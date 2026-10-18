@@ -398,7 +398,9 @@ access. A token cannot be validated until the runner reaches Cloudflare.
 - Looks up or creates the `rolesignal` D1 database and `rolesignal-ingest` queue.
 - Looks up or creates the `role-signal` Pages project.
 - Replaces placeholder database IDs in the runner's config files, applies remote
-  migrations, and deploys Pages and the ingestion worker. Config originals are
+  migrations, and deploys Pages, the queue consumer, and the scheduled ingestion
+  producer. Only the consumer binds the queue as a consumer; both ingestion
+  workers have public workers.dev and preview URLs disabled. Config originals are
   restored even on failure; no credentials are written into the configs.
 - Deploys to the existing project's production branch, or uses this session's
   branch as the production branch of a new project, so the stable

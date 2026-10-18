@@ -84,7 +84,10 @@ export async function enqueueDue(env: Env): Promise<number> {
   if (due.length === 0) return 0
 
   const messages = due.map((source) => ({ body: { sourceId: source.id } }))
-  await queue.sendBatch(messages)
+  // Cloudflare Queues accepts at most 100 messages in one sendBatch call.
+  for (let offset = 0; offset < messages.length; offset += 100) {
+    await queue.sendBatch(messages.slice(offset, offset + 100))
+  }
   return messages.length
 }
 

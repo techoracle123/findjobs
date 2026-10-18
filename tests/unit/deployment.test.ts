@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import producerConfig from '../../wrangler.ingest.jsonc?raw'
+import consumerConfig from '../../wrangler.ingest-consumer.jsonc?raw'
 // @ts-expect-error Node deployment scripts are deliberately plain JavaScript.
 import * as deployment from '../../scripts/deploy-cloudflare.mjs'
 
@@ -131,5 +133,21 @@ describe('Cloudflare deployment automation', () => {
   it('rejects broken configs before deploying', () => {
     expect(() => deploymentConfig('{broken', 'wrangler.jsonc', 'id')).toThrow('Cannot parse')
     expect(() => deploymentConfig('{}', 'wrangler.jsonc', 'id')).toThrow('Missing DB binding')
+  })
+})
+
+describe('ingestion deployment configuration', () => {
+  it('deploys a producer without a consumer binding and a separate consumer', () => {
+    const producer = JSON.parse(deploymentConfig(producerConfig, 'wrangler.ingest.jsonc', 'db'))
+    const consumer = JSON.parse(
+      deploymentConfig(consumerConfig, 'wrangler.ingest-consumer.jsonc', 'db'),
+    )
+    expect(producer.queues.consumers).toBeUndefined()
+    expect(producer.queues.producers[0].queue).toBe(consumer.queues.consumers[0].queue)
+    expect(consumer.main).toBe('src/ingest-consumer.ts')
+    expect(producer.workers_dev).toBe(false)
+    expect(consumer.workers_dev).toBe(false)
+    expect(producer.preview_urls).toBe(false)
+    expect(consumer.preview_urls).toBe(false)
   })
 })

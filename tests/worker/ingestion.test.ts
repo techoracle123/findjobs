@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:test'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './setup'
 import arbeitnowFixture from '../fixtures/arbeitnow.json'
 import remotiveFixture from '../fixtures/remotive.json'
@@ -7,6 +7,7 @@ import greenhouseFixture from '../fixtures/greenhouse.json'
 import { jobIdFor, runIngestion } from '../../src/server/ingest'
 import { inferCountry, inferRoleFamily, inferSeniority } from '../../src/server/sources/normalize'
 import { listJobs } from '../../src/server/jobs'
+import { enqueueDue } from '../../src/ingest'
 
 /**
  * A stand-in for the network that replays a recorded API response. The
@@ -229,5 +230,17 @@ describe('normalisation', () => {
     expect(inferCountry('Berlin, Germany')).toBe('DE')
     expect(inferCountry('Remote, Europe')).toBe('')
     expect(inferCountry('')).toBe('')
+  })
+})
+
+describe('queue producer', () => {
+  it('splits a large due registry into batches of at most 100 messages', async () => {
+    await env.DB.prepare('UPDATE sources SET enabled = 1, last_run_at = NULL').run()
+    const sendBatch = vi.fn().mockResolvedValue(undefined)
+    const count = await enqueueDue({ ...env, INGEST_QUEUE: { sendBatch } as unknown as Queue })
+    expect(count).toBeGreaterThan(100)
+    const batches = sendBatch.mock.calls.map((call) => call[0] as unknown[])
+    expect(batches.every((batch) => batch.length <= 100)).toBe(true)
+    expect(batches.reduce((sum, batch) => sum + batch.length, 0)).toBe(count)
   })
 })

@@ -4,6 +4,8 @@
   "main": "src/ingest.ts",
   "compatibility_date": "2026-10-17",
   "observability": { "enabled": true },
+  "workers_dev": false,
+  "preview_urls": false,
   "d1_databases": [
     {
       "binding": "DB",
@@ -17,14 +19,6 @@
       {
         "binding": "INGEST_QUEUE",
         "queue": "rolesignal-ingest",
-      },
-    ],
-    "consumers": [
-      {
-        "queue": "rolesignal-ingest",
-        "max_batch_size": 10,
-        "max_batch_timeout": 5,
-        "max_retries": 3,
       },
     ],
   },

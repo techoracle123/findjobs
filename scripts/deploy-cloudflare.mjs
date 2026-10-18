@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { stripVTControlCharacters } from 'node:util'
 import ts from 'typescript'
 
 const API = 'https://api.cloudflare.com/client/v4'
@@ -95,11 +96,16 @@ export function deploymentConfig(text, filename, databaseId) {
 
 function wrangler(args) {
   const result = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js', ...args], {
-    stdio: 'inherit',
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
     env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
   })
+  const output = stripVTControlCharacters(`${result.stdout ?? ''}\n${result.stderr ?? ''}`)
+  const token = process.env.CLOUDFLARE_API_TOKEN
+  const safeOutput = token ? output.replaceAll(token, '[REDACTED]') : output
+  console.log(safeOutput)
   if (result.error || result.status !== 0)
-    throw new Error(`Wrangler ${args[0]} failed; deployment stopped.`)
+    throw new Error(`Wrangler ${args[0]} failed; deployment stopped. ${safeOutput.slice(-5000)}`)
 }
 
 export async function main() {
@@ -109,7 +115,7 @@ export async function main() {
   if (!/^[a-z0-9][a-z0-9-]{0,57}[a-z0-9]$/.test(project))
     throw new Error('Invalid Pages project name.')
   const { databaseId, productionBranch } = await provision(api, project)
-  const files = ['wrangler.jsonc', 'wrangler.ingest.jsonc']
+  const files = ['wrangler.jsonc', 'wrangler.ingest.jsonc', 'wrangler.ingest-consumer.jsonc']
   const originals = new Map()
   try {
     for (const file of files) {
@@ -128,8 +134,6 @@ export async function main() {
       productionBranch,
       '--commit-dirty=true',
     ])
-    wrangler(['deploy', '--config', 'wrangler.ingest.jsonc'])
-
     const url = `https://${project}.pages.dev`
     const response = await fetch(`${url}/api/readiness`, { signal: AbortSignal.timeout(60_000) })
     if (!response.ok)
@@ -142,6 +146,13 @@ export async function main() {
         'Deployment uploaded, but staging readiness checks failed. Inspect /api/readiness.',
       )
     }
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      console.log(
+        `::notice title=Pages app is live::Readiness passed at ${url}; deploying ingestion workers next.`,
+      )
+    }
+    wrangler(['deploy', '--config', 'wrangler.ingest-consumer.jsonc'])
+    wrangler(['deploy', '--config', 'wrangler.ingest.jsonc'])
     console.log(
       `Staging deployed: ${url}. Payments are disabled; sign-in requires Cloudflare Access setup.`,
     )
