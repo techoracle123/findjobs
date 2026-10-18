@@ -3,7 +3,9 @@ import type { AppEnv } from '../env'
 import type { Profile } from '../../shared/types'
 import {
   createAlert,
+  deleteAccount,
   deleteAlert,
+  exportAccount,
   getProfile,
   listAlerts,
   listSaved,
@@ -199,6 +201,18 @@ accountRoutes.post('/account/import', async (c) => {
   return c.json({ imported })
 })
 
+/**
+ * Everything the service holds about the signed-in account, as one document.
+ * A person who asks what is known about them gets the whole thing.
+ */
+accountRoutes.get('/account/export', async (c) => {
+  const user = await requireUser(c)
+  if (!user) return unauthorized(c)
+  if (!c.env?.DB) return c.json({ error: 'storage_unavailable' }, 503)
+
+  return c.json(await exportAccount(c.env.DB, user.id))
+})
+
 /** Deletes the account and everything attached to it. */
 accountRoutes.delete('/account', async (c) => {
   const user = await requireUser(c)
@@ -206,7 +220,7 @@ accountRoutes.delete('/account', async (c) => {
   if (!c.env?.DB) return c.json({ error: 'storage_unavailable' }, 503)
 
   await recordAudit(c.env.DB, user.id, 'account.delete', {})
-  await c.env.DB.prepare('DELETE FROM users WHERE id = ?1').bind(user.id).run()
+  await deleteAccount(c.env.DB, user.id)
   logger.info('account deleted', { userId: user.id })
   return c.json({ ok: true })
 })

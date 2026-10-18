@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import { CreditCard, ExternalLink } from 'lucide-react'
-import type { Subscription } from '../lib/api'
+import type { PlanDefinition, Subscription } from '../lib/api'
+import { currencySymbol } from '../shared/format'
 
-const PLANS = [
-  {
-    id: 'free',
-    name: 'Desk',
-    price: 'Free',
+const COPY: Record<string, { features: string[]; cadence: string }> = {
+  free: {
     cadence: 'forever',
     features: [
       'Browse the full feed',
@@ -14,18 +12,16 @@ const PLANS = [
       'Save roles and track applications',
     ],
   },
-  {
-    id: 'pro',
-    name: 'Desk+',
-    price: '$9',
+  pro: {
     cadence: 'per month',
     features: ['Alerts to Telegram', 'Weekly digest', 'Verified source badges'],
   },
-]
+}
 
 interface PlanPanelProps {
   signedIn: boolean
   billingEnabled: boolean
+  plans: PlanDefinition[]
   subscription: Subscription | null
   entitlements: string[]
   onRefresh: () => Promise<void>
@@ -33,13 +29,15 @@ interface PlanPanelProps {
 }
 
 /**
- * Billing. When a payment provider is configured the checkout button starts
- * a real checkout; when it is not, the panel says so plainly rather than
- * pretending.
+ * Billing. The plan, the price and the currency come from the server, so
+ * what is shown here is what would actually be charged. When a payment
+ * provider is configured the checkout button starts a real checkout; when it
+ * is not, the panel says so plainly rather than pretending.
  */
 export function PlanPanel({
   signedIn,
   billingEnabled,
+  plans,
   subscription,
   entitlements,
   onRefresh,
@@ -50,6 +48,7 @@ export function PlanPanel({
 
   const active = subscription && subscription.status === 'active' && !subscription.cancelAtPeriodEnd
   const isPro = Boolean(active && subscription.plan === 'pro')
+  const ending = Boolean(subscription?.cancelAtPeriodEnd)
 
   const subscribe = async () => {
     if (!signedIn) {
@@ -62,7 +61,12 @@ export function PlanPanel({
       const { openBillingPortal, startCheckout } = await import('../lib/api')
       if (isPro) {
         const { session } = await openBillingPortal()
-        window.open(session.url, '_blank', 'noopener')
+        // A provider with no portal of its own points back at this page.
+        if (session.url.includes('billing=manage')) {
+          setMessage('Manage your plan below.')
+        } else {
+          window.open(session.url, '_blank', 'noopener')
+        }
       } else {
         const { session } = await startCheckout('pro')
         window.location.href = session.url
@@ -74,6 +78,23 @@ export function PlanPanel({
     }
   }
 
+  const cancel = async () => {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const { cancelSubscription } = await import('../lib/api')
+      await cancelSubscription()
+      await onRefresh()
+      setMessage('Your plan will end at the close of the period you have already paid for.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const shown = plans.length > 0 ? plans : []
+
   return (
     <div className="panel">
       <div className="panel__head">
@@ -81,6 +102,8 @@ export function PlanPanel({
         <div style={{ flex: 1 }} />
         {isPro ? (
           <span className="chip chip--ok">Desk+ active</span>
+        ) : ending ? (
+          <span className="chip chip--plain">Ending</span>
         ) : (
           <span className="chip chip--plain">Desk</span>
         )}
@@ -96,27 +119,32 @@ export function PlanPanel({
           </div>
         )}
 
-        {subscription?.cancelAtPeriodEnd && (
+        {ending && (
           <div className="banner banner--info">
             <span>
               Your Desk+ plan is set to end on{' '}
-              {subscription.currentPeriodEnd
+              {subscription?.currentPeriodEnd
                 ? new Date(subscription.currentPeriodEnd).toLocaleDateString()
                 : 'the next renewal'}{' '}
-              and will not renew.
+              and will not renew. Everything you have paid for stays available until then.
             </span>
           </div>
         )}
 
         <div className="skillsplit" style={{ gridTemplateColumns: '1fr' }}>
-          {PLANS.map((plan) => {
+          {shown.map((plan) => {
+            const copy = COPY[plan.id] ?? { features: [], cadence: 'per month' }
             const isCurrent = plan.id === 'pro' ? isPro : !isPro
+            const price =
+              plan.price.amount > 0
+                ? `${currencySymbol(plan.price.currency)}${plan.price.amount.toLocaleString('en-US')}`
+                : 'Free'
             return (
               <div key={plan.id} className="panel" style={{ boxShadow: 'none' }}>
                 <div className="panel__body">
                   <div className="kv">
                     <span className="kv__key">
-                      {plan.name}
+                      {plan.label}
                       {isCurrent && (
                         <span className="chip chip--plain" style={{ marginLeft: 8 }}>
                           current
@@ -124,11 +152,11 @@ export function PlanPanel({
                       )}
                     </span>
                     <span className="kv__value">
-                      {plan.price} <span style={{ color: 'var(--faint)' }}>{plan.cadence}</span>
+                      {price} <span style={{ color: 'var(--faint)' }}>{copy.cadence}</span>
                     </span>
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 16, color: 'var(--muted)', fontSize: 12.5 }}>
-                    {plan.features.map((feature) => (
+                    {copy.features.map((feature) => (
                       <li key={feature}>{feature}</li>
                     ))}
                   </ul>
@@ -149,6 +177,16 @@ export function PlanPanel({
                           'Choose Desk+'
                         )}
                       </button>
+                      {isPro && (
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          onClick={() => void cancel()}
+                          disabled={busy}
+                        >
+                          Cancel plan
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="btn btn--ghost btn--sm"

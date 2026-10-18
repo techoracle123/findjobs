@@ -19,7 +19,8 @@
     "test": "npm run test:unit && npm run test:worker",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:worker": "vitest run --config vitest.worker.config.ts",
-    "test:smoke": "./node_modules/node/bin/node ./scripts/smoke.mjs"
+    "test:smoke": "./node_modules/node/bin/node ./scripts/smoke.mjs",
+    "doctor": "./node_modules/node/bin/node ./scripts/doctor.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.3",

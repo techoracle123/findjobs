@@ -10,6 +10,7 @@ import m0006 from '../../migrations/0006_telegram.sql?raw'
 import m0007 from '../../migrations/0007_rate_limits.sql?raw'
 import m0008 from '../../migrations/0008_source_scale.sql?raw'
 import m0009 from '../../migrations/0009_alert_deliveries.sql?raw'
+import m0010 from '../../migrations/0010_billing_events_and_ai_budget.sql?raw'
 
 /**
  * The real migration files, applied to the test database.
@@ -18,7 +19,7 @@ import m0009 from '../../migrations/0009_alert_deliveries.sql?raw'
  * schema production runs, without pulling a Node-only migration reader into
  * the Workers runtime.
  */
-const MIGRATIONS = [m0001, m0002, m0003, m0004, m0005, m0006, m0007, m0008, m0009]
+const MIGRATIONS = [m0001, m0002, m0003, m0004, m0005, m0006, m0007, m0008, m0009, m0010]
 
 /**
  * Splits a migration file into individual statements, dropping the comment

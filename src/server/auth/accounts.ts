@@ -462,3 +462,85 @@ export async function listTelegramSubscribers(
     .map((row) => ({ userId: row.id, chatId: Number(row.telegram_chat_id) }))
     .filter((entry) => Number.isFinite(entry.chatId))
 }
+
+export interface AccountExport {
+  exportedAt: string
+  user: AccountUser
+  profile: Profile
+  saved: SavedApplication[]
+  alerts: AlertPreference[]
+  subscription: Subscription | null
+  entitlements: string[]
+  consents: { kind: string; granted: boolean; createdAt: string }[]
+  audit: { action: string; metadata: string; createdAt: string }[]
+}
+
+/**
+ * Everything held about an account, in one document.
+ *
+ * A person who asks what the service knows about them should be able to get
+ * an answer, and it should be the same answer the service has, not a
+ * summary of it.
+ */
+export async function exportAccount(db: D1Database, userId: string): Promise<AccountExport> {
+  const [userRow, profile, saved, alerts, subscription, entitlements] = await Promise.all([
+    db
+      .prepare('SELECT id, email, display_name, created_at FROM users WHERE id = ?1')
+      .bind(userId)
+      .first<{ id: string; email: string; display_name: string | null; created_at: string }>(),
+    getProfile(db, userId),
+    listSaved(db, userId),
+    listAlerts(db, userId),
+    getSubscription(db, userId),
+    getEntitlements(db, userId),
+  ])
+
+  const consentRows = await db
+    .prepare('SELECT kind, granted, created_at FROM consents WHERE user_id = ?1 ORDER BY kind')
+    .bind(userId)
+    .all<{ kind: string; granted: number; created_at: string }>()
+
+  const auditRows = await db
+    .prepare(
+      'SELECT action, metadata, created_at FROM audit_log WHERE user_id = ?1 ORDER BY created_at',
+    )
+    .bind(userId)
+    .all<{ action: string; metadata: string; created_at: string }>()
+
+  return {
+    exportedAt: new Date().toISOString(),
+    user: {
+      id: userRow?.id ?? userId,
+      email: userRow?.email ?? '',
+      displayName: userRow?.display_name ?? null,
+      createdAt: userRow?.created_at ?? new Date().toISOString(),
+    },
+    profile,
+    saved,
+    alerts,
+    subscription,
+    entitlements,
+    consents: (consentRows.results ?? []).map((row) => ({
+      kind: row.kind,
+      granted: Boolean(row.granted),
+      createdAt: row.created_at,
+    })),
+    audit: (auditRows.results ?? []).map((row) => ({
+      action: row.action,
+      metadata: row.metadata,
+      createdAt: row.created_at,
+    })),
+  }
+}
+
+/**
+ * Deletes an account and everything attached to it.
+ *
+ * Most of the tables cascade from the user row. The audit log does not,
+ * because it also holds entries for people who never had an account, so it
+ * is cleared here rather than left behind.
+ */
+export async function deleteAccount(db: D1Database, userId: string): Promise<void> {
+  await db.prepare('DELETE FROM audit_log WHERE user_id = ?1').bind(userId).run()
+  await db.prepare('DELETE FROM users WHERE id = ?1').bind(userId).run()
+}

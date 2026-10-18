@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import type { AppEnv } from './env'
 import { DEFAULT_APP_MODE } from './env'
-import { accessConfigured, readConfig, stripeConfigured, telegramConfigured } from './config'
+import { accessConfigured, readConfig, telegramConfigured } from './config'
+import { hasRealProvider } from './billing/provider'
 import { listJobs, findJob, searchJobs } from './jobs'
 import { getRates } from './rates'
 import { suggest } from './cv'
@@ -9,6 +10,10 @@ import { scoreJob } from '../shared/scoring'
 import type { Profile, ScoredJob } from '../shared/types'
 import { requestContext, stringList } from './http'
 import { enforceRateLimit } from './ratelimit'
+import { takeAiBudget } from './aiquota'
+import { buildReadiness } from './readiness'
+import { resolveIdentity } from './auth/identity'
+import { userIdFor } from './auth/accounts'
 import { accountRoutes } from './routes/account'
 import { sourceRoutes } from './routes/sources'
 import { billingRoutes } from './routes/billing'
@@ -55,7 +60,7 @@ app.get('/api/health', async (c) => {
     aiBinding: config.aiEnabled,
     telegramConfigured: telegramConfigured(config),
     accessConfigured: accessConfigured(config),
-    billingConfigured: stripeConfigured(config),
+    billingConfigured: hasRealProvider(config),
     authenticationRequired: config.isProduction,
     accessLoginUrl,
     dataSource: source,
@@ -132,8 +137,35 @@ app.post('/api/cv/suggest', async (c) => {
     return c.json({ error: 'text_required' }, 400)
   }
   const env = c.env ?? {}
+  const config = readConfig(env)
+
+  // The keyword fallback costs nothing, so only a real model call is
+  // counted against the budget.
+  if (env.AI && env.DB) {
+    const identity = await resolveIdentity(c.req.raw, config)
+    const scope = identity
+      ? `user:${await userIdFor(identity.email)}`
+      : `ip:${c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? 'unknown'}`
+
+    const decision = await takeAiBudget(env.DB, scope, config)
+    if (!decision.allowed) {
+      return c.json(
+        { error: 'ai_quota_exceeded', message: decision.message, scope: decision.scope },
+        429,
+      )
+    }
+  }
+
   const suggestion = await suggest(env.AI, text)
   return c.json(suggestion)
+})
+
+/**
+ * What is working and what is not, in one place. The `doctor` command prints
+ * this, and it is the first thing to look at when a deployment misbehaves.
+ */
+app.get('/api/readiness', async (c) => {
+  return c.json(await buildReadiness(c.env ?? {}))
 })
 
 app.get('/api/rates', async (c) => {

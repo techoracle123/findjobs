@@ -1,11 +1,14 @@
+import { hmacHex, timingSafeEqual } from './crypto'
 import type {
   BillingPortalSession,
   CheckoutRequest,
   CheckoutSession,
   PaymentProvider,
+  PlanPriceMap,
   ProviderSubscription,
   WebhookEvent,
 } from './types'
+import { planForAmount } from './pricing'
 
 const API = 'https://api.stripe.com/v1'
 
@@ -15,18 +18,21 @@ const API = 'https://api.stripe.com/v1'
  * SDK to keep up to date and the signature check can be unit tested.
  */
 export class StripeProvider implements PaymentProvider {
-  readonly id = 'stripe'
+  readonly id = 'stripe' as const
+  readonly webhookHeaders = ['stripe-signature']
 
   constructor(
     private readonly secretKey: string,
     private readonly webhookSecret: string,
+    private readonly plans: PlanPriceMap = {},
+    private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
   private async post(
     path: string,
     fields: Record<string, string>,
   ): Promise<Record<string, unknown>> {
-    const response = await fetch(`${API}${path}`, {
+    const response = await this.fetchImpl(`${API}${path}`, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${this.secretKey}`,
@@ -71,7 +77,8 @@ export class StripeProvider implements PaymentProvider {
    * carries a timestamp and one or more HMAC signatures; the timestamp is
    * checked against a tolerance so a captured webhook cannot be replayed.
    */
-  async parseWebhook(payload: string, signature: string | null): Promise<WebhookEvent | null> {
+  async parseWebhook(payload: string, headers: Headers): Promise<WebhookEvent | null> {
+    const signature = headers.get('stripe-signature')
     if (!signature) return null
 
     const parts = signature.split(',').map((part) => part.trim())
@@ -95,11 +102,14 @@ export class StripeProvider implements PaymentProvider {
     }
 
     const object = (event.data?.object ?? {}) as {
+      id?: string
       customer_email?: string
       customer?: string | { id?: string }
       subscription?: string
       metadata?: { plan?: string }
       status?: string
+      amount_total?: number
+      currency?: string
       current_period_end?: number
       cancel_at_period_end?: boolean
     }
@@ -110,31 +120,50 @@ export class StripeProvider implements PaymentProvider {
         ? object.customer
         : ((object.customer as { id?: string } | undefined)?.id ?? '')
 
-    const providerSubscription: ProviderSubscription | null =
+    const isSubscriptionEvent =
       type === 'checkout.session.completed' || type.startsWith('customer.subscription.')
-        ? {
-            customerId,
-            subscriptionId:
-              typeof object.subscription === 'string'
-                ? object.subscription
-                : ((object.subscription as { id?: string } | undefined)?.id ?? ''),
-            plan: typeof object.metadata?.plan === 'string' ? object.metadata.plan : 'pro',
-            status:
-              type === 'customer.subscription.deleted'
-                ? 'canceled'
-                : typeof object.status === 'string'
-                  ? object.status
-                  : 'active',
-            currentPeriodEnd:
-              typeof object.current_period_end === 'number'
-                ? new Date(object.current_period_end * 1000).toISOString()
-                : null,
-            cancelAtPeriodEnd: Boolean(object.cancel_at_period_end),
-          }
-        : null
+
+    let providerSubscription: ProviderSubscription | null = null
+
+    if (isSubscriptionEvent) {
+      let plan = typeof object.metadata?.plan === 'string' ? object.metadata.plan : 'pro'
+
+      // When the amount is known it is checked against the catalogue, so a
+      // session for the wrong price cannot buy a plan.
+      if (typeof object.amount_total === 'number' && Object.keys(this.plans).length > 0) {
+        const matched = planForAmount(
+          this.plans,
+          object.amount_total / 100,
+          String(object.currency ?? '').toUpperCase(),
+        )
+        if (!matched) throw new Error('Stripe session amount does not match any plan price')
+        plan = matched
+      }
+
+      providerSubscription = {
+        customerId,
+        subscriptionId:
+          typeof object.subscription === 'string'
+            ? object.subscription
+            : ((object.subscription as { id?: string } | undefined)?.id ?? ''),
+        plan,
+        status:
+          type === 'customer.subscription.deleted'
+            ? 'canceled'
+            : typeof object.status === 'string'
+              ? object.status
+              : 'active',
+        currentPeriodEnd:
+          typeof object.current_period_end === 'number'
+            ? new Date(object.current_period_end * 1000).toISOString()
+            : null,
+        cancelAtPeriodEnd: Boolean(object.cancel_at_period_end),
+      }
+    }
 
     return {
       type,
+      eventId: object.id ?? null,
       customerEmail: typeof object.customer_email === 'string' ? object.customer_email : null,
       providerSubscription,
     }
@@ -143,26 +172,4 @@ export class StripeProvider implements PaymentProvider {
   subscriptionFromEvent(event: WebhookEvent): ProviderSubscription | null {
     return event.providerSubscription
   }
-}
-
-export async function hmacHex(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message))
-  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
-}
-
-/** Compares two hex strings without leaking their length through timing. */
-export function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let difference = 0
-  for (let index = 0; index < a.length; index += 1) {
-    difference |= a.charCodeAt(index) ^ b.charCodeAt(index)
-  }
-  return difference === 0
 }

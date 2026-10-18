@@ -10,66 +10,109 @@ read the second, so tell me when it is done.
 
 ---
 
-## 1. Cloudflare — blocks everything else
+## 1. Cloudflare — blocks everything else (do this first)
 
-Nothing can be hosted until I can reach your account, so this is first and it
-gates the other steps.
+Nothing can be hosted until I can reach your account. This is the only hard block.
 
-**What to create**
+### What a Cloudflare account is
 
-1. Sign in at <https://dash.cloudflare.com>.
-2. Confirm the account is a **paid plan**. Free Workers has a 10 ms CPU limit
-   and a 50-subrequest limit, which is not enough to fan out across hundreds
-   of job feeds. Workers Paid ($5/month, includes 10 million requests) is the
-   minimum sensible target. The free tier is fine for a staging preview.
-3. Create an API token: <https://dash.cloudflare.com/profile/api-tokens> →
-   **Create Token** → **Edit Cloudflare Workers** template → **Configure** →
-   add these permissions:
+Cloudflare sits in front of your domain and runs the code that serves the site.
+This project needs three things from Cloudflare:
 
-   | Scope   | Permission                      | Why                                     |
-   | ------- | ------------------------------- | --------------------------------------- |
-   | Account | Workers Scripts: Edit           | deploy the ingestion worker and the API |
-   | Account | D1: Edit                        | create and migrate the database         |
-   | Account | Workers Queues: Edit            | fan ingestion out across many sources   |
-   | Account | Workers KV Storage: Edit        | cache source responses and rate tables  |
-   | Account | Pages: Edit                     | deploy the web app                      |
-   | Account | Access: Apps and Policies: Edit | create the identity application         |
-   | Account | Account Settings: Read          | resolve the account id                  |
-   | Zone    | Workers Routes: Edit            | point the custom domain at the app      |
-   | Zone    | DNS: Edit                       | create the records for that domain      |
+- **Workers & Pages** — the code that serves the app and ingests jobs.
+- **D1** — the SQLite database that holds jobs, accounts and alerts.
+- **Access** — the identity layer that signs people in (no passwords).
 
-   Scope the token to your account and to the one zone if you add a domain.
-   Do not use the "Global API Key".
+Everything else hangs off these, so this step has to happen before anything else
+can be deployed.
 
-4. Find your **Account ID** (right-hand sidebar of the Cloudflare dashboard,
-   or the URL of any Workers page).
+### Step by step: create an API token
 
-**How to get it to me**
+An API token is a long string that lets me talk to Cloudflare on your behalf,
+without your password. It can be revoked at any time.
 
-Set two environment variables on this session — not in a file in the repo:
+1. **Sign in or sign up** at <https://dash.cloudflare.com>.
+   - If you don't have an account, click **Sign up** — an email and a password is enough.
+   - Confirm the account is on at least the **Workers Paid** plan if you intend
+     to run ingestion at scale. Free Workers has a 10 ms CPU limit and a
+     50-subrequest limit, which is not enough to fan out across hundreds of job
+     feeds. Workers Paid is $5/month and includes 10 million requests. For a
+     staging preview the free tier is fine.
 
-```sh
-export CLOUDFLARE_API_TOKEN='<the token you just created>'
-export CLOUDFLARE_ACCOUNT_ID='<your account id>'
-```
+2. **Open the API tokens page:**
+   <https://dash.cloudflare.com/profile/api-tokens>
 
-I will confirm I can see the account before going further. If you would
-rather not hand over a token, the alternative is for you to run the deploy
-commands yourself and I will hand you the exact list — that works, it is just
-slower for both of us.
+3. Click **Create Token** → choose the **Edit Cloudflare Workers** template → click
+   **Use template** (or **Configure**).
 
-**What I will do with it:** create the `rolesignal` D1 database and the
-`rolesignal-test` database, apply the migrations, create the ingestion queue,
-deploy the Pages app, deploy the scheduled ingestion worker, create the
-Cloudflare Access application and its policy, and register the custom domain.
+4. You will see a form with **Account Resources**, **Zone Resources** and
+   **Permissions**. Leave the template's defaults and **add** these permissions:
+
+   | Scope   | Permission                      | Why                                               |
+   | ------- | ------------------------------- | ------------------------------------------------- |
+   | Account | Workers Scripts: Edit           | deploy the app and the ingestion worker           |
+   | Account | D1: Edit                        | create and migrate the database                   |
+   | Account | Workers Queues: Edit            | fan ingestion out across many sources             |
+   | Account | Pages: Edit                     | deploy the web app                                |
+   | Account | Access: Apps and Policies: Edit | create the sign-in application                    |
+   | Account | Account Settings: Read          | confirm the account id                            |
+   | Zone    | Workers Routes: Edit            | point a custom domain at the app (if you add one) |
+   | Zone    | DNS: Edit                       | create the records for that domain                |
+   - Under **Account Resources**, choose **Include → All accounts** (or the one
+     account if you have several).
+   - Under **Zone Resources**, choose **Include → All zones** for now. You can
+     narrow it to one zone later if you add a domain.
+   - Leave **TTL** and **IP filtering** empty.
+   - Click **Continue to summary** → **Create Token**.
+
+5. **Copy the token** — Cloudflare shows it once. It looks like a long string
+   starting with a mix of letters and numbers.
+
+   > **Do not use the "Global API Key".** That key is your account password in
+   > another form and grants everything. The token above is scoped to only what
+   > this project needs.
+
+6. **Find your Account ID.** You need this alongside the token.
+   - In the dashboard, open any Workers page, or look at the right-hand sidebar
+     of the overview — it shows **Account ID** as a 32-character hex string.
+   - Alternatively, the URL of any Workers page contains it:
+     `https://dash.cloudflare.com/<ACCOUNT_ID>/workers`.
+
+7. **Hand both values to me.** Set two environment variables on this session —
+   not in a file in the repo:
+
+   ```sh
+   export CLOUDFLARE_API_TOKEN='<the token you just created>'
+   export CLOUDFLARE_ACCOUNT_ID='<your account id>'
+   ```
+
+   I will confirm I can see the account (`wrangler whoami`) before doing
+   anything else.
+
+   **Alternative if you prefer not to share a token:** tell me and I will hand
+   you the exact deploy commands to run yourself. That works, it is just slower
+   for both of us.
+
+### What I will do with it
+
+Once the token is set I will:
+
+1. Create the `rolesignal` D1 database (and `rolesignal-test` for tests).
+2. Apply all 10 migrations (jobs, accounts, sources, alerts, billing receipts, AI budget, etc.).
+3. Create the `rolesignal-ingest` queue.
+4. Deploy the Pages app (the site) and the scheduled ingestion worker.
+5. Create the Cloudflare Access application and its policy.
+6. Attach a custom domain if you provide one (next section).
+
+You can revoke or rotate the token at any time from the same API tokens page.
 
 ---
 
 ## 2. A domain (recommended, not required)
 
 `*.pages.dev` is enough to launch. A domain you control is better because the
-Access session cookie is tied to the host, Stripe webhook URLs look
-legitimate, and people trust it.
+Access session cookie is tied to the host, webhook URLs look legitimate, and
+people trust it.
 
 If you have one, add it to Cloudflare as a zone and give me the name. I will
 create the DNS records and attach it to both the Pages app and the Access
@@ -80,40 +123,66 @@ do that from your own browser, not through me.
 
 ---
 
-## 3. Stripe (needed for the paid plan)
+## 3. Payments — Paystack or Flutterwave (deferred, nothing to do now)
 
-A Stripe account takes about ten minutes: <https://dashboard.stripe.com> →
-**Sign up**. You do not need to complete business verification to create
-products or to test; you do need it before taking real money.
+You asked to use **Paystack or Flutterwave** and to do payments last. That is
+the right call — everything else works without a payment provider.
 
-**What to create:** nothing yourself, if you give me the key. I will create
-the recurring price, the product, the customer portal configuration and the
-webhook endpoint, then read back the webhook signing secret.
+### How it works in this build
 
-**How to get it to me**
+- The plan, the price and the currency live on the **server** (environment
+  variables), so the price a customer is charged is never something the browser
+  can choose.
+- The default is **₦5,000/month** in **NGN** — change `BILLING_PRICE_PRO` and
+  `BILLING_CURRENCY` to whatever you want.
+- When no payment provider is configured, the app runs with a **fake provider**
+  that never charges anyone. The Plan tab says "No payment provider is
+  configured" and the checkout button is disabled. A crafted webhook cannot
+  grant a paid plan — the fake provider refuses every webhook and the local
+  confirm route is blocked in production.
+- When you are ready, you set one of these:
 
-```sh
-export STRIPE_SECRET_KEY='sk_test_...'   # or sk_live_...
-```
+  | Provider        | Variables to set                                                                                     | Dashboard                                              |
+  | --------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+  | **Paystack**    | `PAYSTACK_SECRET_KEY` (sk_test_… or sk_live_…)                                                       | https://dashboard.paystack.com/#/settings/developer    |
+  | **Flutterwave** | `FLUTTERWAVE_SECRET_KEY` + `FLUTTERWAVE_WEBHOOK_SECRET` (the hash you set under Settings → Webhooks) | https://app.flutterwave.com/dashboard/settings/account |
 
-Start with the **test** key. When you are ready for real money, swap to the
-live key and I will re-point the webhook. I will not ask you for a card
-number, a bank detail or a password at any point.
+  Then tell me which one and I will wire the checkout, the redirect and the
+  webhook. Stripe is also implemented if you ever need it.
 
-**What I need you to do later:** complete Stripe's business verification, and
-decide the price. I have assumed $9/month on the basis of the original plan
-panel — tell me if it should be different, or if there should be more than one
-tier.
+- How to tell me when ready:
+
+  ```sh
+  export PAYSTACK_SECRET_KEY='sk_test_...'        # or sk_live_...
+  # — or —
+  export FLUTTERWAVE_SECRET_KEY='FLWSECK_TEST-...'
+  export FLUTTERWAVE_WEBHOOK_SECRET='your_hash'
+  ```
+
+  Or set them as encrypted Pages secrets — I will read the readiness report.
+
+### What this build does not do until you connect a provider
+
+- No checkout can be started — the button is disabled and the API answers 503.
+- No webhook can grant anything — every unsigned webhook is rejected with 400.
+- The local `POST /api/billing/confirm` route (used in development to simulate
+  a payment) is blocked in production.
+
+So there is nothing to configure now, and leaving it unconfigured is safe.
 
 ---
 
-## 4. Telegram (needed for alerts)
+## 4. Telegram (needed for alerts — send the token when ready)
+
+You said you will provide the Telegram bot token later. Nothing to do now.
+
+For reference, when you are ready:
 
 1. Open Telegram and message **@BotFather**.
 2. Send `/newbot`, give it a name and a username ending in `bot`.
 3. BotFather replies with a **token**.
 
-**How to get it to me**
+Then:
 
 ```sh
 export TELEGRAM_BOT_TOKEN='123456:ABC-DEF...'
@@ -126,6 +195,9 @@ that links a Telegram chat to an account, and build the delivery job.
 The bot only ever reads `/start` messages and sends role matches. It does not
 read your personal chats, and it does not message anyone who has not linked
 their account.
+
+Until then, alerts are recorded but not delivered — the readiness report will
+say so.
 
 ---
 
@@ -250,6 +322,24 @@ run. Work is spread across a Cloudflare Queue, so the number of sources is
 not limited by how long one Worker invocation may run. The feed is searched
 and paged in the database rather than shipped whole to the browser.
 
+**Billing, ready to connect.** The payment layer speaks Paystack, Flutterwave
+and Stripe behind one interface. The plan and the price live on the server,
+webhooks are verified (HMAC for Paystack/Stripe, static hash for Flutterwave
+with a follow-up API confirmation), every payment is confirmed with the
+provider before anything is granted, and retries are deduped. When no provider
+is configured the app runs in a safe mode where nothing can be charged and
+no webhook can grant a plan.
+
+**AI with a budget.** CV extraction uses Workers AI when it is bound, with a
+clearly labelled keyword fallback when it is not. Every real model call is
+counted against the account that made it and against the deployment as a
+whole, with a per-day limit enforced in the database.
+
+**Readiness in one place.** `GET /api/readiness` (and `npm run doctor`) says
+what is working and what is missing — database, identity, payments, Telegram,
+sources, queue, AI, rates — and what to do about each. It is the first thing
+to look at when a deployment misbehaves.
+
 **The interface.** Verified, unverified, stale and closed badges on every
 row, filters for each, a direct apply link, and the closed date and reason
 in the detail panel.
@@ -264,11 +354,12 @@ is announced twice.
 
 1. **You**: Cloudflare API token + account id → **me**: everything else.
 2. **Me**: database, migrations, queue, Access application, workers, deploy.
-3. **You**: Stripe key, Telegram token, domain name.
-4. **Me**: price, webhook, bot webhook, live ingestion, first real run.
+3. **You**: domain name (if you have one).
+4. **Me**: live ingestion, first real run.
 5. **Both**: point the sources at the registry, watch the first real feed
    come in, fix what the normalisation gets wrong.
-6. **You**: Stripe business verification, then flip the paid plan on.
+6. **You**: Paystack or Flutterwave key, Telegram token — when you are ready.
+7. **Me**: price, webhook, bot webhook, flip the paid plan on.
 
-Step 1 is the only hard block. Everything else can be done in parallel once
-the token lands.
+Step 1 is the only hard block. Payment and Telegram can wait — the app runs
+without them and says so honestly.

@@ -13,7 +13,8 @@ import type {
  * payment account. It never contacts anything and never charges anyone.
  */
 export class FakeProvider implements PaymentProvider {
-  readonly id = 'fake'
+  readonly id = 'fake' as const
+  readonly webhookHeaders = ['x-role-signal-signature']
 
   async createCheckoutSession(request: CheckoutRequest): Promise<CheckoutSession> {
     return {
@@ -26,12 +27,17 @@ export class FakeProvider implements PaymentProvider {
     return { url: 'about:blank#fake-billing-portal' }
   }
 
-  async parseWebhook(payload: string): Promise<WebhookEvent | null> {
-    try {
-      return JSON.parse(payload) as WebhookEvent
-    } catch {
-      return null
-    }
+  /**
+   * The fake provider never accepts a webhook.
+   *
+   * It has no way to verify one, so accepting an event would mean trusting
+   * whatever the body said. A deployment with no payment provider configured
+   * must not be a deployment where anyone can post a crafted event and
+   * grant themselves the paid plan, so every webhook is refused. The local
+   * flow uses the separate confirm route, which is blocked in production.
+   */
+  async parseWebhook(): Promise<WebhookEvent | null> {
+    return null
   }
 
   subscriptionFromEvent(event: WebhookEvent): ProviderSubscription | null {

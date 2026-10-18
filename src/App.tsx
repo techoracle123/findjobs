@@ -4,10 +4,12 @@ import type { ApiHealth, CvSuggestion, Job, Profile, RatesPayload } from './shar
 import {
   fetchHealth,
   fetchJobs,
+  fetchPlans,
   fetchRates,
   createTelegramLink,
   fetchTelegramStatus,
 } from './lib/api'
+import type { PlanDefinition } from './lib/api'
 import { readLocal, writeLocal } from './lib/storage'
 import { DEFAULT_FILTERS, filterJobs, salaryView, sortJobs } from './lib/ranking'
 import type { SortKey } from './lib/ranking'
@@ -37,6 +39,7 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [rates, setRates] = useState<RatesPayload | null>(null)
   const [health, setHealth] = useState<ApiHealth | null>(null)
+  const [plans, setPlans] = useState<PlanDefinition[]>([])
   const [dataNote, setDataNote] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -61,15 +64,17 @@ export default function App() {
     setLoading(true)
     setLoadError(null)
     try {
-      const [jobsResponse, ratesResponse, healthResponse] = await Promise.all([
+      const [jobsResponse, ratesResponse, healthResponse, planResponse] = await Promise.all([
         fetchJobs(),
         fetchRates(),
         fetchHealth(),
+        fetchPlans(),
       ])
       setJobs(jobsResponse.jobs)
       setDataNote(jobsResponse.warning ?? null)
       setRates(ratesResponse)
       setHealth(healthResponse)
+      setPlans(planResponse.plans)
     } catch (cause) {
       setLoadError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -453,6 +458,7 @@ export default function App() {
             <PlanPanel
               signedIn={account.mode === 'signed-in'}
               billingEnabled={Boolean(health?.billingConfigured)}
+              plans={plans}
               subscription={account.subscription}
               entitlements={account.entitlements}
               onRefresh={account.refresh}

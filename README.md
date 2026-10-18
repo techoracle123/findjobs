@@ -44,9 +44,18 @@ The default ranking is eligibility-first (eligible overlap, unknown, then restri
 
 **Billing**
 
-- A payment-provider interface with a Stripe implementation (checkout, customer portal, webhook signature verification) and a local fake provider for development.
+- A payment-provider interface with Paystack, Flutterwave and Stripe behind one seam. The plan and the price live on the server, never in the browser.
 - Entitlements are always derived server-side from the subscription row. The client is never trusted to grant itself a feature.
-- Webhooks are verified by HMAC over `timestamp.payload` with a replay window, and applied idempotently.
+- Paystack and Stripe webhooks are verified with an HMAC over the raw body (or `timestamp.payload` for Stripe) and checked against a replay window; Flutterwave's static `verif-hash` is verified and the payment is then confirmed with the provider's own API before anything is granted. Retries are deduped.
+- When no provider is configured the app runs with a safe fake provider that never charges and never accepts a webhook. The UI says so plainly.
+
+**AI with a budget**
+
+- CV extraction uses Workers AI when it is bound, with a clearly labelled keyword fallback when it is not. Every real model call is counted against the account that made it and against the deployment as a whole.
+
+**Readiness in one place**
+
+- `GET /api/readiness` (and `npm run doctor`) reports what is working and what is missing — database, identity, payments, Telegram, sources, queue, AI, rates — and what to do about each.
 
 **Alerts**
 
@@ -126,11 +135,14 @@ curl -H 'x-dev-user-email: person@example.com' http://localhost:8787/api/account
 | `DELETE /api/account`                       | Deletes the account and everything attached to it          |
 | `GET /api/sources`                          | The source registry and the state of every source          |
 | `POST /api/sources/ingest`                  | Runs the sources that are due, within a budget             |
-| `GET /api/billing/plans`                    | Available plans                                            |
+| `GET /api/readiness`                        | What is working and what is missing, in one place          |
+| `GET /api/billing/plans`                    | Available plans, their price and the provider              |
 | `GET /api/billing/subscription`             | Current subscription and entitlements                      |
 | `POST /api/billing/checkout`                | Starts a checkout                                          |
 | `POST /api/billing/portal`                  | Opens the provider's customer portal                       |
+| `POST /api/billing/cancel`                  | Cancels the plan at the end of the paid period             |
 | `POST /api/billing/webhook`                 | The provider's webhook (signature verified)                |
+| `GET /api/account/export`                   | Everything held about the signed-in account                |
 | `GET /api/telegram/status`                  | Whether this account has linked a chat                     |
 | `POST /api/telegram/link`                   | Returns a signed deep link to link Telegram                |
 | `POST /api/telegram/webhook`                | The bot's webhook (secret token verified)                  |
@@ -139,17 +151,25 @@ curl -H 'x-dev-user-email: person@example.com' http://localhost:8787/api/account
 
 Set these as Pages environment variables, or as Wrangler secrets where the value is sensitive.
 
-| Variable                  | Purpose                                        |
-| ------------------------- | ---------------------------------------------- |
-| `APP_MODE`                | `production` enables the strict identity rules |
-| `ACCESS_TEAM_DOMAIN`      | Your Cloudflare Access team domain             |
-| `ACCESS_AUD`              | The Access application AUD tag                 |
-| `STRIPE_SECRET_KEY`       | Stripe secret key                              |
-| `STRIPE_WEBHOOK_SECRET`   | Stripe webhook signing secret                  |
-| `STRIPE_PRICE_PRO`        | Stripe price id for the paid plan              |
-| `TELEGRAM_BOT_TOKEN`      | Telegram bot token                             |
-| `TELEGRAM_BOT_USERNAME`   | Bot handle, used to build the deep link        |
-| `TELEGRAM_WEBHOOK_SECRET` | Telegram webhook secret token                  |
+| Variable                     | Purpose                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `APP_MODE`                   | `production` enables the strict identity rules                           |
+| `ACCESS_TEAM_DOMAIN`         | Your Cloudflare Access team domain                                       |
+| `ACCESS_AUD`                 | The Access application AUD tag                                           |
+| `BILLING_PROVIDER`           | `paystack`, `flutterwave`, `stripe` or `fake` (auto-inferred when unset) |
+| `BILLING_CURRENCY`           | The currency the paid plan is settled in (default `NGN`)                 |
+| `BILLING_PRICE_PRO`          | The price of the paid plan, in major units (default `5000`)              |
+| `PAYSTACK_SECRET_KEY`        | Paystack secret key (`sk_test_…` / `sk_live_…`)                          |
+| `FLUTTERWAVE_SECRET_KEY`     | Flutterwave secret key (`FLWSECK_…`)                                     |
+| `FLUTTERWAVE_WEBHOOK_SECRET` | The hash Flutterwave echoes back in `verif-hash`                         |
+| `STRIPE_SECRET_KEY`          | Stripe secret key (also supported)                                       |
+| `STRIPE_WEBHOOK_SECRET`      | Stripe webhook signing secret                                            |
+| `STRIPE_PRICE_PRO`           | Stripe price id for the paid plan                                        |
+| `TELEGRAM_BOT_TOKEN`         | Telegram bot token                                                       |
+| `TELEGRAM_BOT_USERNAME`      | Bot handle, used to build the deep link                                  |
+| `TELEGRAM_WEBHOOK_SECRET`    | Telegram webhook secret token                                            |
+| `AI_DAILY_LIMIT`             | How many AI calls one account may make in a day                          |
+| `AI_GLOBAL_DAILY_LIMIT`      | How many AI calls the whole deployment may make in a day                 |
 
 Access protects _paths_, so create an Access application that covers `/api/account/*`, `/api/billing/*` and `/api/telegram/*`. Public job browsing stays anonymous.
 
@@ -162,10 +182,11 @@ npm run format:check   # prettier
 npm run test           # unit + worker integration tests
 npm run build          # production build
 npm run test:smoke     # browser smoke test (needs the API running on 8787)
+npm run doctor         # what is working and what is missing (needs the API on 8787)
 npm audit --audit-level=high
 ```
 
-`npm run test:smoke` builds the app as a single bundle, runs it in jsdom against the local API worker, and asserts that the desk renders, ranks, scores and explains itself.
+`npm run test:smoke` builds the app as a single bundle, runs it in jsdom against the local API worker, and asserts that the desk renders, ranks, scores and explains itself. `npm run doctor` hits `GET /api/readiness` and prints every check with what to do about it.
 
 ## Deployment
 

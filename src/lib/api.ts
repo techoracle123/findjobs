@@ -178,6 +178,29 @@ export function createTelegramLink(): Promise<{ url: string; token: string }> {
 
 /* ---------- billing ---------- */
 
+export interface PlanPrice {
+  amount: number
+  currency: string
+}
+
+export interface PlanDefinition {
+  id: string
+  label: string
+  entitlements: string[]
+  price: PlanPrice
+}
+
+export interface PlanCatalogue {
+  plans: PlanDefinition[]
+  provider: string
+  currency: string
+  billingEnabled: boolean
+}
+
+export function fetchPlans(): Promise<PlanCatalogue> {
+  return request<PlanCatalogue>('/api/billing/plans')
+}
+
 export function fetchSubscription(): Promise<{
   subscription: Subscription | null
   entitlements: string[]
@@ -195,4 +218,12 @@ export function startCheckout(plan: string): Promise<{ session: { id: string; ur
 
 export function openBillingPortal(): Promise<{ session: { url: string } }> {
   return request('/api/billing/portal', { method: 'POST' })
+}
+
+export function cancelSubscription(): Promise<{ subscription: Subscription }> {
+  return request('/api/billing/cancel', { method: 'POST' })
+}
+
+export function exportAccount(): Promise<unknown> {
+  return request('/api/account/export')
 }
