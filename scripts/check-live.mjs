@@ -19,7 +19,8 @@ for (let attempt = 0; !nigeria.total && attempt < 12; attempt++) {
   await new Promise((resolve) => setTimeout(resolve, 10000))
   nigeria = await json('/api/jobs?status=open&limit=200&country=NG')
 }
-const sources = await json('/api/sources')
+const sources =
+  process.env.STORAGE_DEGRADED === 'true' ? { sources: [] } : await json('/api/sources')
 console.log(
   `::notice title=Live source status::${JSON.stringify(
     (sources.sources || [])
@@ -75,7 +76,7 @@ if (!rates.rates?.NGN)
   )
 // Exercise the deployed integration, not only secret presence. Real public job
 // text only; no CV, account profile, email address or credential is logged.
-if (health.aiBinding) {
+if (health.aiBinding && process.env.STORAGE_DEGRADED !== 'true') {
   const post = async (id, action) => {
     const response = await fetch(`${base}/api/jobs/${encodeURIComponent(id)}/${action}`, {
       method: 'POST',

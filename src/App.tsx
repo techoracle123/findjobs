@@ -539,7 +539,8 @@ export default function App() {
             {loadError && (
               <div className="banner banner--demo">
                 <span>
-                  We couldn’t load jobs right now. Please check your connection and try again.
+                  Job sources are temporarily unavailable. Your saved preferences are safe. Please
+                  try again shortly.
                 </span>
               </div>
             )}

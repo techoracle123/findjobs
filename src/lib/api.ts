@@ -46,7 +46,7 @@ export class ApiError extends Error {
 export interface JobsResponse {
   jobs: Job[]
   total?: number
-  dataSource: 'd1' | 'fixture'
+  dataSource: 'd1' | 'fixture' | 'live-public'
   warning?: string
 }
 

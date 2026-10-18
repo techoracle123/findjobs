@@ -107,6 +107,8 @@ export interface ApiHealth {
   /** Where to send a person to sign in, when identity is available. */
   accessLoginUrl: string | null
   dataSource: 'd1' | 'fixture'
+  /** Public browsing can continue independently when this is false. */
+  storageAvailable?: boolean
   jobCount: number
   ratesDate: string
   ratesSource: string

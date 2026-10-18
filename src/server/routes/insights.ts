@@ -4,6 +4,7 @@ import { franc } from 'franc-min'
 import type { AppEnv } from '../env'
 import type { ApplicationTip, Job, JobAdvice, JobTranslation } from '../../shared/types'
 import { findJob } from '../jobs'
+import { livePublicEnabled, livePublicJobs } from '../live-public'
 import { cleanJobText } from '../sources/html'
 import { openRouterJson } from '../openrouter'
 import { readConfig } from '../config'
@@ -27,10 +28,28 @@ async function hash(text: string): Promise<string> {
     .join('')
 }
 
+async function availableJob(c: AppContext): Promise<Job | null> {
+  try {
+    const job = await findJob(c.env?.DB, c.req.param('id') || '')
+    if (job) return job
+  } catch (error) {
+    if (!livePublicEnabled(c.env?.APP_MODE)) throw error
+  }
+  return livePublicEnabled(c.env?.APP_MODE)
+    ? (await livePublicJobs(new URL(c.req.url).origin)).find(
+        (job) => job.id === c.req.param('id'),
+      ) || null
+    : null
+}
+
 async function budget(c: AppContext): Promise<boolean> {
   if (!c.env?.DB || !c.env.OPENROUTER_API_KEY) return false
-  return (await takeAiBudget(c.env.DB, `insights:${rateLimitSubject(c)}`, readConfig(c.env)))
-    .allowed
+  try {
+    return (await takeAiBudget(c.env.DB, `insights:${rateLimitSubject(c)}`, readConfig(c.env)))
+      .allowed
+  } catch {
+    return false
+  }
 }
 
 export function fallbackTips(job: Job, skills: string[] = []): ApplicationTip[] {
@@ -83,7 +102,7 @@ export function validatedTips(input: unknown): ApplicationTip[] {
 }
 
 insightRoutes.post('/jobs/:id/translation', async (c) => {
-  const job = await findJob(c.env?.DB, c.req.param('id'))
+  const job = await availableJob(c)
   if (!job) return c.json({ error: 'not_found' }, 404)
   const description = cleanJobText(job.description)
   const originalLanguage = detectLanguage(description)
@@ -102,6 +121,7 @@ insightRoutes.post('/jobs/:id/translation', async (c) => {
     ?.prepare('SELECT english_text FROM job_translations WHERE job_id = ?1 AND content_hash = ?2')
     .bind(job.id, cacheKey)
     .first<{ english_text: string | null }>()
+    .catch(() => null)
   if (cached?.english_text)
     return c.json({
       ...original,
@@ -113,8 +133,18 @@ insightRoutes.post('/jobs/:id/translation', async (c) => {
     return unavailable(
       'English translation is not configured yet. This is the original description.',
     )
-  const limited = await enforceRateLimit(c, { bucket: 'translation', limit: 30, windowSeconds: 60 })
-  if (limited) return limited
+  try {
+    const limited = await enforceRateLimit(c, {
+      bucket: 'translation',
+      limit: 30,
+      windowSeconds: 60,
+    })
+    if (limited) return limited
+  } catch {
+    return unavailable(
+      'English translation is temporarily unavailable. This is the original description.',
+    )
+  }
   // A database lease prevents simultaneous page views paying for the same translation.
   const owner = crypto.randomUUID()
   const lease = await db
@@ -125,6 +155,11 @@ insightRoutes.post('/jobs/:id/translation', async (c) => {
     )
     .bind(job.id, cacheKey, owner, Date.now() + 35000, Date.now())
     .run()
+    .catch(() => null)
+  if (!lease)
+    return unavailable(
+      'English translation is temporarily unavailable. This is the original description.',
+    )
   if (!(lease.meta.changes ?? 0))
     return unavailable('English translation is being prepared. Try again shortly.')
   try {
@@ -168,14 +203,25 @@ insightRoutes.post('/jobs/:id/translation', async (c) => {
 })
 
 insightRoutes.post('/jobs/:id/tips', async (c) => {
-  const limited = await enforceRateLimit(c, { bucket: 'job-tips', limit: 10, windowSeconds: 60 })
-  if (limited) return limited
-  const job = await findJob(c.env?.DB, c.req.param('id'))
+  let storageDown = false
+  try {
+    const limited = await enforceRateLimit(c, { bucket: 'job-tips', limit: 10, windowSeconds: 60 })
+    if (limited) return limited
+  } catch {
+    storageDown = true
+  }
+  const job = await availableJob(c)
   if (!job) return c.json({ error: 'not_found' }, 404)
   const body = (await c.req.json().catch(() => ({}))) as { skills?: unknown }
   const skills = stringList(body.skills, 30).map((skill) => cleanJobText(skill).slice(0, 80))
   const fallback: JobAdvice = { tips: fallbackTips(job, skills), provider: 'listing-based' }
   const db = c.env?.DB
+  if (storageDown)
+    return c.json({
+      ...fallback,
+      message:
+        'These pointers are based on the listing while account syncing is temporarily unavailable.',
+    })
   if (!db || !c.env.OPENROUTER_API_KEY)
     return c.json({
       ...fallback,
@@ -196,6 +242,7 @@ insightRoutes.post('/jobs/:id/tips', async (c) => {
     )
     .bind(cacheKey)
     .first<{ tips: string }>()
+    .catch(() => null)
   if (cached)
     return c.json({ tips: JSON.parse(cached.tips), provider: 'openrouter' } satisfies JobAdvice)
   if (!(await budget(c)))

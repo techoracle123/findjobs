@@ -315,11 +315,10 @@ export async function main() {
         'wrangler.jsonc',
       ])
     } catch (error) {
-      // An empty newly reserved hostname would otherwise show an origin error.
-      // Publish its honest unavailable UI, but NEVER mark this release successful,
-      // skip arbitrary migration failures, or overwrite an existing working site.
-      if (projectInfo.latest_deployment || !/daily row (?:read|write) limit/i.test(error.message))
-        throw error
+      // A known account quota outage must not block the DB-independent public
+      // browsing repair. Never bypass other migration errors or mark storage
+      // healthy: validate genuine public listings and deep links after upload.
+      if (!/daily row (?:read|write) limit/i.test(error.message)) throw error
       quotaBlocked = true
     }
     if (!quotaBlocked) await seedPublicSources(api, databaseId)
@@ -333,10 +332,29 @@ export async function main() {
       productionBranch,
       '--commit-dirty=true',
     ])
-    if (quotaBlocked)
-      throw new Error(
-        `The new interface was published at ${url}, but live jobs and account storage are BLOCKED by Cloudflare's exhausted daily database allowance. This is NOT a completed live release. Retry after 00:00 UTC, or ask the owner to upgrade hosting. No synthetic feed or paid upgrade was enabled.`,
+    if (quotaBlocked) {
+      const recovered = await publicJson(`${url}/api/jobs?status=open&limit=5`, 18)
+      if (
+        !recovered.total ||
+        recovered.jobs.some(
+          (job) => job.isDemo || !/^https?:\/\//i.test(job.applyUrl || job.sourceUrl),
+        )
       )
+        throw new Error('Live public recovery did not return real listings.')
+      const detail = await publicJson(
+        `${url}/api/jobs/${encodeURIComponent(recovered.jobs[0].id)}`,
+        3,
+      )
+      if (!detail.job?.id) throw new Error('Live public job pages did not recover.')
+      annotation(
+        'warning',
+        'Public browsing recovered; account storage degraded',
+        `${recovered.total} genuine public listings available at ${url}. Database quota still blocks account syncing and ingestion. No synthetic jobs or paid upgrade enabled.`,
+      )
+      if (process.env.GITHUB_ENV)
+        await writeFile(process.env.GITHUB_ENV, 'STORAGE_DEGRADED=true\n', { flag: 'a' })
+      return
+    }
     const report = await publicJson(`${url}/api/readiness`, 18)
     if (
       report.checks?.find((check) => check.id === 'database')?.status !== 'ok' ||

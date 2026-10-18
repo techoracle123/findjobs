@@ -168,7 +168,7 @@ test('sign-up, sign-in and passwordless recovery are clear on small phones', asy
   await expect(dialog).toContainText('There isn’t one to reset')
   await expect(dialog).toContainText('check your inbox and spam folder')
   const health = await (await page.request.get('/api/health')).json()
-  if (health.accessConfigured) {
+  if (health.accessLoginUrl) {
     await expect(dialog.getByRole('link', { name: 'Get a new sign-in code' })).toHaveAttribute(
       'href',
       '/api/auth/login?returnTo=%2F',

@@ -20,6 +20,8 @@ import { billingRoutes } from './routes/billing'
 import { telegramRoutes } from './routes/telegram'
 import { insightRoutes } from './routes/insights'
 import { publicDataCache } from './public-cache'
+import { livePublicEnabled, livePublicJobs, searchLivePublic } from './live-public'
+import type { JobSearch } from './jobs'
 
 export const app = new Hono<AppEnv>()
 
@@ -79,10 +81,13 @@ app.get('/api/health', async (c) => {
   const count = env.DB
     ? await env.DB.prepare(
         "SELECT COUNT(*) AS n FROM jobs WHERE is_demo = 0 AND job_status = 'open' AND expired_at IS NULL AND datetime(last_seen_at) >= datetime('now', '-3 days')",
-      ).first<{ n: number }>()
+      )
+        .first<{ n: number }>()
+        .catch(() => null)
     : null
   const rates = await getRates(config.appMode !== 'test', env.DB)
-  const accessLoginUrl = accessConfigured(config) ? '/api/auth/login' : null
+  const storageAvailable = Boolean(count)
+  const accessLoginUrl = accessConfigured(config) && storageAvailable ? '/api/auth/login' : null
   return c.json({
     ok: true,
     appMode: config.appMode || DEFAULT_APP_MODE,
@@ -94,6 +99,7 @@ app.get('/api/health', async (c) => {
     accessLoginUrl,
     dataSource: 'd1',
     jobCount: count?.n ?? 0,
+    storageAvailable,
     ratesDate: rates.date,
     ratesSource: rates.source,
   })
@@ -118,6 +124,16 @@ app.get('/api/jobs', async (c) => {
     !['country', 'roles', 'modes', 'levels'].some((key) => url.searchParams.has(key))
   ) {
     const { jobs, source, warning } = await listOpenJobs(env.DB)
+    if (warning && livePublicEnabled(env.APP_MODE)) {
+      const current = await livePublicJobs(url.origin)
+      return c.json({
+        jobs: current,
+        total: current.length,
+        dataSource: 'live-public',
+        warning:
+          'Showing current public listings while account syncing is temporarily unavailable.',
+      })
+    }
     return c.json({
       jobs,
       dataSource: source,
@@ -125,7 +141,7 @@ app.get('/api/jobs', async (c) => {
     })
   }
 
-  const result = await searchJobs(env.DB, {
+  const search: JobSearch = {
     query,
     country: url.searchParams.get('country')?.trim().toUpperCase().slice(0, 2) || undefined,
     roleFamilies: (url.searchParams.get('roles') || '').split(',').filter(Boolean).slice(0, 30),
@@ -134,20 +150,47 @@ app.get('/api/jobs', async (c) => {
     status: status === 'all' || status === 'closed' ? status : 'open',
     limit,
     offset,
-  })
+  }
+
+  let result
+  let dataSource: 'd1' | 'live-public' = 'd1'
+  try {
+    if (!env.DB) throw new Error('Database unavailable')
+    result = await searchJobs(env.DB, search)
+  } catch (error) {
+    if (!livePublicEnabled(env.APP_MODE)) throw error
+    result = searchLivePublic(await livePublicJobs(url.origin), search)
+    dataSource = 'live-public'
+  }
 
   return c.json({
     jobs: result.jobs,
     total: result.total,
     limit: result.limit,
     offset: result.offset,
-    dataSource: 'd1',
+    dataSource,
+    ...(dataSource === 'live-public'
+      ? {
+          warning:
+            'Showing current public listings while account syncing is temporarily unavailable. Always verify the original listing.',
+        }
+      : {}),
   })
 })
 
 app.get('/api/jobs/:id', async (c) => {
   const env = c.env ?? {}
-  const job = await findJob(env.DB, c.req.param('id'))
+  let job
+  try {
+    job = await findJob(env.DB, c.req.param('id'))
+  } catch (error) {
+    if (!livePublicEnabled(env.APP_MODE)) throw error
+  }
+  if (!job && livePublicEnabled(env.APP_MODE))
+    job =
+      (await livePublicJobs(new URL(c.req.url).origin)).find(
+        (item) => item.id === c.req.param('id'),
+      ) || null
   if (!job) return c.json({ error: 'not_found' }, 404)
   return c.json({ job })
 })
@@ -221,13 +264,13 @@ app.notFound((c) => c.json({ error: 'not_found' }, 404))
 
 app.onError((error, c) => {
   const quota = /daily row (?:read|write) limit|quota|7500/i.test(error.message)
+  const sourcesDown = error.message === 'Live public sources are temporarily unavailable'
   console.error('api error', { type: quota ? 'storage_unavailable' : 'internal_error' })
-  return quota
+  return quota || sourcesDown
     ? c.json(
         {
           error: 'temporarily_unavailable',
-          message:
-            'Job loading and account syncing are temporarily paused. Please try again later.',
+          message: 'Some services are temporarily unavailable. Please try again shortly.',
         },
         503,
       )
