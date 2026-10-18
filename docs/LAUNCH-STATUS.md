@@ -9,7 +9,7 @@ integration is connected.
   the assigned hostname of the `find-jobs` project. The exact requested
   `find-jobs.pages.dev` was not assigned; a hostname owned by another project
   cannot be claimed by this deployment. No existing project was deleted.
-- 747 real open jobs were confirmed by the deployment runner; the number changes
+- 2,444 real open jobs were confirmed by the deployment runner; the number changes
   as sources refresh. No fictional rows are returned by any job API. Migration
   0011 purges historical demo rows and their saved-job references.
 - Ingestion producer, queue, and consumer are deployed. Source writes and search
@@ -78,6 +78,14 @@ links it and receives a message.
 After updating permissions/secrets, rerun **Deploy Find Jobs** in GitHub Actions
 (or ask the agent to trigger another deployment). Never include credentials in
 workflow inputs, repository files, issue comments or chat.
+
+## Latest verification
+
+- Deployment and live browser run: <https://github.com/techoracle123/findjobs/actions/runs/39146609963> — passed.
+- Unit tests: 91 passed. Worker integration tests: 114 passed.
+- Live browser checks: 6 passed. Local interface smoke checks: 11 passed.
+- Type check, lint, format check and production build: passed.
+- These checks do not include a real email-code sign-in or a real Telegram chat delivery.
 
 ## Limits on the current readiness claim
 
