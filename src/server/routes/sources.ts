@@ -23,7 +23,8 @@ async function mayTrigger(c: AppContext): Promise<boolean> {
 
 sourceRoutes.get('/sources', async (c) => {
   if (!c.env?.DB) return c.json({ error: 'storage_unavailable' }, 503)
-  await ensureSources(c.env.DB)
+  // Registration is a deployment/scheduler operation, not a public GET write.
+  if (readConfig(c.env).isLocal || readConfig(c.env).isTest) await ensureSources(c.env.DB)
 
   const rows = await c.env.DB.prepare(
     `SELECT s.id, s.name, s.adapter, s.kind, s.platform, s.enabled, s.homepage, s.listing_url,

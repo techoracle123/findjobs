@@ -145,6 +145,72 @@ async function publicJson(url, attempts = 1) {
   throw new Error(`Public API check failed at ${url} (${status}).`)
 }
 
+export function sourceRegistrySql(sources) {
+  const quote = (value) =>
+    value == null
+      ? 'NULL'
+      : typeof value === 'number'
+        ? String(value)
+        : `'${String(value).replaceAll("'", "''")}'`
+  const fields = [
+    'name',
+    'adapter',
+    'kind',
+    'platform',
+    'listing_url',
+    'homepage',
+    'verification',
+    'refresh_tier',
+    'rate_limit_per_hour',
+    'country',
+    'tags',
+    'config',
+  ]
+  return sources
+    .map((source) => {
+      const values = [
+        source.id,
+        source.name,
+        source.parser,
+        source.kind,
+        ['rss', 'jsonld'].includes(source.parser) ? null : source.parser,
+        source.listingUrl,
+        source.listingUrl,
+        source.enabled ? 1 : 0,
+        ['rss', 'jsonld', 'arbeitnow', 'remotive'].includes(source.parser)
+          ? 'unverified'
+          : 'verified',
+        source.tier,
+        source.rateLimitPerHour,
+        source.country,
+        JSON.stringify(source.tags),
+        JSON.stringify({
+          company: source.company,
+          companyLabel: source.companyLabel,
+          country: source.country,
+        }),
+        'pending',
+      ]
+      return `INSERT INTO sources (id,name,adapter,kind,platform,listing_url,homepage,enabled,verification,refresh_tier,rate_limit_per_hour,country,tags,config,last_status) VALUES (${values.map(quote).join(',')}) ON CONFLICT(id) DO UPDATE SET ${fields.map((key) => `${key}=excluded.${key}`).join(',')} WHERE ${fields.map((key) => `sources.${key} IS NOT excluded.${key}`).join(' OR ')};`
+    })
+    .join('\n')
+}
+
+async function seedPublicSources(api, databaseId) {
+  const source = await readFile(new URL('../src/server/sources/seed.ts', import.meta.url), 'utf8')
+  const js = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  const { SEED_SOURCES } = await import(
+    `data:text/javascript;base64,${Buffer.from(js).toString('base64')}`
+  )
+  for (let offset = 0; offset < SEED_SOURCES.length; offset += 50)
+    await api(`/d1/database/${databaseId}/query`, {
+      method: 'POST',
+      body: { sql: sourceRegistrySql(SEED_SOURCES.slice(offset, offset + 50)) },
+    })
+}
+
 export async function main() {
   const auth = credentials(process.env)
   const api = client(auth)
@@ -237,7 +303,26 @@ export async function main() {
       originals.set(file, text)
       await writeFile(file, deploymentConfig(text, file, databaseId, vars))
     }
-    wrangler(['d1', 'migrations', 'apply', 'rolesignal', '--remote', '--config', 'wrangler.jsonc'])
+    let quotaBlocked = false
+    try {
+      wrangler([
+        'd1',
+        'migrations',
+        'apply',
+        'rolesignal',
+        '--remote',
+        '--config',
+        'wrangler.jsonc',
+      ])
+    } catch (error) {
+      // An empty newly reserved hostname would otherwise show an origin error.
+      // Publish its honest unavailable UI, but NEVER mark this release successful,
+      // skip arbitrary migration failures, or overwrite an existing working site.
+      if (projectInfo.latest_deployment || !/daily row (?:read|write) limit/i.test(error.message))
+        throw error
+      quotaBlocked = true
+    }
+    if (!quotaBlocked) await seedPublicSources(api, databaseId)
     wrangler([
       'pages',
       'deploy',
@@ -248,6 +333,10 @@ export async function main() {
       productionBranch,
       '--commit-dirty=true',
     ])
+    if (quotaBlocked)
+      throw new Error(
+        `The new interface was published at ${url}, but live jobs and account storage are BLOCKED by Cloudflare's exhausted daily database allowance. This is NOT a completed live release. Retry after 00:00 UTC, or ask the owner to upgrade hosting. No synthetic feed or paid upgrade was enabled.`,
+      )
     const report = await publicJson(`${url}/api/readiness`, 18)
     if (
       report.checks?.find((check) => check.id === 'database')?.status !== 'ok' ||

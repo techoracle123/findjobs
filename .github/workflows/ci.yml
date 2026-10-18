@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -44,6 +48,24 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install Chromium for isolated real-feed browser checks
+        run: npx playwright install --with-deps chromium
+
+      - name: Test the new interface against a recent real-feed capture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/verify-real-preview.mjs
+
+      - name: Save isolated preview browser reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-preview-browser-report
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
 
       - name: Dependency audit
         run: npm audit --audit-level=high

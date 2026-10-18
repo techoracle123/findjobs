@@ -270,7 +270,7 @@ export async function searchJobs(
   const rows = await db
     .prepare(
       `SELECT ${COLUMNS} FROM jobs j WHERE ${where}
-         ORDER BY COALESCE(j.posted_at, '') DESC, j.id
+         ORDER BY j.posted_at DESC, j.id
          LIMIT ? OFFSET ?`,
     )
     .bind(...binds, limit, offset)

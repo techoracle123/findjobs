@@ -151,3 +151,25 @@ describe('ingestion deployment configuration', () => {
     expect(consumer.preview_urls).toBe(false)
   })
 })
+
+it('registers public sources without changing operator enablement or rewriting unchanged metadata', async () => {
+  const { sourceRegistrySql } = deployment
+  const sql = sourceRegistrySql([
+    {
+      id: 'board',
+      name: "Employer's board",
+      parser: 'greenhouse',
+      kind: 'ats',
+      listingUrl: 'https://boards-api.greenhouse.io/v1/boards/example/jobs',
+      enabled: true,
+      tier: 'daily',
+      rateLimitPerHour: 2,
+      country: 'NG',
+      tags: ['public'],
+    },
+  ])
+  expect(sql).toContain("Employer''s board")
+  expect(sql).toContain('ON CONFLICT(id) DO UPDATE')
+  expect(sql).toContain('IS NOT excluded.')
+  expect(sql).not.toContain('enabled=excluded.enabled')
+})

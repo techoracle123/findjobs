@@ -19,10 +19,29 @@ import { sourceRoutes } from './routes/sources'
 import { billingRoutes } from './routes/billing'
 import { telegramRoutes } from './routes/telegram'
 import { insightRoutes } from './routes/insights'
+import { publicDataCache } from './public-cache'
 
 export const app = new Hono<AppEnv>()
 
 app.use('*', requestContext)
+app.use('*', publicDataCache())
+app.onError((error, c) => {
+  if (/daily row (?:read|write) limit|quota|7500/i.test(error.message))
+    return c.json(
+      {
+        error: 'temporarily_unavailable',
+        message: 'Job loading and account syncing are temporarily paused. Please try again later.',
+      },
+      503,
+    )
+  return c.json(
+    {
+      error: 'temporarily_unavailable',
+      message: 'We couldn’t complete this request. Please try again shortly.',
+    },
+    500,
+  )
+})
 
 // Cookie-authenticated writes are same-origin. Signed provider webhooks are
 // verified separately and must remain callable by Telegram/payment servers.
