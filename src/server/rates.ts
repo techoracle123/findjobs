@@ -36,6 +36,7 @@ export async function getRates(allowNetwork = true, db?: D1Database): Promise<Ra
       try {
         const payload = JSON.parse(row.payload) as RatesPayload
         validateRates(payload.rates)
+        if (payload.source === 'exchangerate-api') throw new Error('Refresh retired provider')
         cached = { payload, fetchedAt: Date.now() }
         return payload
       } catch {
@@ -61,51 +62,61 @@ export async function getRates(allowNetwork = true, db?: D1Database): Promise<Ra
   return pending
 }
 
+const SUPPORTED = new Set(
+  'USD EUR GBP CAD AUD CHF SGD BRL INR JPY NGN ZAR GHS KES AED SEK NOK DKK PLN HKD CNY NZD MXN CZK HUF RON TRY KRW ILS MYR THB PHP IDR VND SAR QAR TWD RUB'.split(
+    ' ',
+  ),
+)
+
+export function parseReferenceRates(
+  input: unknown,
+  source: 'open-currency' | 'frankfurter',
+): RatesPayload {
+  if (!input || typeof input !== 'object') throw new Error('Invalid rates payload')
+  const body = input as { date?: string; usd?: unknown; rates?: unknown }
+  const date = body.date
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Invalid rates date')
+  const age = Date.now() - Date.parse(date)
+  if (!Number.isFinite(age) || age > 7 * 86400000 || age < -86400000) throw new Error('Stale rates')
+  const raw = source === 'open-currency' ? body.usd : body.rates
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid rates')
+  const normalized = Object.fromEntries(
+    Object.entries(raw).map(([code, value]) => [code.toUpperCase(), value]),
+  )
+  const rates = validateRates(source === 'frankfurter' ? { ...normalized, USD: 1 } : normalized)
+  return {
+    base: 'USD',
+    date,
+    source,
+    rates: Object.fromEntries(Object.entries(rates).filter(([code]) => SUPPORTED.has(code))),
+  }
+}
+
 async function fetchLiveRates(): Promise<RatesPayload> {
-  for (const provider of ['exchangerate-api', 'frankfurter'] as const) {
+  // CC0-licensed data, including NGN. Two independently hosted mirrors, then
+  // central-bank reference rates as a fallback. No paid key or branded widget.
+  const endpoints = [
+    ['https://latest.currency-api.pages.dev/v1/currencies/usd.min.json', 'open-currency'],
+    [
+      'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.min.json',
+      'open-currency',
+    ],
+    ['https://api.frankfurter.app/latest?from=USD', 'frankfurter'],
+  ] as const
+  for (const [url, source] of endpoints) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 3500)
     try {
-      const response = await fetch(
-        provider === 'exchangerate-api'
-          ? 'https://open.er-api.com/v6/latest/USD'
-          : 'https://api.frankfurter.app/latest?from=USD',
-        { signal: controller.signal, headers: { accept: 'application/json' } },
-      )
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: { accept: 'application/json' },
+      })
       if (!response.ok) continue
-      const body = (await response.json()) as {
-        result?: string
-        base_code?: string
-        time_last_update_unix?: number
-        date?: string
-        rates?: unknown
-      }
-      if (
-        provider === 'exchangerate-api' &&
-        (body.result !== 'success' || body.base_code !== 'USD')
-      )
-        continue
-      const date =
-        provider === 'exchangerate-api' && body.time_last_update_unix
-          ? new Date(body.time_last_update_unix * 1000).toISOString().slice(0, 10)
-          : body.date
-      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
-      const age = Date.now() - Date.parse(date)
-      if (age > 7 * 24 * 60 * 60 * 1000 || age < -24 * 60 * 60 * 1000) continue
-      const rates = validateRates({ ...(body.rates as Record<string, number>), USD: 1 })
-      const supported = new Set(
-        'USD EUR GBP CAD AUD CHF SGD BRL INR JPY NGN ZAR GHS KES AED SEK NOK DKK PLN HKD CNY NZD MXN CZK HUF RON TRY KRW ILS MYR THB PHP IDR VND SAR QAR TWD RUB'.split(
-          ' ',
-        ),
-      )
-      const appRates = Object.fromEntries(
-        Object.entries(rates).filter(([code]) => supported.has(code)),
-      )
-      const payload: RatesPayload = { base: 'USD', date, source: provider, rates: appRates }
+      const payload = parseReferenceRates(await response.json(), source)
       cached = { payload, fetchedAt: Date.now() }
       return payload
     } catch {
-      /* Try the next provider; keep original salaries if both fail. */
+      /* Keep original salaries if no current reference data is available. */
     } finally {
       clearTimeout(timer)
     }

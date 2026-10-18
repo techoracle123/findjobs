@@ -45,6 +45,9 @@ interface GreenhouseJob {
   id?: number | string
   title?: string
   updated_at?: string
+  first_published?: string
+  application_deadline?: string | null
+  company_name?: string
   absolute_url?: string
   location?: { name?: string }
   departments?: { name?: string }[]
@@ -65,11 +68,20 @@ export const greenhouse: SourceParser = {
 
   async fetchPostings(source, fetchImpl = fetch) {
     const company = slugOf(source)
-    const url = `https://boards.greenhouse.io/${encodeURIComponent(company)}/jobs?content=true`
+    const url = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(company)}/jobs?content=true`
     const payload = (await readJson(url, source.id, fetchImpl)) as { jobs?: GreenhouseJob[] }
 
-    return (payload.jobs ?? [])
-      .filter((job) => job.id !== undefined && job.title)
+    if (!Array.isArray(payload.jobs))
+      throw new SourceError('The board did not return a jobs list', source.id)
+    return payload.jobs
+      .filter(
+        (job) =>
+          job.id !== undefined &&
+          job.title &&
+          !/^(?:general (?:interest|application)|open application|join (?:our |the )?talent|talent (?:pool|community)|expression of interest)\b/i.test(
+            job.title.trim(),
+          ),
+      )
       .map((job) => {
         const location = job.location?.name ?? job.offices?.[0]?.name ?? ''
         const metadata = new Map(
@@ -80,7 +92,9 @@ export const greenhouse: SourceParser = {
         return {
           externalId: String(job.id),
           title: String(job.title ?? '').trim(),
-          company: String(source.options.companyLabel ?? metadata.get('company') ?? company),
+          company: String(
+            job.company_name || source.options.companyLabel || metadata.get('company') || company,
+          ),
           description: stripHtml(job.content ?? ''),
           url: job.absolute_url ?? `https://boards.greenhouse.io/${company}/jobs/${job.id}`,
           applyUrl: job.absolute_url ?? '',
@@ -91,8 +105,14 @@ export const greenhouse: SourceParser = {
             ...(job.offices ?? []).map((entry) => entry.name ?? ''),
           ].filter(Boolean),
           jobType: metadata.get('employment type') ?? metadata.get('type') ?? '',
-          publishedAt: null,
-          validThrough: null,
+          publishedAt:
+            job.first_published && Number.isFinite(Date.parse(job.first_published))
+              ? new Date(job.first_published).toISOString()
+              : null,
+          validThrough:
+            job.application_deadline && Number.isFinite(Date.parse(job.application_deadline))
+              ? new Date(job.application_deadline).toISOString()
+              : null,
           closed: false,
           salary: null,
           ...(salary ? { salary: null } : {}),

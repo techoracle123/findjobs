@@ -150,8 +150,8 @@ export function JobDetail({
           {hasPay && salary.converted && (
             <p className="field__hint">
               Original: {formatRange(job.salaryMin, job.salaryMax, job.salaryCurrency)}{' '}
-              {PERIOD_LABELS[job.salaryPeriod]}. Approximate conversion to {displayCurrency},
-              reference rates dated {rates?.date}. Your bank’s rate and fees may differ.
+              {PERIOD_LABELS[job.salaryPeriod]}. Approximate conversion to {displayCurrency}, your
+              bank’s rate and fees may differ.
             </p>
           )}
           {hasPay && !salary.converted && !salary.sameCurrency && (
@@ -160,15 +160,14 @@ export function JobDetail({
               currency is shown.
             </p>
           )}
-          {hasPay && salary.converted && rates?.source === 'exchangerate-api' && (
-            <a
-              className="field__hint"
-              href="https://www.exchangerate-api.com"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Rates by ExchangeRate-API
-            </a>
+          {hasPay && salary.converted && rates?.date && (
+            <details className="salary-reference">
+              <summary>About this estimate</summary>
+              <p className="field__hint">
+                Based on reference rates from {rates.date}. This is an estimate, not a bank quote.
+                The original salary and pay period remain unchanged.
+              </p>
+            </details>
           )}
         </section>
         <section className="detail-section">
@@ -272,8 +271,8 @@ export function JobDetail({
         </section>
         {profile.skills.length > 0 && (
           <details className="detail-section">
-            <summary>Why this matches your profile</summary>
-            <ScoreBreakdown components={scored.components} total={scored.score} />
+            <summary>How your preferences compare</summary>
+            <ScoreBreakdown components={scored.components} />
           </details>
         )}
         <footer className="original-listing">

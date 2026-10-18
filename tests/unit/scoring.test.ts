@@ -186,3 +186,20 @@ describe('compareScoredJobs', () => {
     expect(ELIGIBILITY_ORDER.unknown).toBeLessThan(ELIGIBILITY_ORDER.restricted)
   })
 })
+
+it('does not count unknown profession, experience or arrangement as mismatches', () => {
+  const scored = scoreJob(
+    makeJob({
+      roleFamily: 'unknown',
+      seniority: 'unknown',
+      workMode: 'unknown',
+      requiredSkills: ['Go'],
+      usefulSkills: [],
+    }),
+    profile,
+  )
+  expect(
+    scored.components.filter((component) => component.applicable).map((component) => component.key),
+  ).toEqual(['requiredSkills'])
+  expect(scored.score).toBe(100)
+})

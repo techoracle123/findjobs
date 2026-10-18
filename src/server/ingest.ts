@@ -33,7 +33,7 @@ export interface IngestionOptions {
 }
 
 export const USER_AGENT =
-  'FindJobsBot/1.0 (+https://find-jobs.pages.dev; public job feed aggregator)'
+  'FindJobsBot/1.0 (+https://fj-find-jobs.pages.dev; public job feed aggregator)'
 
 const encoder = new TextEncoder()
 
@@ -429,7 +429,7 @@ export async function runIngestion(
       seen.add(raw.externalId)
 
       const jobId = await jobIdFor(sourceId, raw.externalId)
-      const contentHash = await sha256('live-v2:' + contentHashOf(raw))
+      const contentHash = await sha256('live-v3:' + contentHashOf(raw))
       const normalised = normalizePosting(raw, {
         verification: sourceRef.verification,
         verificationReason: sourceRef.verificationReason,

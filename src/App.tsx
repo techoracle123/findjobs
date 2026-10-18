@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Bell, Bookmark, Radar, RotateCw, Search, SlidersHorizontal } from 'lucide-react'
+import {
+  ArrowLeft,
+  Bell,
+  Bookmark,
+  Radar,
+  RotateCw,
+  Search,
+  SlidersHorizontal,
+  UserRound,
+} from 'lucide-react'
 import type { ApiHealth, CvSuggestion, Job, Profile, RatesPayload } from './shared/types'
 import {
   fetchHealth,
@@ -21,6 +30,7 @@ import { JobDetail } from './components/JobDetail'
 import { SavedPanel } from './components/SavedPanel'
 import { AlertsPanel } from './components/AlertsPanel'
 import { useAccount } from './hooks/useAccount'
+import { AuthDialog, type AuthMode } from './components/AuthDialog'
 
 type Tab = 'opportunities' | 'saved' | 'alerts'
 
@@ -59,7 +69,7 @@ function routeJobId(): string | null {
 }
 
 const DISCLAIMER =
-  'FJ points you to opportunities. We are not affiliated with employers and do not verify or endorse job listings. Check the original listing and never pay to apply.'
+  'FJ is an information broker: we share opportunities, not job offers. We are not affiliated with employers and do not verify or endorse listings. Always verify the employer, requirements and original listing before applying. Never pay to apply.'
 
 export default function App() {
   const [knownJobs, setKnownJobs] = useState<Record<string, Job>>({})
@@ -80,6 +90,7 @@ export default function App() {
   const { profile, saved, alerts, setProfile, setSaved, setAlerts } = account
 
   const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null)
   const [tab, setTab] = useState<Tab>('opportunities')
   const [selectedId, setSelectedId] = useState<string | null>(routeJobId)
   const [jobPage, setJobPage] = useState(() => routeJobId() !== null)
@@ -215,14 +226,7 @@ export default function App() {
     }
   }, [account.mode])
 
-  const requireSignIn = () => {
-    const url = health?.accessLoginUrl
-    if (url) {
-      window.location.href = url
-      return
-    }
-    setToast('Sign-in isn’t available right now. You can still save jobs on this device.')
-  }
+  const requireSignIn = () => setAuthMode('signin')
 
   const linkTelegram = async () => {
     try {
@@ -354,8 +358,14 @@ export default function App() {
             if (jobPage) backToResults()
           }}
         >
-          <span className="brand__monogram">FJ</span>
-          <span>Find Jobs</span>
+          <img className="brand__logo" src="/favicon.svg" alt="" width="36" height="36" />
+          <span>
+            FJ{' '}
+            <span className="brand__separator" aria-hidden="true">
+              —
+            </span>{' '}
+            Find Jobs
+          </span>
         </a>
 
         <div className="topbar__spacer" />
@@ -379,15 +389,30 @@ export default function App() {
           </select>
 
           {account.mode === 'signed-in' && account.user && (
-            <span className="chip chip--ok" title={`Signed in as ${account.user.email}`}>
-              {account.user.email}
-            </span>
-          )}
-
-          {account.mode === 'anonymous' && health?.accessLoginUrl && (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={requireSignIn}>
-              Sign in
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm account-button"
+              onClick={requireSignIn}
+              aria-label="Your account"
+              title={account.user.email}
+            >
+              <UserRound size={17} />
+              <span className="account-email">Your account</span>
             </button>
+          )}
+          {account.mode === 'anonymous' && (
+            <>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={requireSignIn}>
+                Sign in
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary btn--sm"
+                onClick={() => setAuthMode('signup')}
+              >
+                Sign up
+              </button>
+            </>
           )}
 
           <button
@@ -583,24 +608,18 @@ export default function App() {
                   </span>
                 </div>
 
-                {rates?.source !== 'fallback' && rates?.date && (
-                  <p className="currency-note">
-                    Salary estimates in {displayCurrency} · rates dated {rates.date}
-                    {rates.source === 'exchangerate-api' && (
-                      <>
-                        {' '}
-                        ·{' '}
-                        <a
-                          href="https://www.exchangerate-api.com"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Rates by ExchangeRate-API
-                        </a>
-                      </>
-                    )}
+                <details className="match-help">
+                  <summary>
+                    <span className="match-help__ring" aria-hidden="true" /> What does the green
+                    circle mean?
+                  </summary>
+                  <p>
+                    Add your skills and preferences to see match rings. More green means more
+                    overlap with what you’ve added. It’s a guide to help you explore—not a job
+                    grade, employer verification or a prediction that you’ll be hired. Open a job to
+                    see which preferences match.
                   </p>
-                )}
+                </details>
 
                 {sorted.mixedPeriods && (
                   <div className="banner banner--info">
@@ -683,6 +702,18 @@ export default function App() {
           </main>
         </div>
       )}
+
+      <AuthDialog
+        mode={authMode}
+        onMode={setAuthMode}
+        onClose={() => setAuthMode(null)}
+        email={account.mode === 'signed-in' ? account.user?.email : undefined}
+        loginUrl={
+          health?.accessLoginUrl
+            ? `${health.accessLoginUrl}?returnTo=${encodeURIComponent(window.location.pathname)}`
+            : null
+        }
+      />
 
       {toast && (
         <div className="toast" role="status">

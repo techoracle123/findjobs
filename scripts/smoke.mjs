@@ -73,6 +73,15 @@ const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></
 const { window } = dom
 const { document } = window
 
+// jsdom has no native dialog implementation. Only this DOM harness needs a
+// shim; Playwright tests exercise actual modal focus, Escape and restoration.
+window.HTMLDialogElement.prototype.showModal = function () {
+  this.setAttribute('open', '')
+}
+window.HTMLDialogElement.prototype.close = function () {
+  this.removeAttribute('open')
+}
+
 // Route the app's relative /api calls at the running local worker.
 window.fetch = (input, init) => {
   const url = typeof input === 'string' ? input : (input?.url ?? '')
@@ -138,6 +147,33 @@ check(
   document.body.textContent.includes('aren’t connected yet') ||
     document.body.textContent.includes('Connect Telegram'),
 )
+const signup = [...document.querySelectorAll('.topbar button')].find(
+  (button) => button.textContent === 'Sign up',
+)
+signup.click()
+await waitFor(() => document.querySelector('.auth-dialog[open]'), 5000, 'sign-up dialog')
+check(
+  'sign-up explains passwordless accounts',
+  document
+    .querySelector('.auth-dialog')
+    .textContent.includes('Your first email sign-in creates your account'),
+)
+const recovery = [...document.querySelectorAll('.auth-dialog button')].find((button) =>
+  button.textContent.includes('Forgot password'),
+)
+recovery.click()
+await waitFor(
+  () => document.querySelector('.auth-dialog').textContent.includes('There isn’t one to reset'),
+  5000,
+  'account recovery',
+)
+check(
+  'forgot-password recovery explains requesting a fresh code',
+  document.querySelector('.auth-dialog').textContent.includes('check your inbox and spam folder'),
+)
+document.querySelector('[aria-label="Close account window"]').click()
+await waitFor(() => !document.querySelector('.auth-dialog[open]'), 5000, 'closing account dialog')
+check('account dialog closes', !document.querySelector('.auth-dialog[open]'))
 check('no runtime errors', consoleErrors.length === 0, consoleErrors.join('; '))
 window.close()
 if (failures.length) process.exitCode = 1

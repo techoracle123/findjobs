@@ -148,7 +148,7 @@ async function publicJson(url, attempts = 1) {
 export async function main() {
   const auth = credentials(process.env)
   const api = client(auth)
-  const project = process.env.CLOUDFLARE_PAGES_PROJECT || 'find-jobs'
+  const project = process.env.CLOUDFLARE_PAGES_PROJECT || 'fj-find-jobs'
   if (!/^[a-z0-9][a-z0-9-]{0,57}[a-z0-9]$/.test(project))
     throw new Error('Invalid Pages project name.')
   const { databaseId, productionBranch } = await provision(api, project)

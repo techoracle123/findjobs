@@ -89,7 +89,7 @@ export interface ScoredJob {
 export interface RatesPayload {
   base: string
   date: string
-  source: 'frankfurter' | 'exchangerate-api' | 'fallback'
+  source: 'frankfurter' | 'exchangerate-api' | 'open-currency' | 'fallback'
   rates: Record<string, number>
 }
 

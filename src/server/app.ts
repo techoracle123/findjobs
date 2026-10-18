@@ -68,7 +68,8 @@ app.get('/api/auth/login', async (c) => {
       },
       503,
     )
-  return c.redirect('/')
+  const returnTo = c.req.query('returnTo') || '/'
+  return c.redirect(/^\/(?:jobs\/[A-Za-z0-9_-]+)?$/.test(returnTo) ? returnTo : '/')
 })
 
 app.get('/api/health', async (c) => {

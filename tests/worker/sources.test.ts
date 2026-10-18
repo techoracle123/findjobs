@@ -189,3 +189,46 @@ it('does not mistake another crawler’s rules for ours and honours wildcard pat
   expect(isPathAllowed(own.rules, '/feed')).toBe(true)
   expect(isPathAllowed(own.rules, '/feed/other')).toBe(false)
 })
+
+it('requests the actual public Greenhouse JSON endpoint, not the HTML board page', async () => {
+  let requested = ''
+  const fetcher = (async (url: RequestInfo | URL) => {
+    requested = String(url)
+    return Response.json(greenhouseFixture)
+  }) as typeof fetch
+  await greenhouse.fetchPostings(source(), fetcher)
+  expect(requested).toBe('https://boards-api.greenhouse.io/v1/boards/examplecorp/jobs?content=true')
+})
+
+it('rejects a malformed Greenhouse success response instead of closing existing jobs', async () => {
+  await expect(
+    greenhouse.fetchPostings(source(), textFetch('{"error":"temporary"}')),
+  ).rejects.toThrow('jobs list')
+})
+
+it('uses first-published dates and deadlines, and excludes generic talent pools', async () => {
+  const job = {
+    id: 11,
+    title: 'General Manager',
+    company_name: 'Actual Employer',
+    first_published: '2026-10-01T09:00:00Z',
+    updated_at: '2026-10-17T09:00:00Z',
+    application_deadline: '2026-11-01T09:00:00Z',
+  }
+  const postings = await greenhouse.fetchPostings(
+    source(),
+    textFetch(
+      JSON.stringify({
+        jobs: [
+          job,
+          { ...job, id: 12, title: 'General Interest' },
+          { ...job, id: 13, title: 'Join our talent community' },
+        ],
+      }),
+    ),
+  )
+  expect(postings).toHaveLength(1)
+  expect(postings[0].company).toBe('Actual Employer')
+  expect(postings[0].publishedAt).toBe('2026-10-01T09:00:00.000Z')
+  expect(postings[0].validThrough).toBe('2026-11-01T09:00:00.000Z')
+})

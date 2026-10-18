@@ -14,6 +14,7 @@ import m0010 from '../../migrations/0010_billing_events_and_ai_budget.sql?raw'
 import m0011 from '../../migrations/0011_live_only_and_telegram_links.sql?raw'
 import m0012 from '../../migrations/0012_refresh_live_normalisation.sql?raw'
 import m0013 from '../../migrations/0013_job_insights.sql?raw'
+import m0014 from '../../migrations/0014_public_board_refresh.sql?raw'
 
 /**
  * The real migration files, applied to the test database.
@@ -36,6 +37,7 @@ const MIGRATIONS = [
   m0011,
   m0012,
   m0013,
+  m0014,
 ]
 
 /**

@@ -88,6 +88,11 @@ export const SEED_SOURCES: SeedSource[] = [
   // --- Greenhouse boards: boards.greenhouse.io/<slug> -------------------
   ...(
     [
+      // Confirmed public employer boards: agriculture, research and development.
+      ['oneacrefund', 'One Acre Fund', 'WW'],
+      ['givedirectly', 'GiveDirectly', 'WW'],
+      ['givewell', 'GiveWell', 'WW'],
+      ['acumen', 'Acumen', 'WW'],
       ['stripe', 'Stripe', 'US'],
       ['airbnb', 'Airbnb', 'US'],
       ['dropbox', 'Dropbox', 'US'],
@@ -179,7 +184,7 @@ export const SEED_SOURCES: SeedSource[] = [
     id: `greenhouse-${slug}`,
     parser: 'greenhouse',
     name: `${label} — Greenhouse`,
-    listingUrl: `https://boards.greenhouse.io/${slug}`,
+    listingUrl: `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true`,
     company: slug,
     companyLabel: label,
     country,

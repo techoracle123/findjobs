@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      CLOUDFLARE_PAGES_PROJECT: find-jobs
+      CLOUDFLARE_PAGES_PROJECT: fj-find-jobs
       WRANGLER_SEND_METRICS: 'false'
       CI: 'true'
     steps:

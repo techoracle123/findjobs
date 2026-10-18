@@ -133,7 +133,8 @@ export function scoreJob(job: Job, profile: Profile): ScoredJob {
     missing: useful.missing,
   })
 
-  const roleApplicable = Boolean(job.roleFamily) && profile.targetRoleFamilies.length > 0
+  const roleApplicable =
+    Boolean(job.roleFamily) && job.roleFamily !== 'unknown' && profile.targetRoleFamilies.length > 0
   const roleMatched = roleApplicable && profile.targetRoleFamilies.includes(job.roleFamily)
   components.push({
     key: 'roleFamily',
@@ -145,12 +146,15 @@ export function scoreJob(job: Job, profile: Profile): ScoredJob {
       ? `Matches your ${job.roleFamily} focus`
       : roleApplicable
         ? `Outside your target role families`
-        : 'Add a target role family',
+        : job.roleFamily === 'unknown'
+          ? 'Profession not stated in the listing'
+          : 'Add a target profession',
     matched: roleMatched ? [job.roleFamily] : [],
     missing: roleApplicable && !roleMatched ? [job.roleFamily] : [],
   })
 
-  const seniorityApplicable = Boolean(job.seniority) && profile.targetSeniority.length > 0
+  const seniorityApplicable =
+    Boolean(job.seniority) && job.seniority !== 'unknown' && profile.targetSeniority.length > 0
   const seniorityMatched = seniorityApplicable && profile.targetSeniority.includes(job.seniority)
   components.push({
     key: 'seniority',
@@ -162,12 +166,15 @@ export function scoreJob(job: Job, profile: Profile): ScoredJob {
       ? `Matches your target level`
       : seniorityApplicable
         ? `Not a level you are targeting`
-        : 'Add a target level',
+        : job.seniority === 'unknown'
+          ? 'Experience level not stated in the listing'
+          : 'Add a target level',
     matched: seniorityMatched ? [job.seniority] : [],
     missing: seniorityApplicable && !seniorityMatched ? [job.seniority] : [],
   })
 
-  const modeApplicable = Boolean(job.workMode) && profile.preferredWorkModes.length > 0
+  const modeApplicable =
+    Boolean(job.workMode) && job.workMode !== 'unknown' && profile.preferredWorkModes.length > 0
   const modeMatched = modeApplicable && profile.preferredWorkModes.includes(job.workMode)
   components.push({
     key: 'workMode',
@@ -179,7 +186,9 @@ export function scoreJob(job: Job, profile: Profile): ScoredJob {
       ? `Matches your preferred ${job.workMode} setup`
       : modeApplicable
         ? `Not a work mode you listed`
-        : 'Add a preferred work mode',
+        : job.workMode === 'unknown'
+          ? 'Work arrangement not stated in the listing'
+          : 'Add a preferred work mode',
     matched: modeMatched ? [job.workMode] : [],
     missing: modeApplicable && !modeMatched ? [job.workMode] : [],
   })

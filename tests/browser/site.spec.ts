@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-for (const width of [390, 768, 1280, 1600]) {
+for (const width of [320, 390, 414, 768, 1024, 1280, 1600, 1920]) {
   test(`job board stays aligned at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 })
     const errors: string[] = []
@@ -153,4 +153,57 @@ test('public browsing and sign-in availability are reported honestly', async ({ 
   expect([302, 303]).toContain(login.status())
   expect(login.headers().location).toMatch(/^https:\/\/[^/]+\.cloudflareaccess\.com\//)
   expect((await request.get('/')).ok()).toBe(true)
+})
+
+test('sign-up, sign-in and passwordless recovery are clear on small phones', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Sign up', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('heading', { name: 'Create your free account' })).toBeVisible()
+  await expect(dialog).toContainText('Your first email sign-in creates your account')
+  await dialog.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(dialog.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Forgot password or can’t sign in?' }).click()
+  await expect(dialog).toContainText('There isn’t one to reset')
+  await expect(dialog).toContainText('check your inbox and spam folder')
+  const health = await (await page.request.get('/api/health')).json()
+  if (health.accessConfigured) {
+    await expect(dialog.getByRole('link', { name: 'Get a new sign-in code' })).toHaveAttribute(
+      'href',
+      '/api/auth/login?returnTo=%2F',
+    )
+  } else {
+    await expect(dialog.getByRole('status')).toContainText('temporarily unavailable')
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+  await page.keyboard.press('Escape')
+  await expect(dialog).not.toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sign up', exact: true })).toBeFocused()
+})
+
+test('match rings are visible on phones, explained, and never show a numeric grade', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Your preferences & filters' }).click()
+  await page.getByLabel('Skills', { exact: true }).fill('Python')
+  await page.getByLabel('Skills', { exact: true }).press('Enter')
+  await page.getByLabel('preferred profession', { exact: false }).selectOption('administration')
+  await page.getByRole('button', { name: 'Your preferences & filters' }).click()
+  await expect(page.locator('.joblist .scorebadge').first()).toBeVisible()
+  for (const text of await page.locator('.joblist .scorebadge').allTextContents())
+    expect(text.trim()).toBe('')
+  await page.getByText('What does the green circle mean?', { exact: true }).click()
+  await expect(page.locator('.match-help')).toContainText('not a job grade')
+  await expect(page.locator('.content')).not.toContainText(
+    /Rates by ExchangeRate|Salary estimates in|Job Board API/,
+  )
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
 })

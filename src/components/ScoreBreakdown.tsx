@@ -2,14 +2,13 @@ import type { ScoreComponent } from '../shared/types'
 
 interface ScoreBreakdownProps {
   components: ScoreComponent[]
-  total: number
 }
 
 /**
- * The score is explainable by construction: every component shows the weight
- * it carries, what it earned, and which skills or attributes drove it.
+ * Explain overlap through actual skills and preferences, not numeric grades.
+ * Unknown listing details never count against a visitor.
  */
-export function ScoreBreakdown({ components, total }: ScoreBreakdownProps) {
+export function ScoreBreakdown({ components }: ScoreBreakdownProps) {
   return (
     <div className="breakdown">
       {components.map((component) => {
@@ -22,8 +21,12 @@ export function ScoreBreakdown({ components, total }: ScoreBreakdownProps) {
               <span className="bd__name">{component.label}</span>
               <span className="bd__value">
                 {component.applicable
-                  ? `${percent}% of ${component.weight}`
-                  : `${component.weight} — not scored`}
+                  ? percent >= 60
+                    ? 'Matches well'
+                    : percent > 0
+                      ? 'Some overlap'
+                      : 'No overlap yet'
+                  : 'Add a preference to compare'}
               </span>
             </div>
             <div className="bd__bar">
@@ -42,11 +45,6 @@ export function ScoreBreakdown({ components, total }: ScoreBreakdownProps) {
           </div>
         )
       })}
-      <hr className="divider" />
-      <div className="kv">
-        <span className="kv__key">Match score</span>
-        <span className="kv__value">{total} / 100</span>
-      </div>
     </div>
   )
 }

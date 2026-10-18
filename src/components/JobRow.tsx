@@ -3,6 +3,7 @@ import type { ScoredJob } from '../shared/types'
 import { formatRange, formatRelativeTime } from '../shared/format'
 import { roleFamilyLabel, workModeLabel } from '../shared/taxonomy'
 import type { SalaryView } from '../lib/ranking'
+import { MatchRing } from './MatchRing'
 
 interface JobRowProps {
   scored: ScoredJob
@@ -27,15 +28,7 @@ export function JobRow({ scored, selected, salary, onSelect }: JobRowProps) {
         onSelect()
       }}
     >
-      {hasProfile && (
-        <span
-          className="scorebadge"
-          style={{ '--pct': score } as React.CSSProperties}
-          title={`${score} / 100 skill and preference match, not a hiring prediction`}
-        >
-          <span className="scorebadge__inner">{score}</span>
-        </span>
-      )}
+      {hasProfile && <MatchRing score={score} />}
       <span className="jobrow__main">
         <span className="jobrow__title">{job.title}</span>
         <span className="jobrow__company">
