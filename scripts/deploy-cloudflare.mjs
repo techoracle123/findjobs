@@ -113,6 +113,25 @@ function wrangler(args) {
     throw new Error(`Wrangler ${args[0]} failed; deployment stopped. ${safeOutput.slice(-5000)}`)
 }
 
+async function publicJson(url, attempts = 1) {
+  let status = 'unknown'
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: { 'Cache-Control': 'no-cache' },
+        signal: AbortSignal.timeout(30_000),
+      })
+      status = `${response.status} ${response.headers.get('content-type') ?? ''}`
+      if (response.ok && response.headers.get('content-type')?.includes('application/json'))
+        return await response.json()
+    } catch {
+      status = 'network error'
+    }
+    if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 10_000))
+  }
+  throw new Error(`Public API check failed at ${url} (${status}).`)
+}
+
 export async function main() {
   const auth = credentials(process.env)
   const api = client(auth)
@@ -120,14 +139,31 @@ export async function main() {
   if (!/^[a-z0-9][a-z0-9-]{0,57}[a-z0-9]$/.test(project))
     throw new Error('Invalid Pages project name.')
   const { databaseId, productionBranch } = await provision(api, project)
+  const projectInfo = (await api(`/pages/projects/${project}`)).result
+  const hostname = projectInfo.subdomain || `${project}.pages.dev`
+  const url = `https://${hostname}`
+  annotation('notice', 'Cloudflare assigned hostname', url)
+  if (hostname !== `${project}.pages.dev`)
+    annotation(
+      'warning',
+      'Requested hostname unavailable',
+      `Cloudflare assigned ${hostname} instead of ${project}.pages.dev. The exact requested name may already belong to another project.`,
+    )
+  if (process.env.GITHUB_ENV)
+    await writeFile(process.env.GITHUB_ENV, `LIVE_SITE_URL=${url}\n`, { flag: 'a' })
   let access = {}
   try {
-    access = await provisionAccess(api, project)
+    access = await provisionAccess(api, project, hostname)
     annotation('notice', 'Sign-in configured', 'Cloudflare Access email sign-in is configured.')
   } catch (error) {
     annotation('warning', 'Sign-in needs account permission', error.message)
   }
-  const telegram = await telegramSetup(process.env.TELEGRAM_BOT_TOKEN?.trim(), project)
+  const telegram = await telegramSetup(
+    process.env.TELEGRAM_BOT_TOKEN?.trim(),
+    project,
+    fetch,
+    hostname,
+  )
   if (!telegram)
     annotation(
       'warning',
@@ -161,13 +197,7 @@ export async function main() {
       productionBranch,
       '--commit-dirty=true',
     ])
-    const url = `https://${project}.pages.dev`
-    const response = await fetch(`${url}/api/readiness`, { signal: AbortSignal.timeout(60_000) })
-    if (!response.ok)
-      throw new Error(
-        'Deployment uploaded, but the public readiness request failed. Inspect the deployment before retrying.',
-      )
-    const report = await response.json()
+    const report = await publicJson(`${url}/api/readiness`, 18)
     if (
       report.checks?.find((check) => check.id === 'database')?.status !== 'ok' ||
       report.appMode !== 'production' ||
@@ -178,8 +208,10 @@ export async function main() {
       )
     }
     if (process.env.GITHUB_ACTIONS === 'true') {
-      console.log(
-        `::notice title=Pages app is live::Readiness passed at ${url}; deploying ingestion workers next.`,
+      annotation(
+        'notice',
+        'Pages app deployed',
+        `Database check passed at ${url}; deploying ingestion workers next.`,
       )
     }
     wrangler(['deploy', '--config', 'wrangler.ingest-consumer.jsonc'])

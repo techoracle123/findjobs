@@ -10,7 +10,7 @@ export function annotation(level, title, message) {
 
 /** A path-scoped Access app protects login, while the board remains public.
  * Other API requests verify its signed CF_Authorization cookie themselves. */
-export async function provisionAccess(api, project) {
+export async function provisionAccess(api, project, hostname = `${project}.pages.dev`) {
   let org = (await api('/access/organizations', { optional: true }))?.result
   if (!org) {
     org = (
@@ -37,7 +37,7 @@ export async function provisionAccess(api, project) {
         },
       })
     ).result
-  const domain = `${project}.pages.dev/api/auth/login`
+  const domain = `${hostname}/api/auth/login`
   const apps = (await api('/access/apps')).result ?? []
   let app = apps.find((item) => item.domain === domain)
   if (!app)
@@ -66,7 +66,12 @@ export async function provisionAccess(api, project) {
   return { ACCESS_TEAM_DOMAIN: org.auth_domain, ACCESS_AUD: app.aud }
 }
 
-export async function telegramSetup(token, project, fetcher = fetch) {
+export async function telegramSetup(
+  token,
+  project,
+  fetcher = fetch,
+  hostname = `${project}.pages.dev`,
+) {
   if (!token) return null
   const invoke = async (method, body = {}) => {
     let response
@@ -94,7 +99,7 @@ export async function telegramSetup(token, project, fetcher = fetch) {
     username: me.username,
     secret,
     async register() {
-      const url = `https://${project}.pages.dev/api/telegram/webhook`
+      const url = `https://${hostname}/api/telegram/webhook`
       await invoke('setWebhook', { url, secret_token: secret, allowed_updates: ['message'] })
       const info = await invoke('getWebhookInfo')
       if (info.url !== url) throw new Error('Telegram webhook URL was not saved.')

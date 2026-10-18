@@ -69,8 +69,6 @@ jobs:
       - name: Install Chromium for live browser checks
         run: npx playwright install --with-deps chromium
       - name: Test the live site at phone, tablet, and desktop widths
-        env:
-          LIVE_SITE_URL: https://find-jobs.pages.dev
         run: npx playwright test
       - name: Save browser screenshots and test reports
         if: always()
