@@ -38,7 +38,8 @@ const entries = codes
 
 // JSON.stringify produces a correctly escaped literal; several country names
 // contain an apostrophe ("Côte d'Ivoire") which would otherwise break the
-// generated file.
+// generated file. The literal sits on its own line so the output is exactly
+// what Prettier would write, and regenerating never produces a diff.
 const contents = `/**
  * GENERATED FILE — do not edit by hand.
  *
@@ -47,7 +48,8 @@ const contents = `/**
  *
  * Regenerate with: npm run data:generate
  */
-export const COUNTRY_DATA = ${JSON.stringify(entries)}
+export const COUNTRY_DATA =
+  ${JSON.stringify(entries)}
 `
 
 writeFileSync(targetPath, contents, 'utf8')
