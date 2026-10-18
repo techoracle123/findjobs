@@ -13,9 +13,8 @@ export interface AlertSubscriber {
 /**
  * Finds the subscribers who should hear about a role.
  *
- * A subscriber needs three things: a linked Telegram chat, an enabled
- * alert, and the entitlement to receive alerts. Anything missing means the
- * alert is not delivered, and the reason is not guessed at.
+ * A subscriber needs a linked Telegram chat and an enabled alert. Alerts
+ * are free while payments are deferred. No paid entitlement is required.
  */
 export async function subscribersFor(db: D1Database): Promise<AlertSubscriber[]> {
   const subscribers = await listTelegramSubscribers(db)

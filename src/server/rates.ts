@@ -10,8 +10,8 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000
  * The reference rates.
  *
  * `allowNetwork` is false in the test environment, where a live request is
- * neither possible nor useful: the offline table is used, which also makes
- * the tests deterministic.
+ * neither possible nor useful: only USD identity conversion is available.
+ * No exchange rate is fabricated when the network is unavailable.
  */
 export async function getRates(allowNetwork = true): Promise<RatesPayload> {
   if (allowNetwork && cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {

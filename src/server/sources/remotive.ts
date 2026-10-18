@@ -12,7 +12,7 @@ interface RemotivePosting {
   category?: string
   tags?: string[]
   job_type?: string
-  publication_date?: number
+  publication_date?: number | string
   candidate_required_location?: string
   salary?: string
   description?: string
@@ -64,9 +64,7 @@ export const remotive: SourceParser = {
               .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
               .map((tag) => tag.trim()),
             jobType: String(row.job_type ?? ''),
-            publishedAt: row.publication_date
-              ? new Date(row.publication_date * 1000).toISOString()
-              : null,
+            publishedAt: publicationDate(row.publication_date),
             validThrough: null,
             closed: false,
             salary: parseRemotiveSalary(row.salary),
@@ -115,4 +113,10 @@ export function parseRemotiveSalary(raw: string | undefined): RawPosting['salary
     currency,
     period,
   }
+}
+
+export function publicationDate(value: number | string | undefined): string | null {
+  if (!value) return null
+  const date = new Date(typeof value === 'number' ? value * 1000 : value)
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null
 }

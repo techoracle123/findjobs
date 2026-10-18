@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { verifyJwt } from '../../src/server/auth/jwt'
 import type { SigningKey } from '../../src/server/auth/jwt'
 import { audienceMatches } from '../../src/server/auth/jwt'
@@ -191,6 +191,45 @@ describe('identity resolution', () => {
           readConfig({ APP_MODE: mode }),
         ),
       ).toBeNull()
+    },
+  )
+
+  it.each(['cookie', 'assertion'])(
+    'verifies a signed Access %s token for browser sign-in',
+    async (transport) => {
+      const { publicKey, privateKey } = await makeKeyPair('browser-key')
+      const domain = `${transport}-test.cloudflareaccess.com`
+      const token = await signToken(
+        {
+          iss: `https://${domain}`,
+          aud: 'browser-aud',
+          email: 'browser@example.com',
+          exp: Math.floor(NOW / 1000) + 300,
+        },
+        privateKey,
+        'browser-key',
+      )
+      const mocked = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(Response.json({ keys: [publicKey] }))
+      try {
+        const headers: Record<string, string> =
+          transport === 'cookie'
+            ? { cookie: `other=value; CF_Authorization=${token}` }
+            : { 'cf-access-jwt-assertion': token }
+        const identity = await resolveIdentity(
+          request(headers),
+          readConfig({
+            APP_MODE: 'production',
+            ACCESS_TEAM_DOMAIN: domain,
+            ACCESS_AUD: 'browser-aud',
+          }),
+          NOW,
+        )
+        expect(identity?.email).toBe('browser@example.com')
+      } finally {
+        mocked.mockRestore()
+      }
     },
   )
 

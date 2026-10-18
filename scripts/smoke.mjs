@@ -96,148 +96,49 @@ window.addEventListener('error', (event) => {
 const bundle = readFileSync(join(root, 'dist-smoke', 'smoke.js'), 'utf8')
 window.eval(bundle)
 
-try {
-  await waitFor(() => document.querySelectorAll('.jobrow').length > 0, 20000, 'job rows to render')
-} catch (error) {
-  console.log(`  FAIL  app never rendered rows — ${error.message}`)
-  console.log('  console errors:', consoleErrors.slice(0, 5))
-  process.exit(1)
-}
-
-const rows = document.querySelectorAll('.jobrow')
-check('renders all 8 demo roles', rows.length === 8, `got ${rows.length}`)
-
-const banner = document.querySelector('.banner--demo')
-check(
-  'shows the preview-data warning',
-  Boolean(banner && banner.textContent.includes('Preview dataset')),
-)
-
-const topbar = document.querySelector('.topbar')?.textContent ?? ''
-check('reports AI binding as off', topbar.includes('AI off'), topbar)
-check('reports Telegram as off', topbar.includes('Telegram off'), topbar)
-check('reports the D1 data source', topbar.includes('D1'), topbar)
-
-// Every row should show an eligibility label and a source.
-const rowText = rows[0].textContent ?? ''
-check(
-  'row shows an eligibility verdict',
-  /Eligible|Needs checking|Restricted/.test(rowText),
-  rowText,
-)
-check('row shows a source', /Demo board/.test(rowText), rowText)
-
-// Scores start at zero because no profile has been entered yet.
-const firstScore = document.querySelector('.scorebadge__inner')?.textContent ?? ''
-check('starts with a zero score', firstScore.trim() === '0', firstScore)
-
-// Enter a skill and confirm the ranking reacts.
-const skillInput = document.getElementById('skill-input')
-check('profile skill input exists', Boolean(skillInput))
-
-if (skillInput) {
-  setNativeValue(window, skillInput, 'TypeScript')
-  skillInput.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-  await waitFor(
-    () => Number(document.querySelector('.scorebadge__inner')?.textContent ?? '0') > 0,
-    8000,
-    'score to update after adding a skill',
-  )
-  const updated = document.querySelector('.scorebadge__inner')?.textContent ?? ''
-  check('score reacts to a new skill', Number(updated) > 0, `score=${updated}`)
-  check(
-    'skill appears as a tag',
-    (document.querySelector('.taglist')?.textContent ?? '').includes('TypeScript'),
-  )
-}
-
-// Selecting a row should populate the detail panel.
-rows[0].dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-await waitFor(() => Boolean(document.querySelector('.detail__title')), 8000, 'detail panel to open')
-const detailTitle = document.querySelector('.detail__title')?.textContent ?? ''
-check('detail panel opens with the role title', detailTitle.length > 0, detailTitle)
-
-const breakdown = document.querySelectorAll('.bd')
-check('detail shows the score breakdown', breakdown.length === 5, `got ${breakdown.length}`)
-
-const detailText = document.querySelector('.detail')?.textContent ?? ''
-check('detail explains eligibility', detailText.includes('Eligibility'), '')
-check('detail shows the pay period', /\/(yr|mo|hr)/.test(detailText), '')
-check('detail shows a rate date', /\d{4}-\d{2}-\d{2}/.test(detailText), '')
-
-// Tabs should switch panels.
-const sortSelect = document.getElementById('sort')
-check('sort control exists', Boolean(sortSelect))
-if (sortSelect) {
-  setNativeValue(window, sortSelect, 'salary-desc')
-  await waitFor(
-    () => document.body.textContent?.includes('mix pay periods'),
-    8000,
-    'mixed pay period notice',
-  )
-  check('salary sort warns that periods are not annualised', true)
-  const salaries = [...document.querySelectorAll('.jobrow__salary')].map(
-    (node) => node.textContent ?? '',
-  )
-  check('salary sort still lists every role', salaries.length === 8, `got ${salaries.length}`)
-}
-
-const alertsTab = [...document.querySelectorAll('.tab')].find((tab) =>
-  tab.textContent?.includes('Alerts'),
-)
-if (alertsTab) {
-  alertsTab.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-  await waitFor(
-    () => document.body.textContent?.includes('No Telegram bot is configured'),
-    8000,
-    'alerts panel',
-  )
-  check('alerts tab explains that nothing is delivered', true)
-  const alertsHead = document.querySelector('.content .panel__head')?.textContent ?? ''
-  check('alerts tab is marked as not linked', alertsHead.includes('Not linked'), alertsHead)
-} else {
-  check('alerts tab exists', false)
-}
-
-const planTab = [...document.querySelectorAll('.tab')].find((tab) =>
-  tab.textContent?.includes('Plan'),
-)
-if (planTab) {
-  planTab.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-  await waitFor(
-    () => document.body.textContent?.includes('No payment provider is configured'),
-    8000,
-    'plan panel',
-  )
-  check('plan tab says no provider is connected', true)
-
-  const checkout = [...document.querySelectorAll('.content button')].find((button) =>
-    button.textContent?.includes('Choose Desk+'),
-  )
-  check('plan tab offers the paid plan', Boolean(checkout))
-  check('checkout is disabled without a provider', checkout?.disabled === true)
-} else {
-  check('plan tab exists', false)
-}
-
-const realErrors = consoleErrors.filter(
-  (message) =>
-    !message.includes('not wrapped in act') &&
-    !message.includes('ReactDOMTestUtils') &&
-    !message.includes('Download the React DevTools'),
+window.HTMLElement.prototype.scrollIntoView = () => {}
+await waitFor(
+  () => document.querySelector('.empty__title') || document.querySelector('.joblist .jobrow'),
+  20000,
+  'feed or honest empty state',
 )
 check(
-  'no runtime errors in the console',
-  realErrors.length === 0,
-  realErrors.slice(0, 3).join(' | '),
+  'uses the Find Jobs name',
+  document.querySelector('.brand')?.textContent.includes('Find Jobs'),
 )
-
-console.log('')
-if (failures.length > 0) {
-  console.log(`${failures.length} check(s) failed:`)
-  for (const failure of failures) console.log(`  - ${failure}`)
-  process.exit(1)
-}
-console.log('All smoke checks passed.')
+check('does not show fictional data', !document.body.textContent.includes('Preview dataset'))
+check(
+  'does not show infrastructure controls',
+  !document.querySelector('.topbar')?.textContent.includes('D1'),
+)
+check(
+  'does not offer a payment plan',
+  ![...document.querySelectorAll('.tab')].some((tab) => tab.textContent.includes('Plan')),
+)
+await waitFor(() => document.querySelector('.local-note'), 8000, 'anonymous storage note')
+check('explains anonymous storage', document.body.textContent.includes('stay on this device'))
+const input = document.getElementById('skill-input')
+check('profile input exists', Boolean(input))
+setNativeValue(window, input, 'Python')
+input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+await waitFor(() => document.querySelector('[aria-label="Remove Python"]'), 8000, 'profile tag')
+check('profile accepts a skill', Boolean(document.querySelector('[aria-label="Remove Python"]')))
+const alerts = [...document.querySelectorAll('.tab')].find((tab) =>
+  tab.textContent.includes('Alerts'),
+)
+alerts.click()
+await waitFor(() => document.getElementById('alert-label'), 8000, 'alerts panel')
+check('alerts explain sign-in', document.body.textContent.includes('Sign in to receive job alerts'))
+check(
+  'alert keywords have an accessible label',
+  Boolean(document.querySelector('[aria-label="Alert keywords"]')),
+)
+check(
+  'does not claim alerts are being delivered',
+  document.body.textContent.includes('aren’t connected yet') ||
+    document.body.textContent.includes('Connect Telegram'),
+)
+check('no runtime errors', consoleErrors.length === 0, consoleErrors.join('; '))
 window.close()
-process.exit(0)
+if (failures.length) process.exitCode = 1
+console.log(`\n${failures.length ? 'FAILED' : 'PASS'}: live-only interface smoke checks`)

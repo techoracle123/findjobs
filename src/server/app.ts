@@ -73,7 +73,11 @@ app.get('/api/auth/login', async (c) => {
 app.get('/api/health', async (c) => {
   const env = c.env ?? {}
   const config = readConfig(env)
-  const { jobs, source } = await listOpenJobs(env.DB)
+  const count = env.DB
+    ? await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM jobs WHERE is_demo = 0 AND job_status = 'open' AND expired_at IS NULL AND datetime(last_seen_at) >= datetime('now', '-3 days')",
+      ).first<{ n: number }>()
+    : null
   const rates = await getRates(config.appMode !== 'test')
   const accessLoginUrl = accessConfigured(config) ? '/api/auth/login' : null
   return c.json({
@@ -85,8 +89,8 @@ app.get('/api/health', async (c) => {
     billingConfigured: hasRealProvider(config),
     authenticationRequired: config.isProduction,
     accessLoginUrl,
-    dataSource: source,
-    jobCount: jobs.length,
+    dataSource: 'd1',
+    jobCount: count?.n ?? 0,
     ratesDate: rates.date,
     ratesSource: rates.source,
   })
