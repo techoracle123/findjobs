@@ -162,7 +162,15 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     // Only our sanitised errors are safe to log. Unknown errors may contain credentials.
     const message = error instanceof Error ? error.message : 'Unknown deployment error'
     const token = process.env.CLOUDFLARE_API_TOKEN
-    console.error(token ? message.replaceAll(token, '[REDACTED]') : message)
+    const safeMessage = token ? message.replaceAll(token, '[REDACTED]') : message
+    console.error(safeMessage)
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      const annotation = safeMessage
+        .replaceAll('%', '%25')
+        .replaceAll('\r', '%0D')
+        .replaceAll('\n', '%0A')
+      console.error(`::error title=Cloudflare deployment failed::${annotation}`)
+    }
     process.exitCode = 1
   })
 }
