@@ -5,10 +5,36 @@ import { readFile, writeFile, mkdir, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+process.on('uncaughtException', (error) => {
+  const message = String(error.message)
+    .slice(-3500)
+    .replaceAll('%', '%25')
+    .replaceAll('\r', '%0D')
+    .replaceAll('\n', '%0A')
+  console.error(`::error title=Isolated real-feed preview::${message}`)
+  process.exit(1)
+})
+
 const root = process.cwd()
 const node = process.execPath
-const run = (file, args, options = {}) =>
-  execFileSync(file, args, { cwd: root, stdio: 'inherit', ...options })
+const run = (file, args, options = {}) => {
+  try {
+    const output = execFileSync(file, args, {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 32 * 1024 * 1024,
+      ...options,
+      stdio: 'pipe',
+    })
+    if (output) process.stdout.write(output)
+  } catch (error) {
+    if (error.stdout) process.stdout.write(error.stdout)
+    if (error.stderr) process.stderr.write(error.stderr)
+    throw new Error(
+      `Preview command failed: ${file} ${args.join(' ')}. ${String(error.stderr || error.stdout || error.message).slice(-2600)}`,
+    )
+  }
+}
 const metadata = JSON.parse(
   execFileSync(
     'gh',
