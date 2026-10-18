@@ -1,0 +1,31 @@
+{
+  "job-count": 2,
+  "jobs": [
+    {
+      "id": 1042312,
+      "url": "https://remotive.com/remote-jobs/software-devops-1042312",
+      "title": "DevOps Engineer",
+      "company_name": "Cloudline",
+      "category": "DevOps",
+      "tags": ["terraform", "kubernetes", "aws"],
+      "job_type": "full_time",
+      "publication_date": 1759276800,
+      "candidate_required_location": "Europe",
+      "salary": "$90k - $120k",
+      "description": "<p>Run our infrastructure as code. Terraform, Kubernetes and AWS experience required.</p><p>You will collaborate with backend engineers on service deployment.</p>"
+    },
+    {
+      "id": 1042400,
+      "url": "https://remotive.com/remote-jobs/data-scientist-1042400",
+      "title": "Data Scientist",
+      "company_name": "Bluehaven",
+      "category": "Data",
+      "tags": ["python", "sql", "machine learning"],
+      "job_type": "contract",
+      "publication_date": 1759190400,
+      "candidate_required_location": "Worldwide",
+      "salary": "",
+      "description": "<p>Build and evaluate our forecasting models. Python, SQL and machine learning background expected.</p>"
+    }
+  ]
+}

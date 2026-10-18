@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "role-signal-ingest",
+  "main": "src/ingest.ts",
+  "compatibility_date": "2026-10-17",
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rolesignal",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "triggers": {
+    // Ingestion runs every hour. The schedule is deliberately frequent enough
+    // that postings do not go stale, but infrequent enough to stay well
+    // inside free-tier allowances.
+    "crons": ["17 * * * *"],
+  },
+  "vars": {
+    "APP_MODE": "preview",
+    "JOB_SOURCE_FETCH": "1",
+  },
+}

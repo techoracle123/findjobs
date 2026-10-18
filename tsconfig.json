@@ -15,7 +15,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["vite/client", "@cloudflare/workers-types"]
+    "types": ["vite/client", "@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"]
   },
-  "include": ["src", "functions"]
+  "include": ["src", "functions", "tests"]
 }

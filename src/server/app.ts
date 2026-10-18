@@ -1,24 +1,22 @@
 import { Hono } from 'hono'
-import type { Env } from './env'
+import type { AppEnv } from './env'
 import { DEFAULT_APP_MODE } from './env'
+import { accessConfigured, readConfig, stripeConfigured, telegramConfigured } from './config'
 import { listJobs, findJob } from './jobs'
 import { getRates } from './rates'
 import { suggest } from './cv'
 import { scoreJob } from '../shared/scoring'
 import type { Profile, ScoredJob } from '../shared/types'
+import { requestContext, stringList } from './http'
+import { enforceRateLimit } from './ratelimit'
+import { accountRoutes } from './routes/account'
+import { sourceRoutes } from './routes/sources'
+import { billingRoutes } from './routes/billing'
+import { telegramRoutes } from './routes/telegram'
 
-export const app = new Hono<{ Bindings: Env }>()
+export const app = new Hono<AppEnv>()
 
-const MAX_STRING_LIST = 40
-
-function stringList(value: unknown, limit = MAX_STRING_LIST): string[] {
-  if (!Array.isArray(value)) return []
-  return value
-    .filter((item): item is string => typeof item === 'string')
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, limit)
-}
+app.use('*', requestContext)
 
 function normaliseProfile(input: unknown): Profile {
   const raw = (input ?? {}) as Partial<Profile>
@@ -33,13 +31,21 @@ function normaliseProfile(input: unknown): Profile {
 
 app.get('/api/health', async (c) => {
   const env = c.env ?? {}
+  const config = readConfig(env)
   const { jobs, source } = await listJobs(env.DB)
   const rates = await getRates()
+  const accessLoginUrl = config.access.aud
+    ? `https://${config.access.teamDomain}/cdn-cgi/access/login?app_id=${encodeURIComponent(config.access.aud)}&aud=${encodeURIComponent(config.access.aud)}`
+    : null
   return c.json({
     ok: true,
-    appMode: env.APP_MODE || DEFAULT_APP_MODE,
-    aiBinding: Boolean(env.AI),
-    telegramConfigured: Boolean(env.TELEGRAM_BOT_USERNAME),
+    appMode: config.appMode || DEFAULT_APP_MODE,
+    aiBinding: config.aiEnabled,
+    telegramConfigured: telegramConfigured(config),
+    accessConfigured: accessConfigured(config),
+    billingConfigured: stripeConfigured(config),
+    authenticationRequired: config.isProduction,
+    accessLoginUrl,
     dataSource: source,
     jobCount: jobs.length,
     ratesDate: rates.date,
@@ -65,6 +71,9 @@ app.get('/api/jobs/:id', async (c) => {
 })
 
 app.post('/api/score', async (c) => {
+  const limited = await enforceRateLimit(c, { bucket: 'score', limit: 120, windowSeconds: 60 })
+  if (limited) return limited
+
   const body = await c.req.json().catch(() => ({}))
   const profile = normaliseProfile((body as { profile?: unknown }).profile)
   const env = c.env ?? {}
@@ -77,9 +86,10 @@ app.post('/api/score', async (c) => {
 
 app.post('/api/cv/suggest', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const text = typeof (body as { text?: unknown }).text === 'string'
-    ? String((body as { text: string }).text).slice(0, 40_000)
-    : ''
+  const text =
+    typeof (body as { text?: unknown }).text === 'string'
+      ? String((body as { text: string }).text).slice(0, 40_000)
+      : ''
   if (!text.trim()) {
     return c.json({ error: 'text_required' }, 400)
   }
@@ -91,6 +101,11 @@ app.post('/api/cv/suggest', async (c) => {
 app.get('/api/rates', async (c) => {
   return c.json(await getRates())
 })
+
+app.route('/api', accountRoutes)
+app.route('/api', sourceRoutes)
+app.route('/api', billingRoutes)
+app.route('/api', telegramRoutes)
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404))
 

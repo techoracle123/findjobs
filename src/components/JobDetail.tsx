@@ -1,7 +1,13 @@
 import { Bookmark, BookmarkCheck, ExternalLink, Info, Send } from 'lucide-react'
 import type { RatesPayload, ScoredJob } from '../shared/types'
 import { ELIGIBILITY_LABELS } from '../shared/scoring'
-import { formatRange, formatRelativeTime, freshnessOf, FRESHNESS_LABELS, PERIOD_LABELS } from '../shared/format'
+import {
+  formatRange,
+  formatRelativeTime,
+  freshnessOf,
+  FRESHNESS_LABELS,
+  PERIOD_LABELS,
+} from '../shared/format'
 import { roleFamilyLabel, seniorityLabel, workModeLabel } from '../shared/taxonomy'
 import { countryName } from '../shared/countries'
 import { ScoreBreakdown } from './ScoreBreakdown'
@@ -168,8 +174,9 @@ export function JobDetail({
                 </span>
               </div>
               <p className="rate">
-                Indicative conversion at {rates?.date} ({rates?.source === 'frankfurter' ? 'Frankfurter' : 'offline reference rates'}).
-                Pay periods are not annualised.
+                Indicative conversion at {rates?.date} (
+                {rates?.source === 'frankfurter' ? 'Frankfurter' : 'offline reference rates'}). Pay
+                periods are not annualised.
               </p>
             </>
           ) : salary.sameCurrency ? (

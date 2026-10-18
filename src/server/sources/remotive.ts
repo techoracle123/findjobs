@@ -1,0 +1,110 @@
+import type { RawPosting, SourceAdapter } from './types'
+import { SourceError } from './types'
+import { stripHtml } from './arbeitnow'
+
+const ENDPOINT = 'https://remotive.com/api/remote-jobs'
+
+interface RemotivePosting {
+  id?: number | string
+  url?: string
+  title?: string
+  company_name?: string
+  category?: string
+  tags?: string[]
+  job_type?: string
+  publication_date?: number
+  candidate_required_location?: string
+  salary?: string
+  description?: string
+}
+
+/**
+ * Remotive publishes a public API of remote jobs. It needs no key and asks
+ * that the source is credited, which the attribution field carries.
+ */
+export const remotive: SourceAdapter = {
+  id: 'remotive',
+  name: 'Remotive API',
+  homepage: 'https://remotive.com',
+  attribution: 'Jobs via the Remotive API.',
+
+  async fetchPostings(fetchImpl: typeof fetch = fetch): Promise<RawPosting[]> {
+    let payload: { jobs?: RemotivePosting[] }
+    try {
+      const response = await fetchImpl(ENDPOINT, { headers: { accept: 'application/json' } })
+      if (!response.ok) {
+        throw new SourceError(`Remotive responded with ${response.status}`, 'remotive')
+      }
+      payload = (await response.json()) as { jobs?: RemotivePosting[] }
+    } catch (error) {
+      if (error instanceof SourceError) throw error
+      throw new SourceError(
+        `Could not reach Remotive: ${error instanceof Error ? error.message : String(error)}`,
+        'remotive',
+      )
+    }
+
+    const rows = payload.jobs ?? []
+    return rows
+      .filter((row) => row.id !== undefined && row.title)
+      .map((row) => ({
+        externalId: String(row.id),
+        title: String(row.title ?? '').trim(),
+        company: String(row.company_name ?? 'Unknown employer').trim(),
+        description: stripHtml(String(row.description ?? '')),
+        url: String(row.url ?? ''),
+        location: String(row.candidate_required_location ?? '').trim(),
+        remote: true,
+        tags: [row.category, ...(row.tags ?? [])]
+          .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
+          .map((tag) => tag.trim()),
+        jobType: String(row.job_type ?? ''),
+        publishedAt: row.publication_date
+          ? new Date(row.publication_date * 1000).toISOString()
+          : null,
+        salary: parseRemotiveSalary(row.salary),
+      }))
+  },
+}
+
+/**
+ * Remotive publishes salary as free text, e.g. "$50k - $70k". The currency
+ * and period are only recorded when they are stated plainly.
+ */
+export function parseRemotiveSalary(raw: string | undefined): RawPosting['salary'] {
+  if (!raw) return null
+  const text = raw.trim()
+  if (!text) return null
+
+  const currency = /€|EUR/i.test(text)
+    ? 'EUR'
+    : /£|GBP/i.test(text)
+      ? 'GBP'
+      : /\$|USD/i.test(text)
+        ? 'USD'
+        : null
+
+  const period = /hour|hr|hourly/i.test(text)
+    ? 'hour'
+    : /month|monthly|mo\b/i.test(text)
+      ? 'month'
+      : 'year'
+
+  const numbers = [...text.matchAll(/(\d[\d.,]*)\s*(k)?/g)]
+    .map((match) => {
+      const raw = match[1].replace(/,/g, '')
+      const value = Number.parseFloat(raw)
+      if (Number.isNaN(value)) return null
+      return match[2] ? value * 1000 : value
+    })
+    .filter((value): value is number => value !== null && value > 0)
+
+  if (numbers.length === 0) return null
+
+  return {
+    min: numbers[0],
+    max: numbers.length > 1 ? numbers[1] : numbers[0],
+    currency,
+    period,
+  }
+}

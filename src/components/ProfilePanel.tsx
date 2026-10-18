@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import type { Profile } from '../shared/types'
-import { ROLE_FAMILIES, ROLE_FAMILY_LABELS, SENIORITIES, SENIORITY_LABELS, WORK_MODES, WORK_MODE_LABELS } from '../shared/taxonomy'
+import {
+  ROLE_FAMILIES,
+  ROLE_FAMILY_LABELS,
+  SENIORITIES,
+  SENIORITY_LABELS,
+  WORK_MODES,
+  WORK_MODE_LABELS,
+} from '../shared/taxonomy'
 import { EligibilityPicker } from './EligibilityPicker'
 
 export const EMPTY_PROFILE: Profile = {
@@ -44,7 +51,12 @@ export function ProfilePanel({ profile, onChange, onReset }: ProfilePanelProps) 
       <div className="panel__head">
         <h2 className="panel__title">Your signal</h2>
         <div style={{ flex: 1 }} />
-        <button type="button" className="btn btn--ghost btn--sm" onClick={onReset} title="Clear the profile">
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={onReset}
+          title="Clear the profile"
+        >
           <RotateCcw size={13} />
           Reset
         </button>
@@ -99,7 +111,10 @@ export function ProfilePanel({ profile, onChange, onReset }: ProfilePanelProps) 
                 className="chipbtn"
                 aria-pressed={profile.targetRoleFamilies.includes(family)}
                 onClick={() =>
-                  onChange({ ...profile, targetRoleFamilies: toggle(profile.targetRoleFamilies, family) })
+                  onChange({
+                    ...profile,
+                    targetRoleFamilies: toggle(profile.targetRoleFamilies, family),
+                  })
                 }
               >
                 {ROLE_FAMILY_LABELS[family]}
@@ -137,7 +152,10 @@ export function ProfilePanel({ profile, onChange, onReset }: ProfilePanelProps) 
                 className="chipbtn"
                 aria-pressed={profile.preferredWorkModes.includes(mode)}
                 onClick={() =>
-                  onChange({ ...profile, preferredWorkModes: toggle(profile.preferredWorkModes, mode) })
+                  onChange({
+                    ...profile,
+                    preferredWorkModes: toggle(profile.preferredWorkModes, mode),
+                  })
                 }
               >
                 {WORK_MODE_LABELS[mode]}

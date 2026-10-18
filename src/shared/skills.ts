@@ -185,7 +185,11 @@ export const SKILL_CATALOGUE: SkillPattern[] = [
   { label: 'GraphQL', patterns: [word('graphql')], weight: 5 },
   { label: 'REST', patterns: [word('rest\\s*api'), word('restful')], weight: 4 },
   { label: 'gRPC', patterns: [word('grpc')], weight: 4 },
-  { label: 'PostgreSQL', patterns: [word('postgres'), word('postgresql'), word('psql')], weight: 6 },
+  {
+    label: 'PostgreSQL',
+    patterns: [word('postgres'), word('postgresql'), word('psql')],
+    weight: 6,
+  },
   { label: 'MySQL', patterns: [word('mysql'), word('mariadb')], weight: 5 },
   { label: 'MongoDB', patterns: [word('mongodb'), word('mongo')], weight: 5 },
   { label: 'Redis', patterns: [word('redis')], weight: 4 },
@@ -209,7 +213,11 @@ export const SKILL_CATALOGUE: SkillPattern[] = [
   { label: 'AWS', patterns: [word('aws'), word('amazon web services')], weight: 6 },
   { label: 'GCP', patterns: [word('gcp'), word('google cloud')], weight: 5 },
   { label: 'Azure', patterns: [word('azure')], weight: 5 },
-  { label: 'CI/CD', patterns: [word('ci/cd'), word('cicd'), word('continuous integration'), word('github actions')], weight: 5 },
+  {
+    label: 'CI/CD',
+    patterns: [word('ci/cd'), word('cicd'), word('continuous integration'), word('github actions')],
+    weight: 5,
+  },
   { label: 'Linux', patterns: [word('linux')], weight: 4 },
   { label: 'Bash', patterns: [word('bash'), word('shell script')], weight: 3 },
   { label: 'Git', patterns: [word('git'), word('github'), word('gitlab')], weight: 4 },
@@ -217,17 +225,42 @@ export const SKILL_CATALOGUE: SkillPattern[] = [
   { label: 'Flutter', patterns: [word('flutter')], weight: 4 },
   { label: 'Android', patterns: [word('android')], weight: 4 },
   { label: 'iOS', patterns: [word('ios')], weight: 4 },
-  { label: 'Security', patterns: [word('appsec'), word('application security'), word('infosec'), word('penetration test')], weight: 5 },
+  {
+    label: 'Security',
+    patterns: [
+      word('appsec'),
+      word('application security'),
+      word('infosec'),
+      word('penetration test'),
+    ],
+    weight: 5,
+  },
   { label: 'Threat modeling', patterns: [word('threat model')], weight: 5 },
-  { label: 'Payments', patterns: [word('payments'), word('stripe'), word('payment processing')], weight: 4 },
-  { label: 'Accessibility', patterns: [word('accessibility'), word('a11y'), word('wcag')], weight: 4 },
+  {
+    label: 'Payments',
+    patterns: [word('payments'), word('stripe'), word('payment processing')],
+    weight: 4,
+  },
+  {
+    label: 'Accessibility',
+    patterns: [word('accessibility'), word('a11y'), word('wcag')],
+    weight: 4,
+  },
   { label: 'Figma', patterns: [word('figma')], weight: 4 },
   { label: 'Design systems', patterns: [word('design system')], weight: 4 },
-  { label: 'Product management', patterns: [word('product management'), word('product owner'), word('roadmap')], weight: 4 },
+  {
+    label: 'Product management',
+    patterns: [word('product management'), word('product owner'), word('roadmap')],
+    weight: 4,
+  },
   { label: 'Agile', patterns: [word('agile'), word('scrum'), word('kanban')], weight: 3 },
   { label: 'Tailwind CSS', patterns: [word('tailwind')], weight: 4 },
   { label: 'Storybook', patterns: [word('storybook')], weight: 3 },
-  { label: 'Playwright', patterns: [word('playwright'), word('cypress'), word('selenium')], weight: 4 },
+  {
+    label: 'Playwright',
+    patterns: [word('playwright'), word('cypress'), word('selenium')],
+    weight: 4,
+  },
   { label: 'Pytest', patterns: [word('pytest'), word('unit test')], weight: 3 },
   { label: 'GDPR', patterns: [word('gdpr'), word('data protection')], weight: 4 },
 ]
@@ -236,15 +269,68 @@ export const ROLE_FAMILY_KEYWORDS: { family: string; patterns: RegExp[] }[] = [
   { family: 'frontend', patterns: [word('frontend'), word('front[- ]end'), word('ui engineer')] },
   { family: 'backend', patterns: [word('backend'), word('back[- ]end'), word('api engineer')] },
   { family: 'fullstack', patterns: [word('full[- ]?stack')] },
-  { family: 'data', patterns: [word('data analyst'), word('data engineer'), word('analytics'), bare('bi')] },
-  { family: 'ml', patterns: [word('machine learning'), word('ml engineer'), word('deep learning'), bare('ml')] },
-  { family: 'platform', patterns: [word('platform engineer'), word('developer platform'), word('internal developer platform')] },
-  { family: 'devops', patterns: [word('devops'), word('site reliability'), word('sre'), word('infrastructure engineer')] },
-  { family: 'security', patterns: [word('security engineer'), word('appsec'), word('infosec'), word('security analyst')] },
-  { family: 'product', patterns: [word('product manager'), word('product management'), word('product owner')] },
-  { family: 'design', patterns: [word('designer'), word('design lead'), word('ux researcher'), word('product design')] },
-  { family: 'qa', patterns: [word('qa engineer'), word('quality assurance'), word('test engineer')] },
-  { family: 'mobile', patterns: [word('mobile engineer'), word('ios engineer'), word('android engineer')] },
+  {
+    family: 'data',
+    patterns: [
+      word('data analyst'),
+      word('data engineer'),
+      word('data scientist'),
+      word('data science'),
+      word('analytics'),
+      bare('bi'),
+    ],
+  },
+  {
+    family: 'ml',
+    patterns: [word('machine learning'), word('ml engineer'), word('deep learning'), bare('ml')],
+  },
+  {
+    family: 'platform',
+    patterns: [
+      word('platform engineer'),
+      word('developer platform'),
+      word('internal developer platform'),
+    ],
+  },
+  {
+    family: 'devops',
+    patterns: [
+      word('devops'),
+      word('site reliability'),
+      word('sre'),
+      word('infrastructure engineer'),
+    ],
+  },
+  {
+    family: 'security',
+    patterns: [
+      word('security engineer'),
+      word('appsec'),
+      word('infosec'),
+      word('security analyst'),
+    ],
+  },
+  {
+    family: 'product',
+    patterns: [word('product manager'), word('product management'), word('product owner')],
+  },
+  {
+    family: 'design',
+    patterns: [
+      word('designer'),
+      word('design lead'),
+      word('ux researcher'),
+      word('product design'),
+    ],
+  },
+  {
+    family: 'qa',
+    patterns: [word('qa engineer'), word('quality assurance'), word('test engineer')],
+  },
+  {
+    family: 'mobile',
+    patterns: [word('mobile engineer'), word('ios engineer'), word('android engineer')],
+  },
 ]
 
 export const SENIORITY_KEYWORDS: { level: string; patterns: RegExp[] }[] = [
@@ -254,7 +340,10 @@ export const SENIORITY_KEYWORDS: { level: string; patterns: RegExp[] }[] = [
   { level: 'senior', patterns: [word('senior'), bare('sr')] },
   { level: 'staff', patterns: [word('staff'), word('principal engineer'), word('distinguished')] },
   { level: 'lead', patterns: [word('tech lead'), word('engineering lead'), word('team lead')] },
-  { level: 'principal', patterns: [word('principal'), word('fellow'), word('head of engineering')] },
+  {
+    level: 'principal',
+    patterns: [word('principal'), word('fellow'), word('head of engineering')],
+  },
 ]
 
 export const WORK_MODE_KEYWORDS: { mode: string; patterns: RegExp[] }[] = [

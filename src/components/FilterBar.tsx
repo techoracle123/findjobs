@@ -1,5 +1,12 @@
 import type { Filters } from '../lib/ranking'
-import { ROLE_FAMILIES, ROLE_FAMILY_LABELS, SENIORITIES, SENIORITY_LABELS, WORK_MODES, WORK_MODE_LABELS } from '../shared/taxonomy'
+import {
+  ROLE_FAMILIES,
+  ROLE_FAMILY_LABELS,
+  SENIORITIES,
+  SENIORITY_LABELS,
+  WORK_MODES,
+  WORK_MODE_LABELS,
+} from '../shared/taxonomy'
 import { ELIGIBILITY_LABELS } from '../shared/scoring'
 import type { EligibilityTier } from '../shared/types'
 
@@ -83,7 +90,9 @@ export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
                 type="button"
                 className="chipbtn"
                 aria-pressed={filters.seniorities.includes(level)}
-                onClick={() => onChange({ ...filters, seniorities: toggle(filters.seniorities, level) })}
+                onClick={() =>
+                  onChange({ ...filters, seniorities: toggle(filters.seniorities, level) })
+                }
               >
                 {SENIORITY_LABELS[level]}
               </button>

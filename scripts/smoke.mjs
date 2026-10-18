@@ -53,7 +53,12 @@ function setNativeValue(window, element, value) {
 console.log('Building smoke bundle…')
 execFileSync(
   join(root, 'node_modules', 'node', 'bin', 'node'),
-  [join(root, 'node_modules', 'vite', 'bin', 'vite.js'), 'build', '--config', 'scripts/smoke.vite.config.ts'],
+  [
+    join(root, 'node_modules', 'vite', 'bin', 'vite.js'),
+    'build',
+    '--config',
+    'scripts/smoke.vite.config.ts',
+  ],
   { cwd: root, stdio: 'inherit' },
 )
 
@@ -70,7 +75,7 @@ const { document } = window
 
 // Route the app's relative /api calls at the running local worker.
 window.fetch = (input, init) => {
-  const url = typeof input === 'string' ? input : input?.url ?? ''
+  const url = typeof input === 'string' ? input : (input?.url ?? '')
   const target = url.startsWith('/') ? `${API}${url}` : url
   return fetch(target, init)
 }
@@ -115,7 +120,11 @@ check('reports the D1 data source', topbar.includes('D1'), topbar)
 
 // Every row should show an eligibility label and a source.
 const rowText = rows[0].textContent ?? ''
-check('row shows an eligibility verdict', /Eligible|Needs checking|Restricted/.test(rowText), rowText)
+check(
+  'row shows an eligibility verdict',
+  /Eligible|Needs checking|Restricted/.test(rowText),
+  rowText,
+)
 check('row shows a source', /Demo board/.test(rowText), rowText)
 
 // Scores start at zero because no profile has been entered yet.
@@ -136,7 +145,10 @@ if (skillInput) {
   )
   const updated = document.querySelector('.scorebadge__inner')?.textContent ?? ''
   check('score reacts to a new skill', Number(updated) > 0, `score=${updated}`)
-  check('skill appears as a tag', (document.querySelector('.taglist')?.textContent ?? '').includes('TypeScript'))
+  check(
+    'skill appears as a tag',
+    (document.querySelector('.taglist')?.textContent ?? '').includes('TypeScript'),
+  )
 }
 
 // Selecting a row should populate the detail panel.
@@ -164,26 +176,46 @@ if (sortSelect) {
     'mixed pay period notice',
   )
   check('salary sort warns that periods are not annualised', true)
-  const salaries = [...document.querySelectorAll('.jobrow__salary')].map((node) => node.textContent ?? '')
+  const salaries = [...document.querySelectorAll('.jobrow__salary')].map(
+    (node) => node.textContent ?? '',
+  )
   check('salary sort still lists every role', salaries.length === 8, `got ${salaries.length}`)
 }
 
-const alertsTab = [...document.querySelectorAll('.tab')].find((tab) => tab.textContent?.includes('Alerts'))
+const alertsTab = [...document.querySelectorAll('.tab')].find((tab) =>
+  tab.textContent?.includes('Alerts'),
+)
 if (alertsTab) {
   alertsTab.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-  await waitFor(() => document.body.textContent?.includes('No Telegram bot is configured'), 8000, 'alerts panel')
+  await waitFor(
+    () => document.body.textContent?.includes('No Telegram bot is configured'),
+    8000,
+    'alerts panel',
+  )
   check('alerts tab explains that nothing is delivered', true)
   const alertsHead = document.querySelector('.content .panel__head')?.textContent ?? ''
-  check('alerts tab is marked as not connected', alertsHead.includes('Not connected'), alertsHead)
+  check('alerts tab is marked as not linked', alertsHead.includes('Not linked'), alertsHead)
 } else {
   check('alerts tab exists', false)
 }
 
-const planTab = [...document.querySelectorAll('.tab')].find((tab) => tab.textContent?.includes('Plan'))
+const planTab = [...document.querySelectorAll('.tab')].find((tab) =>
+  tab.textContent?.includes('Plan'),
+)
 if (planTab) {
   planTab.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-  await waitFor(() => document.body.textContent?.includes('No payment provider is connected'), 8000, 'plan panel')
-  check('plan tab is clearly preview-only', true)
+  await waitFor(
+    () => document.body.textContent?.includes('No payment provider is configured'),
+    8000,
+    'plan panel',
+  )
+  check('plan tab says no provider is connected', true)
+
+  const checkout = [...document.querySelectorAll('.content button')].find((button) =>
+    button.textContent?.includes('Choose Desk+'),
+  )
+  check('plan tab offers the paid plan', Boolean(checkout))
+  check('checkout is disabled without a provider', checkout?.disabled === true)
 } else {
   check('plan tab exists', false)
 }
@@ -194,7 +226,11 @@ const realErrors = consoleErrors.filter(
     !message.includes('ReactDOMTestUtils') &&
     !message.includes('Download the React DevTools'),
 )
-check('no runtime errors in the console', realErrors.length === 0, realErrors.slice(0, 3).join(' | '))
+check(
+  'no runtime errors in the console',
+  realErrors.length === 0,
+  realErrors.slice(0, 3).join(' | '),
+)
 
 console.log('')
 if (failures.length > 0) {

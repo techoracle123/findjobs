@@ -1,21 +1,36 @@
 import { useState } from 'react'
-import { Bell, Plus, Trash2 } from 'lucide-react'
+import { Bell, Link2, Plus, Trash2 } from 'lucide-react'
 import type { AlertPreference } from '../shared/types'
 
 interface AlertsPanelProps {
   alerts: AlertPreference[]
   telegramConfigured: boolean
+  telegramLinked: boolean
+  signedIn: boolean
+  canDeliver: boolean
   onChange: (alerts: AlertPreference[]) => void
+  onLinkTelegram: () => void
+  onRequireSignIn: () => void
 }
 
 /**
- * Alert preferences are stored locally and are not connected to any delivery
- * channel. The panel is explicit about that so nobody mistakes a saved
- * preference for a working alert.
+ * Alert preferences. Delivery needs a linked Telegram chat and an account
+ * with the alerts entitlement; the panel states plainly which of those is
+ * missing rather than showing a switch that quietly does nothing.
  */
-export function AlertsPanel({ alerts, telegramConfigured, onChange }: AlertsPanelProps) {
+export function AlertsPanel({
+  alerts,
+  telegramConfigured,
+  telegramLinked,
+  signedIn,
+  canDeliver,
+  onChange,
+  onLinkTelegram,
+  onRequireSignIn,
+}: AlertsPanelProps) {
   const [label, setLabel] = useState('')
   const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState(false)
 
   const add = () => {
     const trimmedLabel = label.trim()
@@ -38,28 +53,80 @@ export function AlertsPanel({ alerts, telegramConfigured, onChange }: AlertsPane
     onChange(alerts.map((alert) => (alert.id === id ? { ...alert, ...patch } : alert)))
   }
 
+  const toggle = (alert: AlertPreference) => {
+    if (!alert.enabled) {
+      if (!signedIn) {
+        onRequireSignIn()
+        return
+      }
+      if (!canDeliver) {
+        return
+      }
+    }
+    update(alert.id, { enabled: !alert.enabled })
+  }
+
+  const link = async () => {
+    setBusy(true)
+    try {
+      await onLinkTelegram()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="panel">
       <div className="panel__head">
         <h2 className="panel__title">Alerts</h2>
         <div style={{ flex: 1 }} />
-        <span className="chip chip--warn">Not connected</span>
+        <span className={`chip ${telegramLinked ? 'chip--ok' : 'chip--warn'}`}>
+          {telegramLinked ? 'Telegram linked' : 'Not linked'}
+        </span>
       </div>
       <div className="panel__body">
-        <div className="banner banner--demo">
-          <Bell size={15} />
-          <span>
-            No Telegram bot is configured in this preview, so nothing is delivered. These
-            preferences are saved in your browser and are not sent anywhere.
-          </span>
-        </div>
+        {!telegramConfigured && (
+          <div className="banner banner--demo">
+            <Bell size={15} />
+            <span>
+              No Telegram bot is configured on this deployment, so nothing is delivered. These
+              preferences are still saved to your account.
+            </span>
+          </div>
+        )}
+
+        {telegramConfigured && !telegramLinked && (
+          <div className="banner banner--info">
+            <span>
+              Link your Telegram account to receive matches. The link is signed and expires, so it
+              cannot be used to claim somebody else&apos;s account.
+            </span>
+          </div>
+        )}
+
+        {telegramConfigured && signedIn && !telegramLinked && (
+          <div className="btnrow">
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => void link()}
+              disabled={busy}
+            >
+              <Link2 size={13} /> Link Telegram
+            </button>
+          </div>
+        )}
 
         {alerts.length === 0 ? (
           <p className="panel__note">No alert preferences yet.</p>
         ) : (
           <div className="stack stack--sm">
             {alerts.map((alert) => (
-              <div className="jobrow" key={alert.id} style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
+              <div
+                className="jobrow"
+                key={alert.id}
+                style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}
+              >
                 <span className="jobrow__main">
                   <span className="jobrow__title">{alert.label}</span>
                   <span className="jobrow__company">
@@ -67,7 +134,7 @@ export function AlertsPanel({ alerts, telegramConfigured, onChange }: AlertsPane
                   </span>
                   <span className="jobrow__meta">
                     <span className={`chip ${alert.enabled ? 'chip--ok' : 'chip--plain'}`}>
-                      {alert.enabled ? 'Enabled (inert)' : 'Disabled'}
+                      {alert.enabled ? 'Enabled' : 'Disabled'}
                     </span>
                     <span className="chip chip--plain">
                       {alert.channels.length > 0 ? alert.channels.join(', ') : 'no channel'}
@@ -78,7 +145,13 @@ export function AlertsPanel({ alerts, telegramConfigured, onChange }: AlertsPane
                   <button
                     type="button"
                     className="btn btn--ghost btn--sm"
-                    onClick={() => update(alert.id, { enabled: !alert.enabled })}
+                    onClick={() => toggle(alert)}
+                    disabled={!alert.enabled && !canDeliver}
+                    title={
+                      !alert.enabled && !canDeliver
+                        ? 'Delivery needs a Desk+ plan and a linked Telegram chat'
+                        : undefined
+                    }
                   >
                     {alert.enabled ? 'Pause' : 'Enable'}
                   </button>

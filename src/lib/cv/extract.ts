@@ -18,7 +18,8 @@ export function kindOf(file: File): CvKind | null {
   ) {
     return 'docx'
   }
-  if (name.endsWith('.txt') || file.type === 'text/plain' || file.type.startsWith('text/')) return 'txt'
+  if (name.endsWith('.txt') || file.type === 'text/plain' || file.type.startsWith('text/'))
+    return 'txt'
   return null
 }
 

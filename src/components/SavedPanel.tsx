@@ -16,8 +16,8 @@ export function SavedPanel({ saved, jobs, onOpen, onRemove }: SavedPanelProps) {
         <div className="empty">
           <p className="empty__title">Nothing saved yet</p>
           <p>
-            Save a role from the opportunities list and it will appear here. Saved roles live in this
-            browser only.
+            Save a role from the opportunities list and it will appear here. Saved roles live in
+            this browser only.
           </p>
         </div>
       </div>
@@ -37,14 +37,22 @@ export function SavedPanel({ saved, jobs, onOpen, onRemove }: SavedPanelProps) {
         {saved.map((entry) => {
           const job = byId.get(entry.jobId)
           return (
-            <div className="jobrow" key={entry.jobId} style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
+            <div
+              className="jobrow"
+              key={entry.jobId}
+              style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}
+            >
               <span className="jobrow__main">
                 <span className="jobrow__title">{job ? job.title : entry.jobId}</span>
                 <span className="jobrow__company">
-                  {job ? `${job.company} · ${job.locationLabel}` : 'This role is no longer in the feed.'}
+                  {job
+                    ? `${job.company} · ${job.locationLabel}`
+                    : 'This role is no longer in the feed.'}
                 </span>
                 <span className="jobrow__meta">
-                  <span className={`chip ${entry.status === 'applied' ? 'chip--ok' : 'chip--plain'}`}>
+                  <span
+                    className={`chip ${entry.status === 'applied' ? 'chip--ok' : 'chip--plain'}`}
+                  >
                     {entry.status === 'applied' ? 'Applied' : 'Saved'}
                   </span>
                   {job && (

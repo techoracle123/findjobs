@@ -1,5 +1,12 @@
 import demoData from './demo-jobs.json'
-import type { EligibilityTier, Job, SalaryPeriod, Seniority, Sponsorship, WorkMode } from '../shared/types'
+import type {
+  EligibilityTier,
+  Job,
+  SalaryPeriod,
+  Seniority,
+  Sponsorship,
+  WorkMode,
+} from '../shared/types'
 
 interface DemoJobRecord {
   id: string

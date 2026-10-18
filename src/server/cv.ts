@@ -131,10 +131,7 @@ export async function suggestWithAi(ai: AiBinding, text: string): Promise<CvSugg
   }
 }
 
-export async function suggest(
-  ai: AiBinding | undefined,
-  text: string,
-): Promise<CvSuggestion> {
+export async function suggest(ai: AiBinding | undefined, text: string): Promise<CvSuggestion> {
   if (ai) {
     try {
       return await suggestWithAi(ai, text)
@@ -142,7 +139,10 @@ export async function suggest(
       const fallback = suggestFromKeywords(text)
       return {
         ...fallback,
-        notes: [...fallback.notes, 'The AI binding was enabled but the request failed, so keyword extraction was used.'],
+        notes: [
+          ...fallback.notes,
+          'The AI binding was enabled but the request failed, so keyword extraction was used.',
+        ],
       }
     }
   }

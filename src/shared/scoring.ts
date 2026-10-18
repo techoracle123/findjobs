@@ -37,7 +37,10 @@ export const ELIGIBILITY_LABELS: Record<EligibilityTier, string> = {
  * Eligibility is evaluated separately from the score: it is a gate, not a
  * contribution to fit. When we cannot tell, we say so rather than guessing.
  */
-export function evaluateEligibility(job: Job, workCountry: string): { tier: EligibilityTier; reason: string } {
+export function evaluateEligibility(
+  job: Job,
+  workCountry: string,
+): { tier: EligibilityTier; reason: string } {
   const country = (workCountry || '').toUpperCase()
   const listed = (job.eligibleCountries || []).map((code) => code.toUpperCase())
 

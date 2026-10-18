@@ -12,6 +12,35 @@ export interface Env {
   AI?: AiBinding
   APP_MODE?: string
   TELEGRAM_BOT_USERNAME?: string
+
+  // Cloudflare Access (identity)
+  ACCESS_TEAM_DOMAIN?: string
+  ACCESS_AUD?: string
+
+  // Telegram
+  TELEGRAM_BOT_TOKEN?: string
+  TELEGRAM_WEBHOOK_SECRET?: string
+
+  // Payments
+  STRIPE_SECRET_KEY?: string
+  STRIPE_WEBHOOK_SECRET?: string
+  STRIPE_PRICE_PRO?: string
+
+  // Ingestion
+  JOB_SOURCE_FETCH?: string
 }
 
 export const DEFAULT_APP_MODE = 'preview'
+
+/**
+ * Request-scoped values the middleware chain attaches to the context.
+ */
+export interface AppVariables {
+  requestId: string
+  userId: string
+}
+
+export type AppEnv = {
+  Bindings: Env
+  Variables: AppVariables
+}

@@ -104,7 +104,8 @@ export function filterJobs(scored: ScoredJob[], filters: Filters): ScoredJob[] {
     if (!matchesQuery(job, filters.query)) return false
     if (filters.workModes.length > 0 && !filters.workModes.includes(job.workMode)) return false
     if (filters.seniorities.length > 0 && !filters.seniorities.includes(job.seniority)) return false
-    if (filters.roleFamilies.length > 0 && !filters.roleFamilies.includes(job.roleFamily)) return false
+    if (filters.roleFamilies.length > 0 && !filters.roleFamilies.includes(job.roleFamily))
+      return false
     if (filters.eligibility !== 'all' && entry.tier !== filters.eligibility) return false
     if (entry.score < filters.minScore) return false
     return true
@@ -156,10 +157,12 @@ export function sortJobs(
 
   const ordered = buckets
     .map((bucket) => {
-      const median = bucket.jobs.length
-        ? bucket.jobs[Math.floor(bucket.jobs.length / 2)].value
-        : 0
-      return { period: bucket.period, median, entries: bucket.jobs.map((item) => byJobId.get(item.job.id)!) }
+      const median = bucket.jobs.length ? bucket.jobs[Math.floor(bucket.jobs.length / 2)].value : 0
+      return {
+        period: bucket.period,
+        median,
+        entries: bucket.jobs.map((item) => byJobId.get(item.job.id)!),
+      }
     })
     .sort((a, b) => (a.median - b.median) * direction)
 

@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Bell, Bookmark, Briefcase, CreditCard, Radar, RotateCw, Search } from 'lucide-react'
-import type {
-  AlertPreference,
-  ApiHealth,
-  CvSuggestion,
-  Job,
-  Profile,
-  RatesPayload,
-  SavedApplication,
-} from './shared/types'
-import { fetchHealth, fetchJobs, fetchRates } from './lib/api'
+import type { ApiHealth, CvSuggestion, Job, Profile, RatesPayload } from './shared/types'
+import {
+  fetchHealth,
+  fetchJobs,
+  fetchRates,
+  createTelegramLink,
+  fetchTelegramStatus,
+} from './lib/api'
 import { readLocal, writeLocal } from './lib/storage'
 import { DEFAULT_FILTERS, filterJobs, salaryView, sortJobs } from './lib/ranking'
 import type { SortKey } from './lib/ranking'
@@ -22,6 +20,7 @@ import { JobDetail } from './components/JobDetail'
 import { SavedPanel } from './components/SavedPanel'
 import { AlertsPanel } from './components/AlertsPanel'
 import { PlanPanel } from './components/PlanPanel'
+import { useAccount } from './hooks/useAccount'
 
 type Tab = 'opportunities' | 'saved' | 'alerts' | 'plan'
 
@@ -42,20 +41,20 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const [profile, setProfile] = useState<Profile>(() => readLocal<Profile>('profile', EMPTY_PROFILE))
-  const [saved, setSaved] = useState<SavedApplication[]>(() => readLocal<SavedApplication[]>('saved', []))
-  const [alerts, setAlerts] = useState<AlertPreference[]>(() => readLocal<AlertPreference[]>('alerts', []))
-  const [displayCurrency, setDisplayCurrency] = useState<string>(() => readLocal<string>('currency', 'USD'))
+  const [displayCurrency, setDisplayCurrency] = useState<string>(() =>
+    readLocal<string>('currency', 'USD'),
+  )
+
+  const account = useAccount()
+  const { profile, saved, alerts, setProfile, setSaved, setAlerts } = account
 
   const [tab, setTab] = useState<Tab>('opportunities')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [sort, setSort] = useState<SortKey>('relevance')
   const [toast, setToast] = useState<string | null>(null)
+  const [telegramLinked, setTelegramLinked] = useState(false)
 
-  useEffect(() => writeLocal('profile', profile), [profile])
-  useEffect(() => writeLocal('saved', saved), [saved])
-  useEffect(() => writeLocal('alerts', alerts), [alerts])
   useEffect(() => writeLocal('currency', displayCurrency), [displayCurrency])
 
   const load = useCallback(async () => {
@@ -81,6 +80,32 @@ export default function App() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (account.mode !== 'signed-in') return
+    void fetchTelegramStatus()
+      .then((status) => setTelegramLinked(status.linked))
+      .catch(() => setTelegramLinked(false))
+  }, [account.mode])
+
+  const requireSignIn = () => {
+    const url = health?.accessLoginUrl
+    if (url) {
+      window.location.href = url
+      return
+    }
+    setToast('Sign-in is not configured on this deployment.')
+  }
+
+  const linkTelegram = async () => {
+    try {
+      const { url } = await createTelegramLink()
+      window.open(url, '_blank', 'noopener')
+      setToast('Open Telegram to finish linking.')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : String(error))
+    }
+  }
 
   useEffect(() => {
     if (!toast) return
@@ -150,7 +175,9 @@ export default function App() {
     setProfile((current) => ({
       ...current,
       skills: Array.from(new Set([...current.skills, ...suggestion.skills])),
-      targetRoleFamilies: Array.from(new Set([...current.targetRoleFamilies, ...suggestion.roleFamilies])),
+      targetRoleFamilies: Array.from(
+        new Set([...current.targetRoleFamilies, ...suggestion.roleFamilies]),
+      ),
       targetSeniority: Array.from(
         new Set([...current.targetSeniority, ...suggestion.seniority]),
       ) as Profile['targetSeniority'],
@@ -215,6 +242,18 @@ export default function App() {
             ))}
           </select>
 
+          {account.mode === 'signed-in' && account.user && (
+            <span className="chip chip--ok" title={`Signed in as ${account.user.email}`}>
+              {account.user.email}
+            </span>
+          )}
+
+          {account.mode === 'anonymous' && health?.accessLoginUrl && (
+            <button type="button" className="btn btn--ghost btn--sm" onClick={requireSignIn}>
+              Sign in
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn--ghost btn--sm"
@@ -262,7 +301,8 @@ export default function App() {
           {loadError && (
             <div className="banner banner--demo">
               <span>
-                The API could not be reached: {loadError}. Start it with <code>npm run dev:api</code>.
+                The API could not be reached: {loadError}. Start it with{' '}
+                <code>npm run dev:api</code>.
               </span>
             </div>
           )}
@@ -279,8 +319,12 @@ export default function App() {
               >
                 <Icon size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />
                 {label}
-                {id === 'saved' && saved.length > 0 && <span className="tab__count">{saved.length}</span>}
-                {id === 'alerts' && alerts.length > 0 && <span className="tab__count">{alerts.length}</span>}
+                {id === 'saved' && saved.length > 0 && (
+                  <span className="tab__count">{saved.length}</span>
+                )}
+                {id === 'alerts' && alerts.length > 0 && (
+                  <span className="tab__count">{alerts.length}</span>
+                )}
               </button>
             ))}
           </nav>
@@ -382,7 +426,9 @@ export default function App() {
                 setSelectedId(jobId)
                 setTab('opportunities')
               }}
-              onRemove={(jobId) => setSaved((current) => current.filter((entry) => entry.jobId !== jobId))}
+              onRemove={(jobId) =>
+                setSaved((current) => current.filter((entry) => entry.jobId !== jobId))
+              }
             />
           )}
 
@@ -390,11 +436,29 @@ export default function App() {
             <AlertsPanel
               alerts={alerts}
               telegramConfigured={Boolean(health?.telegramConfigured)}
+              telegramLinked={telegramLinked}
+              signedIn={account.mode === 'signed-in'}
+              canDeliver={
+                account.entitlements.includes('alerts') &&
+                telegramLinked &&
+                Boolean(health?.telegramConfigured)
+              }
               onChange={setAlerts}
+              onLinkTelegram={() => void linkTelegram()}
+              onRequireSignIn={requireSignIn}
             />
           )}
 
-          {tab === 'plan' && <PlanPanel />}
+          {tab === 'plan' && (
+            <PlanPanel
+              signedIn={account.mode === 'signed-in'}
+              billingEnabled={Boolean(health?.billingConfigured)}
+              subscription={account.subscription}
+              entitlements={account.entitlements}
+              onRefresh={account.refresh}
+              onRequireSignIn={requireSignIn}
+            />
+          )}
         </main>
       </div>
 

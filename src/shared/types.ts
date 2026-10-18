@@ -1,13 +1,6 @@
 export type WorkMode = 'remote' | 'hybrid' | 'onsite'
 
-export type Seniority =
-  | 'intern'
-  | 'junior'
-  | 'mid'
-  | 'senior'
-  | 'staff'
-  | 'lead'
-  | 'principal'
+export type Seniority = 'intern' | 'junior' | 'mid' | 'senior' | 'staff' | 'lead' | 'principal'
 
 export type EligibilityTier = 'eligible' | 'unknown' | 'restricted'
 
@@ -48,11 +41,7 @@ export interface Profile {
 }
 
 export type ScoreComponentKey =
-  | 'requiredSkills'
-  | 'usefulSkills'
-  | 'roleFamily'
-  | 'seniority'
-  | 'workMode'
+  'requiredSkills' | 'usefulSkills' | 'roleFamily' | 'seniority' | 'workMode'
 
 export interface ScoreComponent {
   key: ScoreComponentKey
@@ -87,6 +76,14 @@ export interface ApiHealth {
   appMode: string
   aiBinding: boolean
   telegramConfigured: boolean
+  /** Cloudflare Access is configured and can issue identities. */
+  accessConfigured: boolean
+  /** A payment provider is configured. */
+  billingConfigured: boolean
+  /** Whether the account routes require a verified identity. */
+  authenticationRequired: boolean
+  /** Where to send a person to sign in, when identity is available. */
+  accessLoginUrl: string | null
   dataSource: 'd1' | 'fixture'
   jobCount: number
   ratesDate: string

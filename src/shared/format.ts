@@ -127,9 +127,7 @@ export interface BucketedSalary {
   jobs: { job: Job; value: number }[]
 }
 
-export function bucketByPeriod(
-  entries: { job: Job; value: number }[],
-): BucketedSalary[] {
+export function bucketByPeriod(entries: { job: Job; value: number }[]): BucketedSalary[] {
   const buckets = new Map<SalaryPeriod, { job: Job; value: number }[]>()
   for (const entry of entries) {
     const list = buckets.get(entry.job.salaryPeriod) ?? []

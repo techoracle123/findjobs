@@ -1,0 +1,45 @@
+{
+  "data": [
+    {
+      "slug": "senior-backend-engineer-berlin-1",
+      "company_name": "Nordlicht Systems",
+      "title": "Senior Backend Engineer (Go)",
+      "description": "<p>We are looking for a <strong>Senior Backend Engineer</strong> to join our platform team in Berlin.</p><ul><li>Five or more years of production Go</li><li>PostgreSQL and Kubernetes in production</li><li>Experience with Kafka and Terraform is a plus</li></ul><p>Salary: €80,000 - €100,000 per year.</p>",
+      "remote": false,
+      "url": "https://www.arbeitnow.com/view/senior-backend-engineer-berlin-1",
+      "tags": ["golang", "postgresql", "kubernetes", "kafka"],
+      "job_types": ["full time"],
+      "location": "Berlin, Germany",
+      "created_at": 1759276800
+    },
+    {
+      "slug": "rust-engineer-remote-2",
+      "company_name": "Tidewater Labs",
+      "title": "Rust Engineer",
+      "description": "<p>Work remotely from anywhere in Europe. You will work on a high performance data pipeline.</p><p>Requirements:</p><ul><li>Rust</li><li>Linux</li><li>Some Docker experience</li></ul>",
+      "remote": true,
+      "url": "https://www.arbeitnow.com/view/rust-engineer-remote-2",
+      "tags": ["rust", "linux", "docker"],
+      "job_types": ["full time", "remote"],
+      "location": "Remote, Europe",
+      "created_at": 1759190400
+    },
+    {
+      "slug": "product-designer-lisbon-3",
+      "company_name": "Verde Studio",
+      "title": "Product Designer",
+      "description": "<p>Design for a fintech product team based in Lisbon. Figma and a strong portfolio required.</p>",
+      "remote": false,
+      "url": "https://www.arbeitnow.com/view/product-designer-lisbon-3",
+      "tags": ["figma", "design", "ux"],
+      "job_types": ["full time"],
+      "location": "Lisbon, Portugal",
+      "created_at": 1759104000
+    }
+  ],
+  "links": {
+    "first": "https://www.arbeitnow.com/api/job-board-api?page=1",
+    "last": "https://www.arbeitnow.com/api/job-board-api?page=1"
+  },
+  "meta": { "currentPage": 1, "totalPages": 1, "total": 3 }
+}

@@ -70,7 +70,7 @@ function mapRow(row: JobRow, now: number): Job {
 const SELECT = `SELECT id, title, company, role_family, seniority, work_mode, location_country,
   location_label, salary_min, salary_max, salary_currency, salary_period, description,
   required_skills, useful_skills, eligible_countries, sponsorship, source_name, source_url,
-  posted_days_ago, posted_at, is_demo FROM jobs`
+  posted_days_ago, posted_at, is_demo FROM jobs WHERE expired_at IS NULL`
 
 export interface JobListResult {
   jobs: Job[]
@@ -83,7 +83,10 @@ export interface JobListResult {
  * migrated. If the database is missing, unmigrated or empty, the bundled demo
  * dataset is served instead so the preview is never a blank page.
  */
-export async function listJobs(db: D1Database | undefined, now: number = Date.now()): Promise<JobListResult> {
+export async function listJobs(
+  db: D1Database | undefined,
+  now: number = Date.now(),
+): Promise<JobListResult> {
   if (!db) {
     return {
       jobs: demoJobs(now),

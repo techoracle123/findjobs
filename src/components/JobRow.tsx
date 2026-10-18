@@ -24,16 +24,13 @@ export function JobRow({ scored, selected, salary, onSelect }: JobRowProps) {
   const hasProfile = scored.components.some((component) => component.applicable)
 
   return (
-    <button
-      type="button"
-      className="jobrow"
-      aria-current={selected}
-      onClick={onSelect}
-    >
+    <button type="button" className="jobrow" aria-current={selected} onClick={onSelect}>
       <span
         className={`scorebadge${hasProfile ? '' : ' scorebadge--muted'}`}
         style={{ '--pct': score } as React.CSSProperties}
-        title={hasProfile ? `${score} / 100 match` : 'Add skills to your profile to see a match score'}
+        title={
+          hasProfile ? `${score} / 100 match` : 'Add skills to your profile to see a match score'
+        }
       >
         <span className="scorebadge__inner">{score}</span>
       </span>
@@ -54,17 +51,29 @@ export function JobRow({ scored, selected, salary, onSelect }: JobRowProps) {
       <span className="jobrow__aside">
         <span className="jobrow__salary">
           {formatRange(salary.min, salary.max, salary.currency)}
-          <span> {salary.period === 'year' ? '/yr' : salary.period === 'month' ? '/mo' : '/hr'}</span>
+          <span>
+            {' '}
+            {salary.period === 'year' ? '/yr' : salary.period === 'month' ? '/mo' : '/hr'}
+          </span>
         </span>
-        <span className="chip chip--plain" title={`${FRESHNESS_LABELS[freshness]} — posted ${formatRelativeTime(job.postedAt)}`}>
+        <span
+          className="chip chip--plain"
+          title={`${FRESHNESS_LABELS[freshness]} — posted ${formatRelativeTime(job.postedAt)}`}
+        >
           <Clock size={11} />
           {formatRelativeTime(job.postedAt)}
         </span>
-        <span className="field__hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <span
+          className="field__hint"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        >
           <MapPin size={11} />
           {job.locationCountry}
         </span>
-        <span className="field__hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <span
+          className="field__hint"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        >
           <ExternalLink size={11} />
           {job.sourceName.split('—')[0].trim()}
         </span>
