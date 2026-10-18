@@ -68,13 +68,17 @@ restoration of database access. Remotive restrictions and robots exclusions rema
 ## OpenRouter
 
 The encrypted **OPENROUTER_API_KEY is now detected** and is configured server-side.
-The exposed chat key was not reused. Do not paste credentials into chat.
+The agent reads the encrypted secret, not credentials from chat. Rotate any key
+that was exposed; do not paste credentials into chat.
 
 Translation and tailored advice code is ready, with caching, bounded requests,
 validated plain-text output, quotas and honest original/listing-based fallback.
-**Live model requests remain unverified while D1 is unavailable**, because both
-features first retrieve an actual job from the database. Secret presence alone
-is not proof that credits, routing and inference work.
+**A real OpenRouter call now passes:** the actual server adapter translated an
+excerpt from a current public French GiveDirectly job into validated English.
+The probe sends no user profile or CV and does not log its key or provider output.
+Verified in deployment 39158240890. Database-backed translation/advice endpoints
+still await storage recovery; this narrow provider test is not a complete user
+session or proof of every AI feature.
 
 ## Read-efficiency and checks
 
@@ -83,16 +87,19 @@ is not proof that credits, routing and inference work.
 - New ordered/country/freshness/source-status indexes reduce scans and sorts.
 - Public source inspection no longer rewrites every registry row. Deployment
   registers sources explicitly and updates metadata only when it changes.
-- 114 unit tests and 138 Workers/D1 tests pass locally; production build,
+- 114 unit tests and 139 Workers/D1 tests pass locally; production build,
   TypeScript, ESLint and formatting pass. The local live-data smoke suite has
   14 passing checks, including sign-up/recovery dialog behavior.
-- The browser suite covers **320, 390, 414, 768, 1024, 1280, 1600 and 1920px**,
+- **All 16 browser tests pass locally** against genuine public-feed data. The
+  browser suite covers **320, 390, 414, 768, 1024, 1280, 1600 and 1920px**,
   navigation, saved state, content, account help and number-free mobile rings.
 - CI can run that browser suite in an isolated staging-mode preview by freshly
   ingesting public One Acre Fund/MyJobMag feeds into an isolated local database.
   It refuses to substitute fictional listings if those sources fail.
   That is NOT a successful production/Access/email delivery test. See Actions for
-  the current run outcome; the new production browser stage remains blocked.
+  the current CI outcome; the new production browser stage remains blocked.
+  CI **39158244867** passed all 16 browser tests in 19.2 seconds against freshly
+  ingested publisher data, along with the unit/worker/build/audit checks.
 - Preview on port 5173 retains 10 genuine source listings and current open FX data,
   without using a synthetic runtime fixture. No local OpenRouter secret is stored.
 
@@ -104,6 +111,12 @@ Workers hosting (minimum US$5/month plus possible excess usage charges). This is
 separate from enabling payments in FJ; the agent has not authorized any upgrade.
 
 Docs: https://developers.cloudflare.com/d1/platform/pricing/
+
+Latest blocked full release: https://github.com/techoracle123/findjobs/actions/runs/39158240890
+
+A best-effort workspace timer queues a free-tier retry at **00:05 UTC / 01:05 Nigeria
+time on 19 October 2026**. It requires the workspace process to remain alive; it
+is not a durable production scheduler or a guarantee of successful deployment.
 
 First blocked release: https://github.com/techoracle123/findjobs/actions/runs/39155920179
 
