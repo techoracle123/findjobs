@@ -13,10 +13,10 @@ fictional rows are purged by migration 0011, and synthetic fixtures exist only f
 tests. Empty feeds stay empty. Unavailable exchange rates do not become made-up
 conversions. Payments and the plan screen are disabled.
 
-**Not fully production-ready yet:** the latest retry still receives a Cloudflare
-Access API 403; OpenRouter needs a rotated `OPENROUTER_API_KEY` repository secret.
-Telegram bot and webhook setup now pass deployment checks, but a real user chat
-still needs an end-to-end confirmation. See [launch status](docs/LAUNCH-STATUS.md) for verified results and
+**Remaining setup:** OpenRouter needs a rotated `OPENROUTER_API_KEY` encrypted
+repository secret. Cloudflare Access is now provisioned and the real email-code
+login page is verified. Telegram bot/webhook checks also pass; completing email
+login and confirming chat delivery still require a real user. See [launch status](docs/LAUNCH-STATUS.md) for verified results and
 remaining owner actions. Deployment success alone does not mean these integrations
 are operational.
 

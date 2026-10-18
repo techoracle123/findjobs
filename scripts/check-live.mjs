@@ -68,7 +68,7 @@ await writeFile('test-results/live-sources.json', JSON.stringify(sources, null, 
 // A small public-only sample can be read through GitHub's checks API when this
 // restricted workspace cannot download Azure-hosted artifacts. No credentials,
 // account data or CVs are present; the full snapshot remains an ignored artifact.
-if (process.env.GITHUB_ACTIONS === 'true') {
+if (process.env.GITHUB_ACTIONS === 'true' && process.env.FJ_CAPTURE_PUBLIC_SAMPLE === 'true') {
   const sample = {
     capturedAt: new Date().toISOString(),
     origin: base,
@@ -80,11 +80,12 @@ if (process.env.GITHUB_ACTIONS === 'true') {
     ],
   }
   let compressed = gzipSync(JSON.stringify(sample)).toString('base64')
-  while (compressed.length > 24000 && sample.jobs.length > 2) {
+  while (compressed.length > 18000 && sample.jobs.length > 2) {
     sample.jobs.pop()
     compressed = gzipSync(JSON.stringify(sample)).toString('base64')
   }
-  // GitHub truncates each annotation to 4,096 characters.
+  // GitHub truncates each annotation to 4,096 characters and caps notices per step.
+  // Six chunks leave room for the three source-status notices. Opt-in only.
   const chunks = compressed.match(/.{1,3000}/g) || []
   for (let index = 0; index < chunks.length; index++)
     console.log(
