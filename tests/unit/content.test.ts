@@ -54,7 +54,9 @@ describe('plain job content and general professions', () => {
       period: 'year',
     })
     expect(extractSalary('Experience: 5 years. We operate in USD.')).toBeNull()
-    expect(extractSalary('Salary $25 per hour')).toEqual({
+    expect(extractSalary('Salary $80000 per year')).toBeNull()
+    expect(extractSalary('Salary $80000 per year', 'CA')?.currency).toBe('CAD')
+    expect(extractSalary('Salary $25 per hour', 'US')).toEqual({
       min: 25,
       max: 25,
       currency: 'USD',

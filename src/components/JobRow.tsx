@@ -49,18 +49,20 @@ export function JobRow({ scored, selected, salary, onSelect }: JobRowProps) {
         </span>
       </span>
       <span className="jobrow__aside">
-        <span className="jobrow__salary">
-          {salary.converted ? '≈ ' : ''}
-          {formatRange(salary.min, salary.max, salary.currency)}
-          {hasPay && (
-            <span>
-              {' '}
-              {salary.period === 'unknown'
-                ? ' (period not stated)'
-                : ` /${salary.period === 'year' ? 'yr' : salary.period === 'month' ? 'mo' : 'hr'}`}
-            </span>
-          )}
-        </span>
+        {hasPay && (
+          <span className="jobrow__salary">
+            {salary.converted ? '≈ ' : ''}
+            {formatRange(salary.min, salary.max, salary.currency)}
+            {hasPay && (
+              <span>
+                {' '}
+                {salary.period === 'unknown'
+                  ? ' (period not stated)'
+                  : ` /${salary.period === 'year' ? 'yr' : salary.period === 'month' ? 'mo' : 'hr'}`}
+              </span>
+            )}
+          </span>
+        )}
         <ArrowUpRight size={16} aria-hidden="true" />
       </span>
     </a>

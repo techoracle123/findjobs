@@ -152,7 +152,7 @@ const CURRENCY_PATTERNS: { pattern: RegExp; currency: string }[] = [
  * Extracts a salary range from free text. Anything that is not stated
  * plainly is left out rather than guessed at.
  */
-export function extractSalary(text: string): RawSalary | null {
+export function extractSalary(text: string, country = ''): RawSalary | null {
   if (!text) return null
   // Require a currency next to the amount, never a year or experience count.
   const token =
@@ -165,9 +165,17 @@ export function extractSalary(text: string): RawSalary | null {
   const single = new RegExp(`${token}\\s*${amount}`, 'i')
   const match = text.match(range) || text.match(single)
   if (!match) return null
-  const currency =
+  let currency =
     CURRENCY_PATTERNS.find((entry) => entry.pattern.test(match[0]))?.currency ??
     (/\bN\s*\d/.test(match[0]) ? 'NGN' : null)
+  // Dollar/yen symbols alone do not identify a currency in a worldwide feed.
+  if (/\$/.test(match[0]) && !/\b(?:USD|CAD|AUD|SGD|NZD)\b/i.test(match[0]))
+    currency =
+      ({ US: 'USD', CA: 'CAD', AU: 'AUD', SG: 'SGD', NZ: 'NZD' } as Record<string, string>)[
+        country
+      ] || null
+  if (/¥/.test(match[0]) && !/\b(?:JPY|CNY)\b/i.test(match[0]))
+    currency = country === 'JP' ? 'JPY' : country === 'CN' ? 'CNY' : null
   if (!currency) return null
   const context = text.slice(
     Math.max(0, (match.index ?? 0) - 35),
@@ -218,7 +226,7 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
   const text = `${raw.title}\n${raw.description}`
   const required = skillsFromTags(raw.tags)
   const useful = skillsFromText(text, required)
-  const salary = raw.salary ?? extractSalary(raw.description)
+  const salary = raw.salary ?? extractSalary(raw.description, inferCountry(raw.location))
 
   const nowIso = new Date(context.now).toISOString()
 

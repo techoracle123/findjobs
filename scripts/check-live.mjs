@@ -75,11 +75,19 @@ if (process.env.GITHUB_ACTIONS === 'true') {
     rates,
     jobs: [
       ...new Map(
-        [...jobs.jobs.slice(0, 12), ...nigeria.jobs.slice(0, 12)].map((job) => [job.id, job]),
+        [...jobs.jobs.slice(0, 4), ...nigeria.jobs.slice(0, 8)].map((job) => [job.id, job]),
       ).values(),
     ],
   }
-  const compressed = gzipSync(JSON.stringify(sample)).toString('base64')
-  if (compressed.length < 60000)
-    console.log(`::notice title=Public-feed diagnostic sample::${compressed}`)
+  let compressed = gzipSync(JSON.stringify(sample)).toString('base64')
+  while (compressed.length > 24000 && sample.jobs.length > 2) {
+    sample.jobs.pop()
+    compressed = gzipSync(JSON.stringify(sample)).toString('base64')
+  }
+  // GitHub truncates each annotation to 4,096 characters.
+  const chunks = compressed.match(/.{1,3000}/g) || []
+  for (let index = 0; index < chunks.length; index++)
+    console.log(
+      `::notice title=Public-feed sample ${index + 1} of ${chunks.length}::${chunks[index]}`,
+    )
 }
