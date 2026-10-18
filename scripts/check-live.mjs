@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises'
+import { gzipSync } from 'node:zlib'
 
 const base = process.env.LIVE_SITE_URL
 if (!base?.startsWith('https://'))
@@ -63,3 +64,22 @@ await writeFile(
   }),
 )
 await writeFile('test-results/live-sources.json', JSON.stringify(sources, null, 2))
+
+// A small public-only sample can be read through GitHub's checks API when this
+// restricted workspace cannot download Azure-hosted artifacts. No credentials,
+// account data or CVs are present; the full snapshot remains an ignored artifact.
+if (process.env.GITHUB_ACTIONS === 'true') {
+  const sample = {
+    capturedAt: new Date().toISOString(),
+    origin: base,
+    rates,
+    jobs: [
+      ...new Map(
+        [...jobs.jobs.slice(0, 12), ...nigeria.jobs.slice(0, 12)].map((job) => [job.id, job]),
+      ).values(),
+    ],
+  }
+  const compressed = gzipSync(JSON.stringify(sample)).toString('base64')
+  if (compressed.length < 60000)
+    console.log(`::notice title=Public-feed diagnostic sample::${compressed}`)
+}
