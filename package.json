@@ -1,0 +1,32 @@
+{
+  "name": "role-signal",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "dev:api": "./node_modules/node/bin/node ./node_modules/wrangler/bin/wrangler.js dev --config wrangler.local.jsonc --local --ip 0.0.0.0 --port 8787",
+    "db:migrate:local": "./node_modules/node/bin/node ./node_modules/wrangler/bin/wrangler.js d1 migrations apply rolesignal --config wrangler.local.jsonc --local",
+    "preview:pages": "./node_modules/node/bin/node ./node_modules/wrangler/bin/wrangler.js pages dev dist --ip 0.0.0.0 --port 8788",
+    "build": "tsc -b && vite build",
+    "check": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "hono": "^4.7.2",
+    "lucide-react": "^0.468.0",
+    "pdfjs-dist": "^4.10.38",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261016.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^5.2.0",
+    "node": "22.23.3",
+    "typescript": "^5.7.2",
+    "vite": "^7.3.7",
+    "wrangler": "^4.151.1"
+  }
+}
