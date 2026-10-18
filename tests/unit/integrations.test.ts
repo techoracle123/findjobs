@@ -91,3 +91,23 @@ it('confirms alternative hostnames from Cloudflare assignment, not missing DNS',
   ])
   expect(api).toHaveBeenCalledTimes(3)
 })
+
+it('bootstraps only the explicit Access-not-enabled account state with the documented creation API', async () => {
+  const api = vi
+    .fn()
+    .mockRejectedValueOnce(
+      new Error('HTTP 403: access.api.error.not_enabled: Access is not enabled'),
+    )
+    .mockResolvedValueOnce({ result: { auth_domain: 'generated-team.cloudflareaccess.com' } })
+    .mockResolvedValueOnce({ result: [{ id: 'otp', type: 'onetimepin' }] })
+    .mockResolvedValueOnce({ result: [] })
+    .mockResolvedValueOnce({ result: { aud: 'audience' } })
+  expect(await provisionAccess(api, 'find-jobs', 'assigned.pages.dev')).toEqual({
+    ACCESS_TEAM_DOMAIN: 'generated-team.cloudflareaccess.com',
+    ACCESS_AUD: 'audience',
+  })
+  expect(api.mock.calls[1]).toEqual([
+    '/access/organizations',
+    { method: 'POST', diagnostic: true, body: { name: 'FJ - Find Jobs' } },
+  ])
+})

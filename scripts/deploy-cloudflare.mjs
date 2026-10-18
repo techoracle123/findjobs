@@ -42,7 +42,9 @@ export function client({ token, account }, fetcher = fetch) {
       // Do not print raw responses: they may contain sensitive account details.
       const codes = (data.errors ?? []).map((error) => error.code).join(', ')
       const detail =
-        diagnostic && method === 'GET' && /^\/access\//.test(path)
+        diagnostic &&
+        (method === 'GET' || (method === 'POST' && path === '/access/organizations')) &&
+        /^\/access\//.test(path)
           ? (data.errors ?? [])
               .map((error) =>
                 String(error.message ?? '')

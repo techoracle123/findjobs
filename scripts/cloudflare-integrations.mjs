@@ -11,14 +11,22 @@ export function annotation(level, title, message) {
 /** A path-scoped Access app protects login, while the board remains public.
  * Other API requests verify its signed CF_Authorization cookie themselves. */
 export async function provisionAccess(api, project, hostname = `${project}.pages.dev`) {
-  let org = (await api('/access/organizations', { optional: true, diagnostic: true }))?.result
+  let org
+  try {
+    org = (await api('/access/organizations', { optional: true, diagnostic: true }))?.result
+  } catch (error) {
+    // A fresh account returns 403/not_enabled on READ, not 404. Bootstrap only
+    // that explicit state using Cloudflare's documented organization CREATE API.
+    // Ordinary authentication/permission failures must still abort unchanged.
+    if (!/access\.api\.error\.not_enabled/.test(error.message)) throw error
+  }
   if (!org) {
     org = (
       await api('/access/organizations', {
         method: 'POST',
+        diagnostic: true,
         body: {
-          name: 'Find Jobs',
-          auth_domain: `${project}.cloudflareaccess.com`,
+          name: 'FJ - Find Jobs',
         },
       })
     ).result
