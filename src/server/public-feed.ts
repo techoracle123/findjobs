@@ -102,7 +102,7 @@ export function assemblePublicSnapshot(
   const jobs = [...unique.values()].sort(
     (a, b) => b.postedAt.localeCompare(a.postedAt) || a.id.localeCompare(b.id),
   )
-  if (!jobs.length) throw new Error('No genuine public listings; keeping previous publication')
+  if (!valid.length) throw new Error('No genuine public listings; keeping previous publication')
   return {
     version: 1,
     refreshedAt: new Date(now).toISOString(),
@@ -187,7 +187,7 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
           job.jobStatus === 'open' &&
           Date.now() - Date.parse(job.lastSeenAt || '') < MAX_AGE,
       )
-      if (!snapshot.jobs.length) return null
+      if (!snapshot.jobs.length && snapshot.ids?.length !== 0) return null
       cached = snapshot
       loadedAt = Date.now()
       return snapshot

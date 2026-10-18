@@ -75,6 +75,8 @@ export async function fetchPublicSource(
       fetcher,
     ),
   )
+  if (limit !== 100 && raw.length > limit)
+    throw new Error('Publisher exceeds ingestion safety bound')
   return Promise.all(
     raw
       .slice(0, limit)

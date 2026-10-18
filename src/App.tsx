@@ -191,7 +191,12 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!jobPage || !selectedId || knownJobs[selectedId]) return
+    if (
+      !jobPage ||
+      !selectedId ||
+      (knownJobs[selectedId] && !knownJobs[selectedId].descriptionPreview)
+    )
+      return
     let cancelled = false
     void fetchJob(selectedId)
       .then((job) => {
@@ -258,7 +263,12 @@ export default function App() {
   useEffect(() => {
     setKnownJobs((current) => ({
       ...current,
-      ...Object.fromEntries(jobs.map((job) => [job.id, job])),
+      ...Object.fromEntries(
+        jobs.map((job) => [
+          job.id,
+          current[job.id] && !current[job.id].descriptionPreview ? current[job.id] : job,
+        ]),
+      ),
     }))
   }, [jobs])
 

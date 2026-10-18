@@ -52,6 +52,19 @@ export async function bootstrapPublicFeed(api, auth) {
   const { PUBLIC_SOURCES, refreshPublicSource, publishPublicSnapshot } = await import(
     pathToFileURL(outfile).href
   )
+  const current = await kv.get('published')
+  if (
+    current?.version === 1 &&
+    current.ids?.length >= 2000 &&
+    current.attemptedSources === PUBLIC_SOURCES.length &&
+    Date.now() - Date.parse(current.refreshedAt) < 12 * 3600000 &&
+    process.env.FJ_FORCE_PUBLIC_REFRESH !== 'true'
+  ) {
+    console.log(
+      `::notice title=Fresh public publication retained::${current.ids.length} listings already refreshed at ${current.refreshedAt}; avoiding duplicate publisher requests and KV writes. The independent 12-hour cron remains responsible for refreshes.`,
+    )
+    return { id: ns.id, count: current.ids.length }
+  }
   const run = String(Date.now())
   let cursor = 0,
     healthy = 0,

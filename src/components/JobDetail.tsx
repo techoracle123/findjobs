@@ -68,7 +68,11 @@ export function JobDetail({
   const applyUrl = applyLinkOf(job)
   const hasPay = job.salaryMin > 0 || job.salaryMax > 0
   const description =
-    !original && translation?.translated ? translation.description : job.description
+    !original && translation?.translated
+      ? translation.description
+      : job.descriptionPreview
+        ? 'Loading the full listing…'
+        : job.description
   const sourceName = job.sourceName
     .replace(/\s*(?:Job Board )?API\b/gi, '')
     .split('—')[0]

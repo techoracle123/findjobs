@@ -27,6 +27,8 @@ export interface Job {
   salaryCurrency: string
   salaryPeriod: SalaryPeriod
   description: string
+  /** Lightweight search excerpt; detail pages must load the full listing. */
+  descriptionPreview?: boolean
   requiredSkills: string[]
   usefulSkills: string[]
   eligibleCountries: string[]

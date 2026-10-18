@@ -139,3 +139,51 @@ describe('durable broad public feed', () => {
     expect(PUBLIC_SOURCES.length).toBeGreaterThan(140)
   })
 })
+
+it('serves the broad index without D1 and returns full descriptions on individual pages', async () => {
+  const { kv, data } = storage(),
+    source = await index()
+  const snapshot = assemblePublicSnapshot([source], new Set())
+  const complete = source.jobs.map((job) => ({
+    ...job,
+    description: job.description + ' Full listing detail only.',
+  }))
+  data.set('details:test', JSON.stringify(complete))
+  data.set('published', JSON.stringify(snapshot))
+  const { default: app } = await import('../../src/server/app')
+  const env = {
+    APP_MODE: 'production',
+    PUBLIC_JOBS: kv,
+    DB: {
+      prepare: () => {
+        throw new Error('Database must not be consulted')
+      },
+    } as unknown as D1Database,
+  }
+  const feed = await app.request(
+    'https://public-feed-tests.example/api/jobs?status=open&limit=1',
+    {},
+    env,
+  )
+  expect(feed.status).toBe(200)
+  const body = (await feed.json()) as {
+    jobs: (IndexedJob & { descriptionPreview: boolean })[]
+    total: number
+    dataSource: string
+  }
+  expect(body.total).toBe(snapshot.jobs.length)
+  expect(body.dataSource).toBe('public-snapshot')
+  expect(body.jobs[0].descriptionPreview).toBe(true)
+  expect(body.jobs[0].detailKey).toBeUndefined()
+  const detail = await app.request(
+    `https://public-feed-tests.example/api/jobs/${body.jobs[0].id}`,
+    {},
+    env,
+  )
+  expect(detail.status).toBe(200)
+  expect(((await detail.json()) as { job: IndexedJob }).job.description).toContain(
+    'Full listing detail only.',
+  )
+  const denied = await app.request('https://public-feed-tests.example/api/account', {}, env)
+  expect(denied.status).toBe(401)
+})

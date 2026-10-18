@@ -145,7 +145,7 @@ app.get('/api/jobs', async (c) => {
     const result = searchLivePublic(published.jobs, search)
     return c.json({
       ...result,
-      jobs: result.jobs.map((job) => ({ ...job, detailKey: undefined })),
+      jobs: result.jobs.map((job) => ({ ...job, detailKey: undefined, descriptionPreview: true })),
       dataSource: 'public-snapshot',
       updatedAt: published.refreshedAt,
       refreshHours: published.refreshHours,

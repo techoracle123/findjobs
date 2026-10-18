@@ -61,7 +61,14 @@ export function publicDataCache(override?: Cache): MiddlewareHandler<AppEnv> {
     const response = new Response(c.res.clone().body, c.res)
     response.headers.set('cache-control', `public, max-age=0, s-maxage=${ttl}`)
     try {
-      await cache.put(key, response)
+      const write = cache.put(key, response).catch(() => undefined)
+      // Cache storage is best effort, not a prerequisite for responding to a
+      // visitor. Pages supplies waitUntil on its actual request context.
+      try {
+        c.executionCtx.waitUntil(write)
+      } catch {
+        await write
+      }
     } catch {
       /* Best effort, never cache an error. */
     }
