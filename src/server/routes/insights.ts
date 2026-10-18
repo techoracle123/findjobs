@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { franc } from 'franc-min'
 import type { AppEnv } from '../env'
 import type { ApplicationTip, Job, JobAdvice, JobTranslation } from '../../shared/types'
+import { withTimeout } from '../timeouts'
 import { findPublishedJob } from '../public-feed'
 import { findJob } from '../jobs'
 import { livePublicEnabled, livePublicJobs } from '../live-public'
@@ -208,7 +209,10 @@ insightRoutes.post('/jobs/:id/translation', async (c) => {
 insightRoutes.post('/jobs/:id/tips', async (c) => {
   let storageDown = false
   try {
-    const limited = await enforceRateLimit(c, { bucket: 'job-tips', limit: 10, windowSeconds: 60 })
+    const limited = await withTimeout(
+      enforceRateLimit(c, { bucket: 'job-tips', limit: 10, windowSeconds: 60 }),
+      2000,
+    )
     if (limited) return limited
   } catch {
     storageDown = true

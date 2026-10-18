@@ -1,5 +1,6 @@
 /** Durable public discovery, independent of account/D1 storage. No credentials or
  * user data live in this namespace. Publish the pointer only after its data. */
+import { withTimeout } from './timeouts'
 import type { Job } from '../shared/types'
 import { SEED_SOURCES } from './sources/seed'
 import { fetchPublicSource } from './live-public'
@@ -157,8 +158,7 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
   if (!kv) return null
   if (cached && Date.now() - loadedAt < 15 * 60000) return cached
   if (pending) return pending
-  pending = kv
-    .get<PublicSnapshot>('published', { type: 'json', cacheTtl: 900 })
+  pending = withTimeout(kv.get<PublicSnapshot>('published', { type: 'json', cacheTtl: 60 }))
     .then(async (snapshot) => {
       if (
         !snapshot ||
@@ -168,14 +168,17 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
         return null
       if (snapshot.parts?.length) {
         const jobs: IndexedJob[] = []
-        for (let i = 0; i < snapshot.parts.length; i += 4) {
-          const parts = await Promise.all(
-            snapshot.parts
-              .slice(i, i + 4)
-              .map((key) => kv.get<IndexedJob[]>(key, { type: 'json', cacheTtl: 3600 })),
+        // KV's bulk API resolves the publication in one RPC, rather than
+        // serial cold-region round trips for each shard. Keep negative cache
+        // short during eventual-consistency propagation of a new publication.
+        for (let i = 0; i < snapshot.parts.length; i += 50) {
+          const keys = snapshot.parts.slice(i, i + 50)
+          const parts = await withTimeout(
+            kv.get<IndexedJob[]>(keys, { type: 'json', cacheTtl: 60 }),
+            5000,
           )
-          if (parts.some((part) => !part)) return null
-          jobs.push(...parts.flatMap((part) => part || []))
+          if (keys.some((key) => !parts.get(key))) return null
+          for (const key of keys) jobs.push(...parts.get(key)!)
         }
         snapshot.jobs = jobs
       }
@@ -206,8 +209,9 @@ export async function findPublishedJob(
   const snapshot = await publishedPublicJobs(kv)
   const entry = snapshot?.jobs.find((job) => job.id === id)
   if (!kv || !entry) return null
-  const details = await kv
-    .get<Job[]>(entry.detailKey, { type: 'json', cacheTtl: 3600 })
-    .catch(() => null)
+  const details = await withTimeout(
+    kv.get<Job[]>(entry.detailKey, { type: 'json', cacheTtl: 60 }),
+    5000,
+  ).catch(() => null)
   return details?.find((job) => job.id === id) || null
 }
