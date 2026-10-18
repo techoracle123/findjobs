@@ -9,6 +9,7 @@ import type {
 import { ROLE_FAMILY_KEYWORDS, SENIORITY_KEYWORDS, SKILL_CATALOGUE } from '../../shared/skills'
 import { COUNTRIES } from '../../shared/countries'
 import type { RawPosting, RawSalary } from './types'
+import { cleanJobText } from './html'
 
 const SENIORITY_RANK: Record<string, number> = {
   intern: 0,
@@ -85,6 +86,8 @@ export function inferWorkMode(remote: boolean, title: string): WorkMode {
  */
 export function inferCountry(location: string): string {
   if (!location) return ''
+  const code = location.trim().toUpperCase()
+  if (COUNTRY_LOOKUP.some((country) => country.code === code)) return code
   const haystack = ` ${location.toLowerCase()} `
   for (const country of COUNTRY_LOOKUP) {
     if (haystack.includes(` ${country.name} `) || haystack.includes(`, ${country.name}`)) {
@@ -151,52 +154,43 @@ const CURRENCY_PATTERNS: { pattern: RegExp; currency: string }[] = [
  */
 export function extractSalary(text: string): RawSalary | null {
   if (!text) return null
-
-  const period: SalaryPeriod = /per\s?hour|\/\s?hr|hourly|\bhour\b/i.test(text)
-    ? 'hour'
-    : /per\s?month|monthly|\/\s?mo\b/i.test(text)
-      ? 'month'
-      : 'year'
-
-  const currency = CURRENCY_PATTERNS.find((entry) => entry.pattern.test(text))?.currency ?? null
-
-  // A number in prose (years of experience, dates, headcount) is not a salary.
+  // Require a currency next to the amount, never a year or experience count.
+  const token =
+    '(?:NGN|USD|EUR|GBP|CHF|SEK|NOK|DKK|PLN|CAD|AUD|SGD|INR|BRL|JPY|[$€£¥₹₦]|\\bN(?=\\s*\\d{2,}))'
+  const amount = '(\\d[\\d.,]*)([kK])?'
+  const range = new RegExp(
+    `${token}\\s*${amount}\\s*(?:-|–|—|to)\\s*(?:${token})?\\s*${amount}`,
+    'i',
+  )
+  const single = new RegExp(`${token}\\s*${amount}`, 'i')
+  const match = text.match(range) || text.match(single)
+  if (!match) return null
+  const currency =
+    CURRENCY_PATTERNS.find((entry) => entry.pattern.test(match[0]))?.currency ??
+    (/\bN\s*\d/.test(match[0]) ? 'NGN' : null)
   if (!currency) return null
-  const compensation = text.match(
-    /[^.!?\n]*(?:salary|compensation|pay range|base pay|[$€£¥₹₦]|USD|EUR|GBP)[^.!?\n]*/i,
-  )?.[0]
-  if (!compensation) return null
-  text = compensation
-
-  const range = text.match(
-    /(?:[$€£¥₹₦]|EUR|USD|GBP|CHF|SEK|NOK|DKK|PLN|CAD|AUD|SGD|INR|BRL|NGN|JPY)?\s*(\d[\d.,]*)\s*(k|K)?\s*(?:-|–|—|to)\s*(?:[$€£¥₹₦]|EUR|USD|GBP|CHF|SEK|NOK|DKK|PLN|CAD|AUD|SGD|INR|BRL|NGN|JPY)?\s*(\d[\d.,]*)\s*(k|K)?/,
+  const context = text.slice(
+    Math.max(0, (match.index ?? 0) - 35),
+    (match.index ?? 0) + match[0].length + 60,
   )
-
-  const toAmount = (digits: string, thousands: string | undefined): number | null => {
-    const value = Number.parseFloat(digits.replace(/,/g, ''))
-    if (Number.isNaN(value)) return null
-    return thousands ? value * 1000 : value
+  const period: SalaryPeriod = /per\s*hour|\/\s*h(?:r|our)?\b|hourly|stunde/i.test(context)
+    ? 'hour'
+    : /per\s*month|monthly|\/\s*(?:mo|month)\b|monat|par mois/i.test(context)
+      ? 'month'
+      : /per\s*year|annually|annual|\/\s*yr\b|per annum|jahr|par an\b/i.test(context)
+        ? 'year'
+        : 'unknown'
+  const number = (digits: string, suffix?: string): number => {
+    const cleaned = digits.replace(/[,.](?=\d{3}(?:[,.]|$))/g, '').replace(',', '.')
+    return Number(cleaned) * (suffix ? 1000 : 1)
   }
-
-  if (range) {
-    const min = toAmount(range[1], range[2])
-    const max = toAmount(range[3], range[4])
-    if (min !== null && max !== null && min > 0 && max >= min) {
-      return { min, max, currency, period }
-    }
-  }
-
-  const single = text.match(
-    /(?:[$€£¥₹₦]|EUR|USD|GBP|CHF|SEK|NOK|DKK|PLN|CAD|AUD|SGD|INR|BRL|NGN|JPY)?\s*(\d[\d.,]*)\s*(k|K)?\s*(?:per\s?hour|\/\s?hr|hourly|per\s?month|monthly|per\s?year|annually)?/i,
+  const min = number(
+    match[1],
+    match[2] || (match[4] && Number(match[1]) < 1000 ? match[4] : undefined),
   )
-  if (single) {
-    const value = toAmount(single[1], single[2])
-    if (value !== null && value >= 100) {
-      return { min: value, max: value, currency, period }
-    }
-  }
-
-  return null
+  const max = match[3] ? number(match[3], match[4]) : min
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max < min) return null
+  return { min, max, currency, period }
 }
 
 export interface NormaliseContext {
@@ -249,7 +243,7 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
     salaryMax: salary?.max ?? 0,
     salaryCurrency: salary?.currency ?? '',
     salaryPeriod: salary?.period ?? 'year',
-    description: raw.description.slice(0, 4000),
+    description: cleanJobText(raw.description).slice(0, 16000),
     requiredSkills: required,
     usefulSkills: useful,
     eligibleCountries: [],

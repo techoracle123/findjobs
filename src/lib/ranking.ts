@@ -11,6 +11,7 @@ import { compareScoredJobs } from '../shared/scoring'
 
 export interface Filters {
   query: string
+  country?: string
   workModes: string[]
   seniorities: string[]
   roleFamilies: string[]
@@ -24,6 +25,7 @@ export interface Filters {
 
 export const DEFAULT_FILTERS: Filters = {
   query: '',
+  country: '',
   workModes: [],
   seniorities: [],
   roleFamilies: [],
@@ -115,6 +117,7 @@ export function filterJobs(scored: ScoredJob[], filters: Filters): ScoredJob[] {
   return scored.filter((entry) => {
     const { job } = entry
     if (!matchesQuery(job, filters.query)) return false
+    if (filters.country && job.locationCountry !== filters.country) return false
     if (filters.workModes.length > 0 && !filters.workModes.includes(job.workMode)) return false
     if (filters.seniorities.length > 0 && !filters.seniorities.includes(job.seniority)) return false
     if (filters.roleFamilies.length > 0 && !filters.roleFamilies.includes(job.roleFamily))

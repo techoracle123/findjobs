@@ -6,7 +6,7 @@ for (const width of [390, 768, 1280, 1600]) {
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
     await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Good work')
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Welcome')
     await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -15,7 +15,14 @@ for (const width of [390, 768, 1280, 1600]) {
     await expect(page.getByRole('button', { name: /^Plan$/ })).toHaveCount(0)
     const first = page.locator('.joblist .jobrow').first()
     await first.click()
+    await expect(page).toHaveURL(/\/jobs\/[^/]+$/)
     await expect(page.locator('.detail__title')).toBeVisible()
+    await expect(page.locator('.joblist')).toHaveCount(0)
+    await expect(page.getByText('Unverified', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('Needs checking', { exact: true })).toHaveCount(0)
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
     const apply = page.getByRole('link', { name: 'Apply for this role' })
     await expect(apply).toHaveAttribute('href', /^https?:\/\//)
     await page.screenshot({ path: testInfo.outputPath(`find-jobs-${width}.png`), fullPage: false })
@@ -29,6 +36,7 @@ test('saving, preferences, and reload work without an account', async ({ page })
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
   await page.locator('.joblist .jobrow').first().click()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await page.getByRole('button', { name: 'Back to results' }).click()
   await page
     .locator('.tabs')
     .getByRole('button', { name: /^Saved/ })
@@ -69,4 +77,70 @@ test('public API serves real jobs and rejects forged identity and purchases', as
     ).status(),
   ).toBe(401)
   expect((await request.post('/api/billing/confirm', { data: { plan: 'pro' } })).status()).toBe(404)
+})
+
+test('job deep links, browser history, filters and scroll return to the results', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+  const title = await page.locator('.joblist .jobrow .jobrow__title').nth(6).innerText()
+  await page.locator('.joblist .jobrow').nth(6).click()
+  const jobUrl = page.url()
+  await expect(page.locator('.detail__title')).toHaveText(title)
+  await page.goBack()
+  await expect(page.locator('.joblist .jobrow').nth(6)).toBeInViewport()
+  await page.goForward()
+  await expect(page.locator('.detail__title')).toHaveText(title)
+  await page.reload()
+  await expect(page.locator('.detail__title')).toHaveText(title)
+  await page.getByRole('button', { name: 'Back to results' }).click()
+  await expect(page).not.toHaveURL(/\/jobs\//)
+  await page.goto(jobUrl)
+  await expect(page.locator('.detail__title')).toHaveText(title)
+})
+
+test('application advice is usable with or without an AI key', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('.joblist .jobrow').first().click()
+  await page.getByRole('button', { name: 'Get application tips' }).click()
+  await expect(page.locator('.application-tips li').first()).toBeVisible({ timeout: 35000 })
+  expect(await page.locator('.application-tips li').count()).toBeGreaterThanOrEqual(2)
+  await expect(page.locator('.application-tips')).not.toContainText('<p>')
+  await expect(page.locator('.detail__text')).not.toContainText(
+    /<\/?(?:div|p|ul|li|span)\b|&lt;|Find more English Speaking Jobs/,
+  )
+})
+
+test('Nigeria and general professions are selectable without repetitive badges', async ({
+  page,
+  request,
+}) => {
+  const response = await request.get('/api/jobs?status=open&country=NG&limit=20')
+  expect(response.ok()).toBe(true)
+  const result = await response.json()
+  expect(result.total).toBeGreaterThan(0)
+  expect(
+    result.jobs.every((job: { locationCountry: string }) => job.locationCountry === 'NG'),
+  ).toBe(true)
+  await page.goto('/')
+  await page.getByLabel('Job location', { exact: true }).selectOption('NG')
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+  await expect(
+    page
+      .getByLabel('Profession', { exact: true })
+      .getByRole('option', { name: 'Healthcare', exact: true }),
+  ).toHaveCount(1)
+  await expect(page.getByText('Unverified', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Needs checking', { exact: true })).toHaveCount(0)
+  await expect(page.locator('.joblist')).not.toContainText('Job Board API')
+})
+
+test('the public board stays public while Access challenges only sign-in', async ({ request }) => {
+  const health = await (await request.get('/api/health')).json()
+  expect(health.accessConfigured).toBe(true)
+  const login = await request.get('/api/auth/login', { maxRedirects: 0 })
+  expect([302, 303]).toContain(login.status())
+  expect(login.headers().location).toMatch(/^https:\/\/[^/]+\.cloudflareaccess\.com\//)
+  expect((await request.get('/')).ok()).toBe(true)
 })

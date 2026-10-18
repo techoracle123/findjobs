@@ -28,7 +28,7 @@ describe('live-data safety', () => {
   it('does not turn experience counts or dates into salaries', () => {
     expect(extractSalary('5 years of experience. Team of 200.')).toBeNull()
     expect(extractSalary('Join our 2026 graduate programme.')).toBeNull()
-    expect(inferRoleFamily('Receptionist', [], '')).toBe('unknown')
+    expect(inferRoleFamily('Receptionist', [], '')).toBe('administration')
     expect(inferWorkMode(false, 'Engineer')).toBe('unknown')
   })
   it('rejects cross-origin account writes', async () => {

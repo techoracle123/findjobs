@@ -18,6 +18,7 @@ import { accountRoutes } from './routes/account'
 import { sourceRoutes } from './routes/sources'
 import { billingRoutes } from './routes/billing'
 import { telegramRoutes } from './routes/telegram'
+import { insightRoutes } from './routes/insights'
 
 export const app = new Hono<AppEnv>()
 
@@ -78,7 +79,7 @@ app.get('/api/health', async (c) => {
         "SELECT COUNT(*) AS n FROM jobs WHERE is_demo = 0 AND job_status = 'open' AND expired_at IS NULL AND datetime(last_seen_at) >= datetime('now', '-3 days')",
       ).first<{ n: number }>()
     : null
-  const rates = await getRates(config.appMode !== 'test')
+  const rates = await getRates(config.appMode !== 'test', env.DB)
   const accessLoginUrl = accessConfigured(config) ? '/api/auth/login' : null
   return c.json({
     ok: true,
@@ -107,7 +108,13 @@ app.get('/api/jobs', async (c) => {
   // Without any paging or filtering the whole feed is returned, which is
   // what the interface wants while the corpus is small. Once it is not
   // small, the caller asks for a page.
-  if (!query && !status && limit === undefined && offset === undefined) {
+  if (
+    !query &&
+    !status &&
+    limit === undefined &&
+    offset === undefined &&
+    !['country', 'roles', 'modes', 'levels'].some((key) => url.searchParams.has(key))
+  ) {
     const { jobs, source, warning } = await listOpenJobs(env.DB)
     return c.json({
       jobs,
@@ -118,6 +125,10 @@ app.get('/api/jobs', async (c) => {
 
   const result = await searchJobs(env.DB, {
     query,
+    country: url.searchParams.get('country')?.trim().toUpperCase().slice(0, 2) || undefined,
+    roleFamilies: (url.searchParams.get('roles') || '').split(',').filter(Boolean).slice(0, 30),
+    workModes: (url.searchParams.get('modes') || '').split(',').filter(Boolean).slice(0, 3),
+    seniorities: (url.searchParams.get('levels') || '').split(',').filter(Boolean).slice(0, 8),
     status: status === 'all' || status === 'closed' ? status : 'open',
     limit,
     offset,
@@ -167,7 +178,7 @@ app.post('/api/cv/suggest', async (c) => {
 
   // The keyword fallback costs nothing, so only a real model call is
   // counted against the budget.
-  if (env.AI && env.DB) {
+  if ((env.AI || env.OPENROUTER_API_KEY) && env.DB) {
     const identity = await resolveIdentity(c.req.raw, config)
     const scope = identity
       ? `user:${await userIdFor(identity.email)}`
@@ -182,7 +193,7 @@ app.post('/api/cv/suggest', async (c) => {
     }
   }
 
-  const suggestion = await suggest(env.AI, text)
+  const suggestion = await suggest(env.AI, text, env)
   return c.json(suggestion)
 })
 
@@ -195,9 +206,10 @@ app.get('/api/readiness', async (c) => {
 })
 
 app.get('/api/rates', async (c) => {
-  return c.json(await getRates(readConfig(c.env ?? {}).appMode !== 'test'))
+  return c.json(await getRates(readConfig(c.env ?? {}).appMode !== 'test', c.env?.DB))
 })
 
+app.route('/api', insightRoutes)
 app.route('/api', accountRoutes)
 app.route('/api', sourceRoutes)
 app.route('/api', billingRoutes)

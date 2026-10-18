@@ -25,102 +25,47 @@ interface Rule {
 }
 
 export function parseRobots(text: string): { rules: Rule[]; crawlDelayMs: number } {
-  const rules: Rule[] = []
-  let crawlDelayMs = 1000
-
-  const lines = text.split('\n')
-  let appliesToUs = false
-  let seenSpecificAgent = false
-
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/#.*$/, '').trim()
+  const groups: { agents: string[]; rules: Rule[]; delay: number }[] = []
+  let group = { agents: [] as string[], rules: [] as Rule[], delay: 1000 }
+  let directives = false
+  const flush = () => {
+    if (group.agents.length) groups.push(group)
+    group = { agents: [], rules: [], delay: 1000 }
+    directives = false
+  }
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/#.*$/, '').trim()
     if (!line) continue
-
-    const [rawKey, ...rest] = line.split(':')
-    const key = rawKey.trim().toLowerCase()
-    const value = rest.join(':').trim()
-
+    const [name, ...rest] = line.split(':')
+    const key = name.trim().toLowerCase(),
+      value = rest.join(':').trim()
     if (key === 'user-agent') {
-      const agent = value.toLowerCase()
-      if (agent === '*') {
-        // A wildcard group applies unless a named group matched, and named
-        // groups win.
-        appliesToUs = true
-      } else if (agent.includes('rolesignal') || agent.includes('bot')) {
-        appliesToUs = true
-        seenSpecificAgent = true
-      }
+      if (directives) flush()
+      group.agents.push(value.toLowerCase())
       continue
     }
-
-    if (!appliesToUs) continue
-
-    if (key === 'disallow') {
-      if (value === '') {
-        // "Disallow:" with no value means allow everything.
-        continue
-      }
-      rules.push({ allow: false, path: value })
-    } else if (key === 'allow') {
-      rules.push({ allow: true, path: value })
-    } else if (key === 'crawl-delay') {
-      const seconds = Number.parseFloat(value)
-      if (Number.isFinite(seconds) && seconds >= 0) {
-        crawlDelayMs = Math.min(60_000, Math.round(seconds * 1000))
-      }
-    }
+    if (!group.agents.length) continue
+    directives = true
+    if (key === 'disallow' && value) group.rules.push({ allow: false, path: value })
+    if (key === 'allow' && value) group.rules.push({ allow: true, path: value })
+    if (key === 'crawl-delay' && Number.isFinite(Number(value)) && Number(value) >= 0)
+      group.delay = Math.min(60000, Number(value) * 1000)
   }
-
-  if (seenSpecificAgent) {
-    // A named group was found: only its rules apply, so drop the wildcard's.
-    // The parser above already separated them by toggling, but the wildcard
-    // group may have been read first, so re-parse in a second pass.
-    const specific = parseSpecific(text)
-    if (specific) {
-      return { rules: specific.rules, crawlDelayMs: specific.crawlDelayMs }
-    }
+  flush()
+  // Keep the established crawler identity. Unrelated training/search bots' groups
+  // do not apply to RoleSignalBot, and must never be conflated with it.
+  const product = 'rolesignalbot'
+  const specificity = (agents: string[]) =>
+    Math.max(
+      -1,
+      ...agents.map((agent) => (agent === '*' ? 0 : product.includes(agent) ? agent.length : -1)),
+    )
+  const best = Math.max(-1, ...groups.map((entry) => specificity(entry.agents)))
+  const selected = groups.filter((entry) => specificity(entry.agents) === best && best >= 0)
+  return {
+    rules: selected.flatMap((entry) => entry.rules),
+    crawlDelayMs: Math.max(1000, ...selected.map((entry) => entry.delay)),
   }
-
-  return { rules, crawlDelayMs }
-}
-
-function parseSpecific(text: string): { rules: Rule[]; crawlDelayMs: number } | null {
-  const rules: Rule[] = []
-  let crawlDelayMs = 1000
-  let active = false
-  let found = false
-
-  for (const rawLine of text.split('\n')) {
-    const line = rawLine.replace(/#.*$/, '').trim()
-    if (!line) continue
-    const [rawKey, ...rest] = line.split(':')
-    const key = rawKey.trim().toLowerCase()
-    const value = rest.join(':').trim()
-
-    if (key === 'user-agent') {
-      const agent = value.toLowerCase()
-      if (agent === '*') {
-        if (found) break
-        active = false
-      } else if (agent.includes('rolesignal') || agent.includes('bot')) {
-        active = true
-        found = true
-      }
-      continue
-    }
-
-    if (!active) continue
-    if (key === 'disallow' && value !== '') rules.push({ allow: false, path: value })
-    else if (key === 'allow') rules.push({ allow: true, path: value })
-    else if (key === 'crawl-delay') {
-      const seconds = Number.parseFloat(value)
-      if (Number.isFinite(seconds) && seconds >= 0) {
-        crawlDelayMs = Math.min(60_000, Math.round(seconds * 1000))
-      }
-    }
-  }
-
-  return found ? { rules, crawlDelayMs } : null
 }
 
 /** The longest matching rule wins; on a tie, Allow wins. */
@@ -128,7 +73,13 @@ export function isPathAllowed(rules: Rule[], path: string): boolean {
   let decision: { allow: boolean; length: number } | null = null
 
   for (const rule of rules) {
-    if (!path.startsWith(rule.path)) continue
+    const end = rule.path.endsWith('$')
+    const expression = rule.path
+      .replace(/\$$/, '')
+      .split('*')
+      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('.*')
+    if (!new RegExp(`^${expression}${end ? '$' : ''}`).test(path)) continue
     if (decision === null || rule.path.length > decision.length) {
       decision = { allow: rule.allow, length: rule.path.length }
     } else if (rule.path.length === decision.length && rule.allow) {
@@ -152,15 +103,15 @@ export async function loadRobots(
       signal: controller.signal,
     })
     if (!response.ok) {
-      // No robots.txt means no stated restriction.
-      return DEFAULT_POLICY
+      if (response.status === 404) return DEFAULT_POLICY
+      return { allowed: false, crawlDelayMs: 60000, rules: 'User-agent: *\nDisallow: /' }
     }
     const text = await response.text()
     const { rules, crawlDelayMs } = parseRobots(text)
     return { allowed: isPathAllowed(rules, '/'), crawlDelayMs, rules: text }
   } catch {
     // If the rules cannot be read, do not guess: leave the host alone.
-    return { allowed: false, crawlDelayMs: 60_000, rules: '' }
+    return { allowed: false, crawlDelayMs: 60_000, rules: 'User-agent: *\nDisallow: /' }
   } finally {
     clearTimeout(timer)
   }

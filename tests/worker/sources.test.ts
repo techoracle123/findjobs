@@ -175,3 +175,17 @@ describe('the registry', () => {
     expect(listParsers().length).toBeGreaterThanOrEqual(10)
   })
 })
+
+it('does not mistake another crawler’s rules for ours and honours wildcard paths', () => {
+  const { rules } = parseRobots(
+    'User-agent: *\nAllow: /\nDisallow: /*?\n\nUser-agent: GPTBot\nDisallow: /\n\nUser-agent: Googlebot\nDisallow: /private\n',
+  )
+  expect(isPathAllowed(rules, '/feeds/jobs.xml')).toBe(true)
+  expect(isPathAllowed(rules, '/jobs?page=2')).toBe(false)
+  const own = parseRobots(
+    'User-agent: *\nAllow: /\n\nUser-agent: RoleSignalBot\nDisallow: /\nAllow: /feed$\n',
+  )
+  expect(isPathAllowed(own.rules, '/jobs')).toBe(false)
+  expect(isPathAllowed(own.rules, '/feed')).toBe(true)
+  expect(isPathAllowed(own.rules, '/feed/other')).toBe(false)
+})

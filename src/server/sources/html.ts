@@ -1,51 +1,43 @@
 /** Small HTML helpers. The Workers runtime has no DOM, so these are text-level. */
 
-const ENTITIES: Record<string, string> = {
-  '&nbsp;': ' ',
-  '&amp;': '&',
-  '&lt;': '<',
-  '&gt;': '>',
-  '&quot;': '"',
-  '&#39;': "'",
-  '&apos;': "'",
-  '&mdash;': '—',
-  '&ndash;': '–',
-  '&hellip;': '…',
-  '&rsquo;': '’',
-  '&lsquo;': '‘',
-  '&ldquo;': '“',
-  '&rdquo;': '”',
-  '&bull;': '•',
-  '&middot;': '·',
-  '&euro;': '€',
-  '&pound;': '£',
-  '&yen;': '¥',
-  '&deg;': '°',
-  '&times;': '×',
-}
+import { decodeHTML } from 'entities'
 
 export function decodeEntities(input: string): string {
-  return input
-    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCharCode(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_match, code: string) =>
-      String.fromCharCode(Number.parseInt(code, 16)),
-    )
-    .replace(/&[a-z]+;/gi, (entity) => ENTITIES[entity.toLowerCase()] ?? entity)
+  return decodeHTML(input)
 }
 
-export function stripHtml(html: string): string {
-  return decodeEntities(
-    html
+/** Plain text only, including HTML that a feed encoded more than once. */
+export function stripHtml(input: string): string {
+  let text = String(input ?? '')
+  for (let pass = 0; pass < 4; pass++) {
+    const decoded = decodeEntities(text)
+    text = decoded
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<(script|style|iframe|object)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+      .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
       .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<li[^>]*>/gi, '\n- ')
-      .replace(/<\/li>/gi, '')
-      .replace(/<h[1-6][^>]*>/gi, '\n')
-      .replace(/<\/h[1-6]>/gi, '\n')
-      .replace(/<[^>]+>/g, ' '),
-  )
-    .replace(/[ \t]{2,}/g, ' ')
+      .replace(/<\/(?:p|div|section|article|h[1-6]|ul|ol|table|tr)>/gi, '\n\n')
+      .replace(/<li\b[^>]*>/gi, '\n• ')
+      .replace(/<\/li>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+    if (!/&(?:amp|lt|gt|#\d+|#x[0-9a-f]+);/i.test(text)) break
+  }
+  return text
+    .replace(/\r/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+export function cleanJobText(input: string): string {
+  return stripHtml(input)
+    .split('\n')
+    .filter(
+      (line) =>
+        !/^find more .*(?:jobs|opportunities).*on\s+(?:arbeitnow|remotive)\b/i.test(line.trim()),
+    )
+    .join('\n')
     .trim()
 }
 

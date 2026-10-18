@@ -10,6 +10,9 @@ export interface AiBinding {
 export interface Env {
   DB?: D1Database
   AI?: AiBinding
+  /** Encrypted server-side secret; never expose to the client bundle. */
+  OPENROUTER_API_KEY?: string
+  OPENROUTER_MODEL?: string
   /** The queue that ingestion work is spread across. */
   INGEST_QUEUE?: Queue
   APP_MODE?: string

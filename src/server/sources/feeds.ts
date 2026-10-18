@@ -149,9 +149,32 @@ export const rss: SourceParser = {
 
     return items
       .map((block) => {
-        const title = stripHtml(tagValue(block, 'title'))
-        const link = tagValue(block, 'link') || tagValue(block, 'guid')
-        const description = stripHtml(tagValue(block, 'description') || tagValue(block, 'content'))
+        let title = stripHtml(tagValue(block, 'title'))
+        if (
+          /job recruitment \(\d+ positions?\)|^(?:fresh |latest |ongoing )?jobs at|^(?:job vacancies|job offers|latest jobs|ongoing recruitment|job openings) at|expression of interest|request for proposals?/i.test(
+            title,
+          )
+        )
+          return null
+        const titleCompany = title.match(/^(.*?)\s+at\s+(.+)$/i)
+        let employer = company || titleCompany?.[2] || ''
+        if (titleCompany) title = titleCompany[1]
+        if (source.id === 'weworkremotely') {
+          const parts = title.match(/^([^:]+):\s*(.+)$/)
+          if (parts) {
+            employer = parts[1]
+            title = parts[2]
+          }
+        }
+        const link =
+          tagValue(block, 'link') ||
+          block.match(/<link\b[^>]*href=["']([^"']+)["'][^>]*\/?\s*>/i)?.[1] ||
+          tagValue(block, 'guid')
+        const description = stripHtml(
+          tagValue(block, 'content:encoded') ||
+            tagValue(block, 'description') ||
+            tagValue(block, 'content'),
+        )
         const published =
           tagValue(block, 'pubDate') || tagValue(block, 'published') || tagValue(block, 'updated')
         const categories = [
@@ -160,22 +183,41 @@ export const rss: SourceParser = {
           decodeEntities(match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')).trim(),
         )
 
-        if (!title || !link) return null
+        if (!title || !/^https?:\/\//i.test(link)) return null
 
-        const publishedAt = published ? new Date(published).toISOString() : null
+        const publishedAt =
+          published && Number.isFinite(Date.parse(published))
+            ? new Date(published).toISOString()
+            : null
+        const country = source.options.country === 'NG' ? 'Nigeria' : ''
+        const place = stripHtml(
+          tagValue(block, 'location') ||
+            tagValue(block, 'job:location') ||
+            (description.match(/(?:Location\s*:|position is located in)\s*([^\n.]+)/i)?.[1] ?? ''),
+        )
+        const location = [place, country && !/nigeria/i.test(place) ? country : '']
+          .filter(Boolean)
+          .join(', ')
+        const deadline =
+          tagValue(block, 'expirationDate') ||
+          tagValue(block, 'validThrough') ||
+          tagValue(block, 'expiryDate')
         const posting: RawPosting = {
           externalId: link,
           title,
-          company,
+          company: employer,
           description,
           url: link,
           applyUrl: link,
-          location: '',
+          location,
           remote: /remote/i.test(`${title} ${description}`),
           tags: categories.filter(Boolean),
           jobType: '',
           publishedAt: publishedAt && !Number.isNaN(Date.parse(publishedAt)) ? publishedAt : null,
-          validThrough: null,
+          validThrough:
+            deadline && Number.isFinite(Date.parse(deadline))
+              ? new Date(deadline).toISOString()
+              : null,
           closed: false,
           salary: null,
         }

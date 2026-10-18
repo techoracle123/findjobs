@@ -138,7 +138,7 @@ export function readConfig(env: Env): AppConfig {
         webhookSecret: env.FLUTTERWAVE_WEBHOOK_SECRET ?? null,
       },
     },
-    aiEnabled: Boolean(env.AI),
+    aiEnabled: Boolean(env.AI || env.OPENROUTER_API_KEY),
     aiDailyLimit: number(env.AI_DAILY_LIMIT, 20),
     aiGlobalDailyLimit: number(env.AI_GLOBAL_DAILY_LIMIT, 1000),
     allowLiveSourceFetch: flag(env.JOB_SOURCE_FETCH) && !isTest,

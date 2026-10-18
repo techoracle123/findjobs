@@ -7,6 +7,7 @@ import type {
   VerificationLevel,
   WorkMode,
 } from '../shared/types'
+import { cleanJobText, stripHtml } from './sources/html'
 
 interface JobRow {
   id: string
@@ -77,8 +78,8 @@ function mapRow(row: JobRow, now: number): Job {
 
   return {
     id: row.id,
-    title: row.title,
-    company: row.company,
+    title: stripHtml(row.title),
+    company: stripHtml(row.company),
     roleFamily: row.role_family,
     seniority: row.seniority as Seniority,
     workMode: row.work_mode as WorkMode,
@@ -88,7 +89,7 @@ function mapRow(row: JobRow, now: number): Job {
     salaryMax: row.salary_max ?? 0,
     salaryCurrency: row.salary_currency ?? 'USD',
     salaryPeriod: (row.salary_period || 'year') as SalaryPeriod,
-    description: row.description ?? '',
+    description: cleanJobText(row.description ?? ''),
     requiredSkills: parseList(row.required_skills),
     usefulSkills: parseList(row.useful_skills),
     eligibleCountries: parseList(row.eligible_countries),
@@ -180,6 +181,10 @@ export async function findJob(
 export interface JobSearch {
   /** A free-text query, matched against the search index. */
   query?: string
+  country?: string
+  roleFamilies?: string[]
+  workModes?: string[]
+  seniorities?: string[]
   /** Which roles to include. */
   status?: 'all' | 'open' | 'closed'
   /** Which verification levels to include. */
@@ -227,6 +232,21 @@ export async function searchJobs(
     binds.push(new Date(now - STALE_AFTER_MS).toISOString())
   }
   if (status === 'closed') conditions.push("j.job_status = 'closed'")
+
+  if (search.country) {
+    conditions.push('j.location_country = ?')
+    binds.push(search.country)
+  }
+  for (const [column, values] of [
+    ['role_family', search.roleFamilies],
+    ['work_mode', search.workModes],
+    ['seniority', search.seniorities],
+  ] as const) {
+    if (values?.length) {
+      conditions.push(`j.${column} IN (${values.map(() => '?').join(',')})`)
+      binds.push(...values)
+    }
+  }
 
   if (search.verification && search.verification.length > 0) {
     const placeholders = search.verification.map(() => '?').join(',')

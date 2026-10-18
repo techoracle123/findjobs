@@ -138,3 +138,27 @@ export async function workerSecrets(api, worker, secrets) {
     })
   }
 }
+
+/** A hostname is only confirmed after Cloudflare assigns it. Reserve two
+ * alternatives without moving the existing app or changing its login domain. */
+export async function reservePageNames(api) {
+  const names = ['fj-find-jobs', 'find-jobs-fj']
+  const results = []
+  for (const name of names) {
+    let project = (await api(`/pages/projects/${name}`, { optional: true }))?.result
+    if (!project)
+      project = (
+        await api('/pages/projects', {
+          method: 'POST',
+          body: { name, production_branch: 'arena/be298902-findjobs' },
+        })
+      ).result
+    if (!project?.subdomain) throw new Error('Cloudflare did not return an alternative hostname.')
+    results.push({
+      requested: `${name}.pages.dev`,
+      assigned: project.subdomain,
+      exact: project.subdomain === `${name}.pages.dev`,
+    })
+  }
+  return results
+}

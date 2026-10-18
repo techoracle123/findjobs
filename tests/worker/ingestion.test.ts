@@ -15,11 +15,14 @@ import { enqueueDue } from '../../src/ingest'
  * so the tests are deterministic and run in CI.
  */
 function fixtureFetch(payload: unknown, status = 200): typeof fetch {
-  return (async () =>
-    new Response(JSON.stringify(payload), {
+  return (async (input: RequestInfo | URL) => {
+    if (String(input).endsWith('/robots.txt'))
+      return new Response('User-agent: *\nAllow: /', { status: 200 })
+    return new Response(JSON.stringify(payload), {
       status,
       headers: { 'content-type': 'application/json' },
-    })) as typeof fetch
+    })
+  }) as typeof fetch
 }
 
 beforeEach(async () => {

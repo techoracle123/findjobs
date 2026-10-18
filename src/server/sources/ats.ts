@@ -1,3 +1,4 @@
+import { countryName } from '../../shared/countries'
 import type { RawPosting, SourceParser, SourceRef } from './types'
 import { SourceError } from './types'
 import { stripHtml } from './html'
@@ -308,15 +309,28 @@ export const smartrecruiters: SourceParser = {
       listings.slice(0, 20).map(async (posting) => {
         const detailUrl = `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(company)}/postings/${posting.id}`
         let description = ''
+        let applicationUrl =
+          posting.external_url ||
+          `https://jobs.smartrecruiters.com/${encodeURIComponent(company)}/${posting.id}`
         try {
           const detail = (await readJson(detailUrl, source.id, fetchImpl)) as {
-            jobAd?: { sections?: { jobDescription?: string; qualifications?: string } }
+            applyUrl?: string
+            postingUrl?: string
+            jobAd?: {
+              sections?: {
+                jobDescription?: string | { text?: string }
+                qualifications?: string | { text?: string }
+                additionalInformation?: string | { text?: string }
+              }
+            }
           }
+          applicationUrl = detail.applyUrl || detail.postingUrl || applicationUrl
           description = [
             detail.jobAd?.sections?.jobDescription ?? '',
             detail.jobAd?.sections?.qualifications ?? '',
+            detail.jobAd?.sections?.additionalInformation ?? '',
           ]
-            .map((part) => stripHtml(part))
+            .map((part) => stripHtml(typeof part === 'string' ? part : part.text || ''))
             .filter(Boolean)
             .join('\n\n')
         } catch {
@@ -326,7 +340,7 @@ export const smartrecruiters: SourceParser = {
         const location = [
           posting.location?.city,
           posting.location?.region,
-          posting.location?.country,
+          posting.location?.country ? countryName(posting.location.country.toUpperCase()) : '',
         ]
           .filter(Boolean)
           .join(', ')
@@ -336,8 +350,8 @@ export const smartrecruiters: SourceParser = {
           title: String(posting.name ?? '').trim(),
           company: posting.company?.name ?? company,
           description,
-          url: posting.external_url ?? detailUrl,
-          applyUrl: posting.external_url ?? '',
+          url: applicationUrl,
+          applyUrl: applicationUrl,
           location,
           remote: /remote/i.test(location),
           tags: posting.department?.label ? [posting.department.label] : [],

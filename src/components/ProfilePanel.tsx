@@ -102,25 +102,29 @@ export function ProfilePanel({ profile, onChange, onReset }: ProfilePanelProps) 
         </div>
 
         <div className="field">
-          <span className="field__label">Roles you’re interested in</span>
-          <div className="chiprow">
-            {ROLE_FAMILIES.map((family) => (
-              <button
-                key={family}
-                type="button"
-                className="chipbtn"
-                aria-pressed={profile.targetRoleFamilies.includes(family)}
-                onClick={() =>
-                  onChange({
-                    ...profile,
-                    targetRoleFamilies: toggle(profile.targetRoleFamilies, family),
-                  })
-                }
-              >
-                {ROLE_FAMILY_LABELS[family]}
-              </button>
-            ))}
-          </div>
+          <label className="field__label" htmlFor="preferred-profession">
+            Preferred profession
+          </label>
+          <select
+            id="preferred-profession"
+            className="select"
+            value={profile.targetRoleFamilies[0] ?? ''}
+            onChange={(event) =>
+              onChange({
+                ...profile,
+                targetRoleFamilies: event.target.value ? [event.target.value] : [],
+              })
+            }
+          >
+            <option value="">Open to any profession</option>
+            {[...ROLE_FAMILIES]
+              .sort((a, b) => ROLE_FAMILY_LABELS[a].localeCompare(ROLE_FAMILY_LABELS[b]))
+              .map((family) => (
+                <option key={family} value={family}>
+                  {ROLE_FAMILY_LABELS[family]}
+                </option>
+              ))}
+          </select>
         </div>
 
         <div className="field">
@@ -170,7 +174,8 @@ export function ProfilePanel({ profile, onChange, onReset }: ProfilePanelProps) 
         />
 
         <p className="panel__note">
-          Your profile is stored in this browser only. It is never sent to the server.
+          Saved on this device; sign in to sync. Your listed skills are shared with the AI provider
+          only when you request personalised advice.
         </p>
       </div>
     </section>

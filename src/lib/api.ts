@@ -3,10 +3,13 @@ import type {
   ApiHealth,
   CvSuggestion,
   Job,
+  JobAdvice,
+  JobTranslation,
   Profile,
   RatesPayload,
   SavedApplication,
 } from '../shared/types'
+import type { Filters } from './ranking'
 
 /**
  * Relative URLs only: the Vite dev server proxies /api to the local worker,
@@ -79,9 +82,13 @@ export function fetchHealth(): Promise<ApiHealth> {
   return request<ApiHealth>('/api/health')
 }
 
-export function fetchJobs(offset = 0, query = ''): Promise<JobsResponse> {
+export function fetchJobs(offset = 0, query = '', filters?: Filters): Promise<JobsResponse> {
   const params = new URLSearchParams({ status: 'open', limit: '200', offset: String(offset) })
   if (query.trim()) params.set('q', query.trim())
+  if (filters?.country) params.set('country', filters.country)
+  if (filters?.roleFamilies.length) params.set('roles', filters.roleFamilies.join(','))
+  if (filters?.workModes.length) params.set('modes', filters.workModes.join(','))
+  if (filters?.seniorities.length) params.set('levels', filters.seniorities.join(','))
   return request<JobsResponse>(`/api/jobs?${params}`)
 }
 
@@ -233,4 +240,17 @@ export function cancelSubscription(): Promise<{ subscription: Subscription }> {
 
 export function exportAccount(): Promise<unknown> {
   return request('/api/account/export')
+}
+
+export function translateJob(id: string): Promise<JobTranslation> {
+  return request<JobTranslation>(`/api/jobs/${encodeURIComponent(id)}/translation`, {
+    method: 'POST',
+  })
+}
+export function jobAdvice(id: string, skills: string[]): Promise<JobAdvice> {
+  return request<JobAdvice>(`/api/jobs/${encodeURIComponent(id)}/tips`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ skills }),
+  })
 }

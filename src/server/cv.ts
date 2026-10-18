@@ -5,7 +5,10 @@ import {
   SKILL_CATALOGUE,
   WORK_MODE_KEYWORDS,
 } from '../shared/skills'
-import type { AiBinding } from './env'
+import type { AiBinding, Env } from './env'
+import { openRouterJson } from './openrouter'
+import { ROLE_FAMILIES, SENIORITIES, WORK_MODES } from '../shared/taxonomy'
+import { cleanJobText } from './sources/html'
 
 const SENIORITY_RANK: Record<string, number> = {
   intern: 0,
@@ -105,7 +108,9 @@ export async function suggestWithAi(ai: AiBinding, text: string): Promise<CvSugg
   const prompt = [
     'Extract a job-search profile from the CV text below.',
     'Reply with JSON only, using exactly this shape:',
-    '{"skills":["..."],"roleFamilies":["frontend|backend|fullstack|data|ml|platform|devops|security|product|design|qa|mobile"],"seniority":["intern|junior|mid|senior|staff|lead|principal"],"workModes":["remote|hybrid|onsite"],"summary":"one sentence"}',
+    '{"skills":["..."],"roleFamilies":["' +
+      ROLE_FAMILIES.join('|') +
+      '"],"seniority":["intern|junior|mid|senior|staff|lead|principal"],"workModes":["remote|hybrid|onsite"],"summary":"one sentence"}',
     '',
     text.slice(0, 12_000),
   ].join('\n')
@@ -131,7 +136,48 @@ export async function suggestWithAi(ai: AiBinding, text: string): Promise<CvSugg
   }
 }
 
-export async function suggest(ai: AiBinding | undefined, text: string): Promise<CvSuggestion> {
+export async function suggest(
+  ai: AiBinding | undefined,
+  text: string,
+  env?: Env,
+): Promise<CvSuggestion> {
+  if (env?.OPENROUTER_API_KEY) {
+    try {
+      const parsed = await openRouterJson(
+        env,
+        `Extract a job-search profile from this CV. Return {"skills":["..."],"roleFamilies":["..."],"seniority":["..."],"workModes":["..."],"summary":"one sentence"}. Only extract stated facts. Valid role families: ${ROLE_FAMILIES.join(', ')}. Seniority: ${SENIORITIES.join(', ')}. Work modes: ${WORK_MODES.join(', ')}.`,
+        { text: text.slice(0, 12000) },
+      )
+      const list = (value: unknown) =>
+        Array.isArray(value)
+          ? value
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => cleanJobText(item).slice(0, 80))
+              .slice(0, 20)
+          : []
+      return {
+        skills: list(parsed.skills),
+        roleFamilies: list(parsed.roleFamilies).filter((item) =>
+          ROLE_FAMILIES.includes(item as (typeof ROLE_FAMILIES)[number]),
+        ),
+        seniority: list(parsed.seniority).filter((item) =>
+          SENIORITIES.includes(item as Seniority),
+        ) as Seniority[],
+        workModes: list(parsed.workModes).filter((item) =>
+          WORK_MODES.includes(item as WorkMode),
+        ) as WorkMode[],
+        summary:
+          typeof parsed.summary === 'string' ? cleanJobText(parsed.summary).slice(0, 400) : '',
+        provider: 'openrouter',
+        notes: ['AI suggestions from OpenRouter. Review them before adding to your profile.'],
+      }
+    } catch {
+      return {
+        ...suggestFromKeywords(text),
+        notes: ['OpenRouter is temporarily unavailable. Local keyword matching was used instead.'],
+      }
+    }
+  }
   if (ai) {
     try {
       return await suggestWithAi(ai, text)

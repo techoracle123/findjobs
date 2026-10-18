@@ -44,6 +44,7 @@ export interface UseAccount {
   refresh: () => Promise<void>
   importLocalData: () => Promise<ImportResult>
   syncError: string | null
+  hasLocalData: boolean
 }
 
 /**
@@ -69,6 +70,13 @@ export function useAccount(): UseAccount {
   )
   const [syncError, setSyncError] = useState<string | null>(null)
 
+  const [hasLocalData, setHasLocalData] = useState(false)
+  const anonymousData = useRef({
+    profile: readLocal<Profile>('profile', EMPTY_PROFILE),
+    saved: readLocal<SavedApplication[]>('saved', []),
+    alerts: readLocal<AlertPreference[]>('alerts', []),
+  })
+
   const signedIn = mode === 'signed-in'
   const profileTimer = useRef<number | null>(null)
 
@@ -82,6 +90,23 @@ export function useAccount(): UseAccount {
   alertsRef.current = alerts
 
   const applySnapshot = useCallback((snapshot: AccountSnapshot) => {
+    const backup = readLocal<typeof anonymousData.current | null>('anonymous-import', null)
+    const local =
+      backup ?? (!readLocal<string | null>('account-owner', null) ? anonymousData.current : null)
+    if (
+      local &&
+      (local.profile.skills.length ||
+        local.profile.targetRoleFamilies.length ||
+        local.profile.targetSeniority.length ||
+        local.profile.preferredWorkModes.length ||
+        local.profile.workCountry ||
+        local.saved.length ||
+        local.alerts.length)
+    ) {
+      writeLocal('anonymous-import', local)
+      setHasLocalData(true)
+    }
+    writeLocal('account-owner', snapshot.user.id)
     setUser(snapshot.user)
     setSubscription(snapshot.subscription)
     setEntitlements(snapshot.entitlements)
@@ -117,7 +142,11 @@ export function useAccount(): UseAccount {
       profileRef.current = next
       setProfileState(next)
       writeLocal('profile', next)
-      if (!signedIn) return
+      if (!signedIn) {
+        anonymousData.current.profile = next
+        writeLocal('anonymous-import', anonymousData.current)
+        return
+      }
 
       // Profile edits arrive one keystroke at a time, so they are coalesced.
       if (profileTimer.current !== null) window.clearTimeout(profileTimer.current)
@@ -137,7 +166,11 @@ export function useAccount(): UseAccount {
       savedRef.current = next
       setSavedState(next)
       writeLocal('saved', next)
-      if (!signedIn) return
+      if (!signedIn) {
+        anonymousData.current.saved = next
+        writeLocal('anonymous-import', anonymousData.current)
+        return
+      }
 
       for (const entry of next) {
         const before = previous.find((item) => item.jobId === entry.jobId)
@@ -165,7 +198,11 @@ export function useAccount(): UseAccount {
       alertsRef.current = next
       setAlertsState(next)
       writeLocal('alerts', next)
-      if (!signedIn) return
+      if (!signedIn) {
+        anonymousData.current.alerts = next
+        writeLocal('anonymous-import', anonymousData.current)
+        return
+      }
 
       for (const entry of next) {
         const before = previous.find((item) => item.id === entry.id)
@@ -176,6 +213,7 @@ export function useAccount(): UseAccount {
         } else if (
           before.label !== entry.label ||
           before.query !== entry.query ||
+          JSON.stringify(before.channels) !== JSON.stringify(entry.channels) ||
           before.enabled !== entry.enabled
         ) {
           void patchAlert(entry.id, entry).catch((error: unknown) => {
@@ -195,16 +233,26 @@ export function useAccount(): UseAccount {
   )
 
   const importLocalData = useCallback(async () => {
-    const result = await importAccount({
-      profile: readLocal<Profile>('profile', EMPTY_PROFILE),
-      saved: readLocal<SavedApplication[]>('saved', []),
-      alerts: readLocal<AlertPreference[]>('alerts', []),
-    })
+    const local =
+      readLocal<typeof anonymousData.current | null>('anonymous-import', null) ??
+      anonymousData.current
+    const result = await importAccount(local)
+    writeLocal('anonymous-import', null)
+    anonymousData.current = { profile: EMPTY_PROFILE, saved: [], alerts: [] }
+    setHasLocalData(false)
     await refresh()
     return result
   }, [refresh])
 
+  useEffect(
+    () => () => {
+      if (profileTimer.current !== null) window.clearTimeout(profileTimer.current)
+    },
+    [],
+  )
+
   return {
+    hasLocalData,
     mode,
     user,
     subscription,

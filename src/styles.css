@@ -1347,3 +1347,206 @@ summary:focus-visible {
 .rail > .panel {
   flex-shrink: 0;
 }
+
+/* FJ: a quiet results page and a separate, readable job page. */
+.brand {
+  align-items: center;
+  text-decoration: none;
+}
+.brand__monogram {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: white;
+  font-size: 16px;
+  letter-spacing: -0.04em;
+}
+.site-disclaimer {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 24px 0 0;
+}
+.intro-disclaimer {
+  margin: -8px 0 0;
+  max-width: 850px;
+}
+.jobrow {
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 155px);
+  text-decoration: none;
+  color: var(--ink);
+}
+.jobrow:has(.scorebadge) {
+  grid-template-columns: 42px minmax(0, 1fr) minmax(110px, 155px);
+}
+.jobrow__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.jobrow__aside {
+  align-items: flex-end;
+}
+.jobrow__salary {
+  text-align: right;
+}
+.results {
+  display: block;
+}
+.job-page {
+  width: 100%;
+  max-width: 950px;
+  margin: 0 auto;
+  padding: 28px 24px 50px;
+}
+.back-to-results {
+  margin: 0 0 20px;
+}
+.job-page .detail {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  box-shadow: var(--shadow);
+}
+.job-page .detail__head {
+  padding: 30px;
+}
+.job-page .detail__title {
+  font-size: clamp(23px, 3vw, 32px);
+  margin: 8px 0;
+}
+.job-page .detail__company {
+  margin: 8px 0;
+}
+.job-page .detail__body {
+  padding: 30px;
+  gap: 28px;
+}
+.job-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  color: var(--muted);
+  font-size: 13px;
+  margin: 12px 0 20px;
+}
+.job-actions {
+  margin-top: 20px;
+}
+.detail-section {
+  min-width: 0;
+}
+.detail-section h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+.detail-section h3 {
+  font-size: 14px;
+  margin: 0 0 6px;
+}
+.detail-section summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.detail-section .breakdown {
+  margin-top: 20px;
+}
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+}
+.detail__text {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+}
+.salary-figure {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+}
+.original-listing {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+  font-size: 12px;
+}
+.original-listing a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.application-tips {
+  margin: 22px 0 0;
+  padding-left: 20px;
+}
+.application-tips li {
+  padding: 0 0 18px 8px;
+}
+.application-tips p {
+  margin: 0;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+.text-button {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  padding: 0;
+  font-size: inherit;
+}
+.cv-disclosure {
+  flex-shrink: 0;
+}
+.cv-disclosure > summary {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 0 4px 12px;
+  cursor: pointer;
+}
+.panel__head {
+  justify-content: space-between;
+}
+@media (max-width: 600px) {
+  .job-page {
+    padding: 18px 12px 35px;
+  }
+  .job-page .detail__head,
+  .job-page .detail__body {
+    padding: 22px 18px;
+  }
+  .jobrow,
+  .jobrow:has(.scorebadge) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 20px 16px;
+  }
+  .jobrow .scorebadge {
+    display: none;
+  }
+  .jobrow__aside {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .jobrow__salary {
+    text-align: left;
+  }
+  .site-disclaimer {
+    font-size: 11.5px;
+  }
+}
+.currency-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: -8px 0 0;
+}

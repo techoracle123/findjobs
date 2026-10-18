@@ -65,9 +65,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: node scripts/deploy-cloudflare.mjs
       - name: Install Chromium for live browser checks
         run: npx playwright install --with-deps chromium
+      - name: Check live integrations and save a real-feed diagnostic snapshot
+        run: node scripts/check-live.mjs
       - name: Test the live site at phone, tablet, and desktop widths
         run: npx playwright test
       - name: Save browser screenshots and test reports

@@ -1,30 +1,17 @@
-import { Bookmark, BookmarkCheck, ExternalLink, Info, Send } from 'lucide-react'
-import type { RatesPayload, ScoredJob } from '../shared/types'
-import { ELIGIBILITY_LABELS } from '../shared/scoring'
-import {
-  formatRange,
-  formatRelativeTime,
-  freshnessOf,
-  FRESHNESS_LABELS,
-  PERIOD_LABELS,
-} from '../shared/format'
+import { useEffect, useState } from 'react'
+import { Bookmark, BookmarkCheck, ExternalLink, LoaderCircle, Send, Sparkles } from 'lucide-react'
+import type { JobAdvice, JobTranslation, Profile, RatesPayload, ScoredJob } from '../shared/types'
+import { formatRange, formatRelativeTime, PERIOD_LABELS } from '../shared/format'
 import { roleFamilyLabel, seniorityLabel, workModeLabel } from '../shared/taxonomy'
-import {
-  applyLinkOf,
-  isClosed,
-  STATUS_LABELS,
-  statusOf,
-  VERIFICATION_DESCRIPTIONS,
-  VERIFICATION_LABELS,
-  verificationOf,
-} from '../shared/verification'
-import { countryName } from '../shared/countries'
+import { applyLinkOf, isClosed } from '../shared/verification'
 import { ScoreBreakdown } from './ScoreBreakdown'
+import { jobAdvice, translateJob } from '../lib/api'
 import type { SalaryView } from '../lib/ranking'
 
 interface JobDetailProps {
   scored: ScoredJob | null
   salary: SalaryView | null
+  profile: Profile
   rates: RatesPayload | null
   displayCurrency: string
   saved: boolean
@@ -33,15 +20,10 @@ interface JobDetailProps {
   onApply: () => void
 }
 
-const TIER_CLASS: Record<string, string> = {
-  eligible: 'chip--ok',
-  unknown: 'chip--warn',
-  restricted: 'chip--danger',
-}
-
 export function JobDetail({
   scored,
   salary,
+  profile,
   rates,
   displayCurrency,
   saved,
@@ -49,217 +31,257 @@ export function JobDetail({
   onSave,
   onApply,
 }: JobDetailProps) {
-  if (!scored || !salary) {
-    return (
-      <aside className="detail">
-        <div className="empty">
-          <p className="empty__title">Select a role</p>
-          <p>
-            Pick any row to see the full breakdown: which skills matched, what is missing, how
-            eligibility was assessed, and where the posting came from.
-          </p>
-        </div>
-      </aside>
-    )
+  const [translation, setTranslation] = useState<JobTranslation | null>(null)
+  const [original, setOriginal] = useState(false)
+  const [translating, setTranslating] = useState(false)
+  const [translationError, setTranslationError] = useState<string | null>(null)
+  const [advice, setAdvice] = useState<JobAdvice | null>(null)
+  const [advising, setAdvising] = useState(false)
+  const [adviceError, setAdviceError] = useState<string | null>(null)
+  const id = scored?.job.id
+
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    setTranslating(true)
+    void translateJob(id)
+      .then((result) => {
+        if (!cancelled) setTranslation(result)
+      })
+      .catch(() => {
+        if (!cancelled)
+          setTranslationError(
+            'Translation is unavailable right now. The original description is shown.',
+          )
+      })
+      .finally(() => {
+        if (!cancelled) setTranslating(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  if (!scored || !salary) return null
+  const { job } = scored
+  const closed = isClosed(job)
+  const applyUrl = applyLinkOf(job)
+  const hasPay = job.salaryMin > 0 || job.salaryMax > 0
+  const description =
+    !original && translation?.translated ? translation.description : job.description
+  const sourceName = job.sourceName
+    .replace(/\s*(?:Job Board )?API\b/gi, '')
+    .split('—')[0]
+    .trim()
+
+  const requestAdvice = async () => {
+    setAdvising(true)
+    setAdviceError(null)
+    try {
+      setAdvice(await jobAdvice(job.id, profile.skills))
+    } catch {
+      setAdviceError('We couldn’t prepare advice just now. Please try again.')
+    } finally {
+      setAdvising(false)
+    }
+  }
+  const retryTranslation = async () => {
+    setTranslating(true)
+    setTranslationError(null)
+    try {
+      setTranslation(await translateJob(job.id))
+    } catch {
+      setTranslationError(
+        'Translation is unavailable right now. The original description is shown.',
+      )
+    } finally {
+      setTranslating(false)
+    }
   }
 
-  const { job, score, tier, tierReason, components, matchedSkills, missingSkills } = scored
-  const freshness = freshnessOf(job.postedAt)
-  const hasProfile = components.some((component) => component.applicable)
-
   return (
-    <aside className="detail">
-      <div className="detail__head">
-        <div className="chiprow">
-          <span className="chip chip--plain">{roleFamilyLabel(job.roleFamily)}</span>
-          <span className="chip chip--plain">{seniorityLabel(job.seniority)}</span>
-          <span className="chip chip--plain">{workModeLabel(job.workMode)}</span>
-          <span className={`chip ${TIER_CLASS[tier]}`}>{ELIGIBILITY_LABELS[tier]}</span>
-        </div>
-        <h2 className="detail__title">{job.title}</h2>
+    <article className="detail">
+      <header className="detail__head">
+        <p className="eyebrow">{job.company || 'Employer not stated'}</p>
+        <h1 className="detail__title">{job.title}</h1>
         <p className="detail__company">
-          {job.company} · {job.locationLabel}
-          {job.locationCountry ? ` (${countryName(job.locationCountry)})` : ''}
+          {job.locationLabel}
+          {job.workMode !== 'unknown' ? ` · ${workModeLabel(job.workMode)}` : ''}
         </p>
-        <div className="btnrow">
-          <button type="button" className="btn btn--sm" onClick={onSave}>
-            {saved ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
+        <div className="job-facts">
+          {job.roleFamily !== 'unknown' && <span>{roleFamilyLabel(job.roleFamily)}</span>}
+          {job.seniority !== 'unknown' && <span>{seniorityLabel(job.seniority)}</span>}
+          {job.postedAt && <span>Posted {formatRelativeTime(job.postedAt)}</span>}
+        </div>
+        {closed && (
+          <p className="banner banner--info">
+            This listing has closed. It is kept here for your saved-job records.
+          </p>
+        )}
+        <div className="btnrow job-actions">
+          {!closed && applyUrl && (
+            <a
+              className="btn btn--primary"
+              href={applyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Apply for this role <ExternalLink size={14} />
+            </a>
+          )}
+          <button className="btn" type="button" onClick={onSave}>
+            {saved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
             {saved ? 'Saved' : 'Save'}
           </button>
-          <button type="button" className="btn btn--primary btn--sm" onClick={onApply}>
-            <Send size={13} />
-            {applied ? 'Marked as applied' : 'Mark as applied'}
+          <button className="btn btn--ghost" type="button" disabled={applied} onClick={onApply}>
+            <Send size={14} />
+            {applied ? 'Applied' : 'Mark as applied'}
           </button>
         </div>
-      </div>
-
+      </header>
       <div className="detail__body">
-        <div>
-          <h3 className="section__label">Match score</h3>
-          {hasProfile ? (
-            <ScoreBreakdown components={components} total={score} />
-          ) : (
-            <p className="detail__text" style={{ color: 'var(--muted)' }}>
-              Add your skills to see how this role matches your experience.
+        <section className="detail-section">
+          <h2>Salary</h2>
+          <p className="salary-figure">
+            {salary.converted ? '≈ ' : ''}
+            {formatRange(salary.min, salary.max, salary.currency)}
+            {hasPay ? ` ${PERIOD_LABELS[salary.period]}` : ''}
+          </p>
+          {hasPay && salary.converted && (
+            <p className="field__hint">
+              Original: {formatRange(job.salaryMin, job.salaryMax, job.salaryCurrency)}{' '}
+              {PERIOD_LABELS[job.salaryPeriod]}. Approximate conversion to {displayCurrency},
+              reference rates dated {rates?.date}. Your bank’s rate and fees may differ.
             </p>
           )}
-        </div>
-
-        <div>
-          <h3 className="section__label">Skill fit</h3>
-          {matchedSkills.length === 0 && missingSkills.length === 0 ? (
-            <p className="detail__text" style={{ color: 'var(--muted)' }}>
-              The listing doesn’t specify skills we can compare yet.
+          {hasPay && !salary.converted && !salary.sameCurrency && (
+            <p className="field__hint">
+              A current {displayCurrency} conversion is unavailable. The employer’s original
+              currency is shown.
             </p>
-          ) : (
-            <div className="skillsplit">
-              <div className="skillsplit__col">
-                <span className="field__hint">Matched</span>
-                <div className="taglist">
-                  {matchedSkills.length === 0 && <span className="field__hint">—</span>}
-                  {matchedSkills.map((skill) => (
-                    <span className="tag" key={skill}>
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="skillsplit__col">
-                <span className="field__hint">Missing</span>
-                <div className="taglist">
-                  {missingSkills.length === 0 && <span className="field__hint">—</span>}
-                  {missingSkills.map((skill) => (
-                    <span className="tag tag--muted" key={skill}>
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
           )}
-        </div>
-
-        <div>
-          <h3 className="section__label">Eligibility</h3>
-          <div className={`banner banner--${tier === 'eligible' ? 'info' : 'demo'}`}>
-            <Info size={15} />
-            <span>{tierReason}</span>
+          {hasPay && salary.converted && rates?.source === 'exchangerate-api' && (
+            <a
+              className="field__hint"
+              href="https://www.exchangerate-api.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Rates by ExchangeRate-API
+            </a>
+          )}
+        </section>
+        <section className="detail-section">
+          <div className="section-heading">
+            <h2>About this role</h2>
+            {translation?.translated && (
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => setOriginal(!original)}
+              >
+                {original ? 'Read in English' : 'View original'}
+              </button>
+            )}
           </div>
-          <div className="kv" style={{ marginTop: 8 }}>
-            <span className="kv__key">Hiring regions</span>
-            <span className="kv__value">
-              {job.eligibleCountries.length === 0
-                ? 'Not stated by the employer'
-                : job.eligibleCountries.join(', ')}
-            </span>
+          {translating && (
+            <p className="field__hint" role="status">
+              Preparing the English description…
+            </p>
+          )}
+          {translation?.translated && !original && (
+            <p className="field__hint">
+              AI-translated into English. Check the original wording for important details.
+            </p>
+          )}
+          {(translation?.message || translationError) && (
+            <p className="field__hint">
+              {translationError || translation?.message}{' '}
+              <button
+                type="button"
+                className="text-button"
+                disabled={translating}
+                onClick={() => void retryTranslation()}
+              >
+                Retry translation
+              </button>
+            </p>
+          )}
+          <div className="detail__text">
+            {description ||
+              'This source only provides a short listing. Open the original listing for the full responsibilities and application instructions.'}
           </div>
-          <div className="kv">
-            <span className="kv__key">Sponsorship</span>
-            <span className="kv__value">
-              {job.sponsorship === 'available'
-                ? 'Offered'
-                : job.sponsorship === 'unavailable'
-                  ? 'Not offered'
-                  : 'Not stated'}
-            </span>
-          </div>
-        </div>
-
-        <div>
-          <h3 className="section__label">Compensation</h3>
-          <div className="kv">
-            <span className="kv__key">Posted range</span>
-            <span className="kv__value">
-              {formatRange(job.salaryMin, job.salaryMax, job.salaryCurrency)}
-              {job.salaryMax > 0 || job.salaryMin > 0 ? PERIOD_LABELS[job.salaryPeriod] : ''}
-            </span>
-          </div>
-          {salary.converted ? (
-            <>
-              <div className="kv">
-                <span className="kv__key">In {displayCurrency}</span>
-                <span className="kv__value">
-                  {formatRange(salary.min, salary.max, salary.currency)}
-                  {PERIOD_LABELS[salary.period]}
+        </section>
+        {(job.requiredSkills.length > 0 || job.usefulSkills.length > 0) && (
+          <section className="detail-section">
+            <h2>Skills mentioned</h2>
+            <div className="taglist">
+              {[...new Set([...job.requiredSkills, ...job.usefulSkills])].map((skill) => (
+                <span className="tag" key={skill}>
+                  {skill}
                 </span>
-              </div>
-              <p className="rate">
-                Indicative conversion at {rates?.date} (
-                {rates?.source === 'frankfurter' ? 'Frankfurter' : 'offline reference rates'}). Pay
-                periods are not annualised.
+              ))}
+            </div>
+          </section>
+        )}
+        <section className="detail-section">
+          <div className="section-heading">
+            <h2>Make your application count</h2>
+            <Sparkles size={17} />
+          </div>
+          <p className="field__hint">
+            Get advice tailored to this listing
+            {profile.skills.length ? ' and your listed skills' : ''}. Requesting advice sends the
+            job text and your skills, not your CV, to our AI provider. Suggestions are not employer
+            requirements or a guarantee.
+          </p>
+          <button
+            type="button"
+            className="btn"
+            disabled={advising}
+            onClick={() => void requestAdvice()}
+          >
+            {advising ? <LoaderCircle size={14} className="icon-spin" /> : <Sparkles size={14} />}
+            {advising
+              ? 'Preparing advice…'
+              : advice
+                ? 'Refresh application tips'
+                : 'Get application tips'}
+          </button>
+          {adviceError && (
+            <p role="alert" className="field__hint">
+              {adviceError}
+            </p>
+          )}
+          {advice && (
+            <>
+              <ol className="application-tips">
+                {advice.tips.map((tip) => (
+                  <li key={tip.title}>
+                    <h3>{tip.title}</h3>
+                    <p>{tip.text}</p>
+                  </li>
+                ))}
+              </ol>
+              <p className="field__hint">
+                {advice.message ||
+                  'AI-generated advice. Review it and only include truthful experience in your application.'}
               </p>
             </>
-          ) : salary.sameCurrency ? (
-            <p className="rate">
-              Already stated in {salary.currency}. Pay periods are not annualised.
-            </p>
-          ) : (
-            <p className="rate">
-              No rate available for {job.salaryCurrency}, so the original currency is shown.
-            </p>
           )}
-        </div>
-
-        <div>
-          <h3 className="section__label">About the role</h3>
-          <p className="detail__text job-description">
-            {job.description || 'Read the full job description on the employer’s website.'}
-          </p>
-        </div>
-
-        <div>
-          <h3 className="section__label">Source, status &amp; freshness</h3>
-          <div className="kv">
-            <span className="kv__key">Source</span>
-            <span className="kv__value">{job.sourceName}</span>
-          </div>
-          <div className="kv">
-            <span className="kv__key">Status</span>
-            <span className="kv__value">
-              {STATUS_LABELS[statusOf(job)]}
-              {job.closedAt ? ` · ${formatRelativeTime(job.closedAt)}` : ''}
-            </span>
-          </div>
-          <div className="kv">
-            <span className="kv__key">Verification</span>
-            <span className="kv__value">
-              {VERIFICATION_LABELS[verificationOf(job)]}
-              {job.verificationReason ? ` — ${job.verificationReason}` : ''}
-            </span>
-          </div>
-          <div className="kv">
-            <span className="kv__key">Posted</span>
-            <span className="kv__value">
-              {job.postedAt
-                ? `${formatRelativeTime(job.postedAt)} · ${FRESHNESS_LABELS[freshness]}`
-                : 'Not stated by the employer'}
-            </span>
-          </div>
-          {job.lastSeenAt && (
-            <div className="kv">
-              <span className="kv__key">Last confirmed</span>
-              <span className="kv__value">{formatRelativeTime(job.lastSeenAt)}</span>
-            </div>
-          )}
-          <p className="rate">{VERIFICATION_DESCRIPTIONS[verificationOf(job)]}</p>
-          {isClosed(job) && job.closedReason && (
-            <p className="rate">
-              This role closed: {job.closedReason}. It stays here so you know it existed, but it
-              will not be offered as something to apply for.
-            </p>
-          )}
-          <a
-            className="btn btn--sm"
-            style={{ marginTop: 8 }}
-            href={applyLinkOf(job)}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            <ExternalLink size={13} />
-            {isClosed(job) ? 'View the original listing' : 'Apply for this role'}
+        </section>
+        {profile.skills.length > 0 && (
+          <details className="detail-section">
+            <summary>Why this matches your profile</summary>
+            <ScoreBreakdown components={scored.components} total={scored.score} />
+          </details>
+        )}
+        <footer className="original-listing">
+          <a href={job.sourceUrl || applyUrl || '#'} target="_blank" rel="noopener noreferrer">
+            Original listing{sourceName ? ` · ${sourceName}` : ''} <ExternalLink size={12} />
           </a>
-        </div>
+        </footer>
       </div>
-    </aside>
+    </article>
   )
 }

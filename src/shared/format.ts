@@ -42,6 +42,7 @@ const SYMBOLS: Record<string, string> = {
 }
 
 export const PERIOD_LABELS: Record<SalaryPeriod, string> = {
+  unknown: '(period not stated)',
   hour: '/hr',
   month: '/mo',
   year: '/yr',

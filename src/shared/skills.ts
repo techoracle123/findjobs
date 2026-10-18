@@ -333,6 +333,61 @@ export const ROLE_FAMILY_KEYWORDS: { family: string; patterns: RegExp[] }[] = [
   },
 ]
 
+// General professions are deliberately first-class, not forced into a tech label.
+ROLE_FAMILY_KEYWORDS.push(
+  ...[
+    ['sales', 'sales|business development|account executive|commercial'],
+    ['marketing', 'marketing|communications|public relations|seo|brand manager'],
+    ['customer-service', 'customer service|customer support|call cent(?:er|re)|customer success'],
+    [
+      'administration',
+      'administrat(?:or|ive)|receptionist|office manager|executive assistant|secretary',
+    ],
+    ['finance', 'accountant|accounting|finance|auditor|bookkeep|banking'],
+    ['healthcare', 'nurs(?:e|ing)|doctor|physician|pharmacist|healthcare|medical|dentist'],
+    ['education', 'teacher|teaching|tutor|lecturer|education|instructor'],
+    ['hospitality', 'hotel|chef|cook|waiter|restaurant|hospitality|tourism'],
+    ['logistics', 'driver|logistics|warehouse|supply chain|procurement|dispatch|delivery'],
+    ['human-resources', 'human resources|recruiter|recruitment|people operations|hr manager'],
+    ['legal', 'lawyer|legal|paralegal|solicitor|compliance officer'],
+    ['engineering', 'mechanical|electrical|manufacturing|industrial engineer|technician'],
+    ['agriculture', 'agricultur|agronom|farm(?:er|ing| manager)'],
+    ['construction', 'construction|civil engineer|surveyor|plumber|electrician|carpenter'],
+    ['creative', 'writer|editor|journalist|photograph|videograph|content creat|copywriter'],
+    [
+      'social-impact',
+      'humanitarian|programme officer|program officer|community|nonprofit|social work',
+    ],
+  ].map(([family, pattern]) => ({ family, patterns: [new RegExp(`\\b(?:${pattern})`, 'i')] })),
+)
+SKILL_CATALOGUE.push(
+  ...[
+    ['Customer service', 'customer (?:service|support)'],
+    ['Sales', 'sales|business development'],
+    ['Microsoft Excel', 'excel|spreadsheets?'],
+    ['Accounting', 'accounting|bookkeeping'],
+    ['Communication', 'communication|interpersonal'],
+    ['Project management', 'project management'],
+    ['Leadership', 'leadership|team management'],
+    ['Digital marketing', 'digital marketing|social media marketing'],
+    ['Teaching', 'teaching|lesson planning'],
+    ['Patient care', 'patient care|nursing'],
+    ['Driving', 'driving|driver.?s licen[cs]e'],
+    ['Logistics', 'logistics|supply chain'],
+    ['Administration', 'administration|office management'],
+    ['Recruitment', 'recruitment|talent acquisition'],
+    ['Writing', 'copywriting|content writing|editing'],
+    ['Hospitality', 'hospitality|guest service'],
+    ['Research', 'research|data collection'],
+    ['Negotiation', 'negotiation'],
+    ['Budgeting', 'budgeting|financial planning'],
+  ].map(([label, pattern]) => ({
+    label,
+    patterns: [new RegExp(`\\b(?:${pattern})\\b`, 'i')],
+    weight: 1,
+  })),
+)
+
 export const SENIORITY_KEYWORDS: { level: string; patterns: RegExp[] }[] = [
   { level: 'intern', patterns: [word('intern'), word('internship')] },
   { level: 'junior', patterns: [word('junior'), word('graduate'), word('entry[- ]level')] },

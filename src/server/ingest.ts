@@ -83,6 +83,7 @@ export async function ensureSources(db: D1Database): Promise<void> {
     const config = JSON.stringify({
       company: source.company,
       companyLabel: source.companyLabel,
+      country: source.country,
     })
 
     statements.push(

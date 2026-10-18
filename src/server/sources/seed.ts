@@ -39,7 +39,7 @@ export const SEED_SOURCES: SeedSource[] = [
   {
     id: 'arbeitnow',
     parser: 'arbeitnow',
-    name: 'Arbeitnow Job Board API',
+    name: 'Arbeitnow',
     listingUrl: 'https://www.arbeitnow.com/api/job-board-api',
     country: 'DE',
     tags: ['aggregator', 'germany', 'europe'],
@@ -51,15 +51,39 @@ export const SEED_SOURCES: SeedSource[] = [
   {
     id: 'remotive',
     parser: 'remotive',
-    name: 'Remotive API',
+    name: 'Remotive',
     listingUrl: 'https://remotive.com/api/remote-jobs',
     country: 'WW',
     tags: ['aggregator', 'remote'],
-    tier: 'hourly',
-    rateLimitPerHour: 60,
+    tier: 'six_hourly',
+    rateLimitPerHour: 4,
     kind: 'api',
-    enabled: true,
+    // Disabled pending publisher permission for third-party redistribution.
+    enabled: false,
   },
+
+  // Publisher-provided RSS, refreshed conservatively and linked back on job pages.
+  ...[
+    [
+      'myjobmag-ng',
+      'MyJobMag',
+      'https://www.myjobmag.com/feeds/ng/jobsxml_by_categories.xml',
+      'NG',
+    ],
+    ['hotnigerianjobs', 'Hot Nigerian Jobs', 'https://www.hotnigerianjobs.com/feed/rss.xml', 'NG'],
+    ['weworkremotely', 'We Work Remotely', 'https://weworkremotely.com/remote-jobs.rss', 'WW'],
+  ].map(([id, name, listingUrl, country]) => ({
+    id,
+    name,
+    listingUrl,
+    country,
+    parser: 'rss',
+    tags: ['public-feed'],
+    tier: 'six_hourly' as const,
+    rateLimitPerHour: 2,
+    kind: 'rss' as const,
+    enabled: true,
+  })),
 
   // --- Greenhouse boards: boards.greenhouse.io/<slug> -------------------
   ...(
@@ -292,6 +316,9 @@ export const SEED_SOURCES: SeedSource[] = [
   ...(
     [
       ['swisscom', 'Swisscom', 'CH'],
+      ['AccorHotel', 'Accor', 'FR'],
+      ['H&MGroup', 'H&M Group', 'SE'],
+      ['IKEA', 'IKEA', 'SE'],
       ['bosch-sr', 'Bosch (SmartRecruiters)', 'DE'],
       ['santander', 'Santander', 'ES'],
       ['glovo-sr', 'Glovo (SmartRecruiters)', 'ES'],

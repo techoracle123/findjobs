@@ -6,6 +6,7 @@ import ts from 'typescript'
 import {
   annotation,
   provisionAccess,
+  reservePageNames,
   telegramSetup,
   pageSecrets,
   workerSecrets,
@@ -151,6 +152,23 @@ export async function main() {
     )
   if (process.env.GITHUB_ENV)
     await writeFile(process.env.GITHUB_ENV, `LIVE_SITE_URL=${url}\n`, { flag: 'a' })
+  try {
+    const names = await reservePageNames(api)
+    for (const result of names)
+      annotation(
+        'notice',
+        'Alternative name reserved',
+        `${result.assigned}${result.exact ? ' (exact name assigned)' : ` (requested ${result.requested} was not assigned)`}. The current live site is unchanged.`,
+      )
+    if (process.env.GITHUB_STEP_SUMMARY)
+      await writeFile(
+        process.env.GITHUB_STEP_SUMMARY,
+        `## Reserved name alternatives\n\n${names.map((result) => `- ${result.assigned}${result.exact ? ' — exact name assigned' : ' — Cloudflare-assigned alternative'}`).join('\n')}\n\nThese projects reserve the names only; the app has not been moved.\n\n`,
+        { flag: 'a' },
+      )
+  } catch (error) {
+    annotation('warning', 'Alternative name check incomplete', error.message)
+  }
   let access = {}
   try {
     access = await provisionAccess(api, project, hostname)
@@ -176,6 +194,19 @@ export async function main() {
         TELEGRAM_WEBHOOK_SECRET: telegram.secret,
       }
     : {}
+  if (process.env.OPENROUTER_API_KEY?.trim()) {
+    secrets.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY.trim()
+    annotation(
+      'notice',
+      'OpenRouter configured',
+      'Server-side AI secret will be deployed securely.',
+    )
+  } else
+    annotation(
+      'warning',
+      'OpenRouter secret missing',
+      'Save a rotated OPENROUTER_API_KEY as an encrypted repository secret to enable English translation and AI advice.',
+    )
   await pageSecrets(api, project, secrets)
   const vars = { ...access, ...(telegram ? { TELEGRAM_BOT_USERNAME: telegram.username } : {}) }
   const files = ['wrangler.jsonc', 'wrangler.ingest.jsonc', 'wrangler.ingest-consumer.jsonc']
@@ -317,7 +348,11 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     // Only our sanitised errors are safe to log. Unknown errors may contain credentials.
     const message = error instanceof Error ? error.message : 'Unknown deployment error'
     let safeMessage = message
-    for (const token of [process.env.CLOUDFLARE_API_TOKEN, process.env.TELEGRAM_BOT_TOKEN]) {
+    for (const token of [
+      process.env.CLOUDFLARE_API_TOKEN,
+      process.env.TELEGRAM_BOT_TOKEN,
+      process.env.OPENROUTER_API_KEY,
+    ]) {
       if (token) safeMessage = safeMessage.replaceAll(token, '[REDACTED]')
     }
     console.error(safeMessage)

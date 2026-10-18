@@ -7,7 +7,7 @@ export type EligibilityTier = 'eligible' | 'unknown' | 'restricted'
 
 export type Sponsorship = 'available' | 'unavailable' | 'unknown'
 
-export type SalaryPeriod = 'hour' | 'month' | 'year'
+export type SalaryPeriod = 'hour' | 'month' | 'year' | 'unknown'
 
 export type VerificationLevel = 'verified' | 'unverified' | 'stale'
 
@@ -89,7 +89,7 @@ export interface ScoredJob {
 export interface RatesPayload {
   base: string
   date: string
-  source: 'frankfurter' | 'fallback'
+  source: 'frankfurter' | 'exchangerate-api' | 'fallback'
   rates: Record<string, number>
 }
 
@@ -118,7 +118,7 @@ export interface CvSuggestion {
   seniority: Seniority[]
   workModes: WorkMode[]
   summary: string
-  provider: 'workers-ai' | 'keyword-fallback'
+  provider: 'workers-ai' | 'openrouter' | 'keyword-fallback'
   notes: string[]
 }
 
@@ -136,4 +136,21 @@ export interface AlertPreference {
   query: string
   channels: string[]
   enabled: boolean
+}
+
+export interface ApplicationTip {
+  title: string
+  text: string
+}
+export interface JobAdvice {
+  tips: ApplicationTip[]
+  provider: 'openrouter' | 'listing-based'
+  message?: string
+}
+export interface JobTranslation {
+  description: string
+  originalLanguage: string
+  translated: boolean
+  available: boolean
+  message?: string
 }

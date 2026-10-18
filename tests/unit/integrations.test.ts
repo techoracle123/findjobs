@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 // @ts-expect-error Deployment helpers run as plain JavaScript in Node.
 import * as integrations from '../../scripts/cloudflare-integrations.mjs'
 
-const { telegramSetup, provisionAccess, workerSecrets } = integrations
+const { telegramSetup, provisionAccess, workerSecrets, reservePageNames } = integrations
 
 describe('encrypted deployment integrations', () => {
   it('does not call Telegram without an encrypted token', async () => {
@@ -76,4 +76,18 @@ describe('encrypted deployment integrations', () => {
       body: { name: 'TELEGRAM_BOT_TOKEN', type: 'secret_text', text: 'test-only' },
     })
   })
+})
+
+it('confirms alternative hostnames from Cloudflare assignment, not missing DNS', async () => {
+  const api = vi
+    .fn()
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce({ result: { subdomain: 'fj-find-jobs.pages.dev' } })
+    .mockResolvedValueOnce({ result: { subdomain: 'find-jobs-fj-xyz.pages.dev' } })
+  const names = await reservePageNames(api)
+  expect(names).toEqual([
+    { requested: 'fj-find-jobs.pages.dev', assigned: 'fj-find-jobs.pages.dev', exact: true },
+    { requested: 'find-jobs-fj.pages.dev', assigned: 'find-jobs-fj-xyz.pages.dev', exact: false },
+  ])
+  expect(api).toHaveBeenCalledTimes(3)
 })

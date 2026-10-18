@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bell, Bookmark, Radar, RotateCw, Search, SlidersHorizontal } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowLeft, Bell, Bookmark, Radar, RotateCw, Search, SlidersHorizontal } from 'lucide-react'
 import type { ApiHealth, CvSuggestion, Job, Profile, RatesPayload } from './shared/types'
 import {
   fetchHealth,
@@ -30,7 +30,36 @@ const TABS: { id: Tab; label: string; icon: typeof Radar }[] = [
   { id: 'alerts', label: 'Alerts', icon: Bell },
 ]
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'CHF', 'SGD', 'BRL', 'INR', 'JPY', 'NGN']
+const CURRENCIES = [
+  'NGN',
+  'USD',
+  'EUR',
+  'GBP',
+  'CAD',
+  'AUD',
+  'CHF',
+  'SGD',
+  'BRL',
+  'INR',
+  'JPY',
+  'ZAR',
+  'GHS',
+  'KES',
+  'AED',
+]
+
+function routeJobId(): string | null {
+  const match = window.location.pathname.match(/^\/jobs\/([^/]+)\/?$/)
+  if (!match) return null
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return null
+  }
+}
+
+const DISCLAIMER =
+  'FJ points you to opportunities. We are not affiliated with employers and do not verify or endorse job listings. Check the original listing and never pay to apply.'
 
 export default function App() {
   const [knownJobs, setKnownJobs] = useState<Record<string, Job>>({})
@@ -44,7 +73,7 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [displayCurrency, setDisplayCurrency] = useState<string>(() =>
-    readLocal<string>('currency', 'USD'),
+    readLocal<string>('currency', 'NGN'),
   )
 
   const account = useAccount()
@@ -52,7 +81,11 @@ export default function App() {
 
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('opportunities')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(routeJobId)
+  const [jobPage, setJobPage] = useState(() => routeJobId() !== null)
+  const [jobPageError, setJobPageError] = useState<string | null>(null)
+  const resultsScroll = useRef(0)
+  const requestVersion = useRef(0)
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [sort, setSort] = useState<SortKey>('relevance')
   const [toast, setToast] = useState<string | null>(null)
@@ -61,30 +94,28 @@ export default function App() {
   useEffect(() => writeLocal('currency', displayCurrency), [displayCurrency])
 
   const load = useCallback(async () => {
+    const version = ++requestVersion.current
     setLoading(true)
     setLoadError(null)
     try {
       const [jobsResponse, ratesResponse, healthResponse] = await Promise.all([
-        fetchJobs(0, filters.query),
+        fetchJobs(0, filters.query, filters),
         fetchRates().catch(() => null),
         fetchHealth().catch(() => null),
       ])
+      if (version !== requestVersion.current) return
       setJobs(jobsResponse.jobs)
       setTotal(jobsResponse.total ?? jobsResponse.jobs.length)
-      setSelectedId((current) =>
-        jobsResponse.jobs.some((job) => job.id === current)
-          ? current
-          : (jobsResponse.jobs[0]?.id ?? null),
-      )
       setDataNote(jobsResponse.warning ?? null)
       setRates(ratesResponse)
       setHealth(healthResponse)
     } catch (cause) {
-      setLoadError(cause instanceof Error ? cause.message : String(cause))
+      if (version === requestVersion.current)
+        setLoadError(cause instanceof Error ? cause.message : String(cause))
     } finally {
-      setLoading(false)
+      if (version === requestVersion.current) setLoading(false)
     }
-  }, [filters.query])
+  }, [filters])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 300)
@@ -94,7 +125,9 @@ export default function App() {
   const loadMore = async () => {
     setLoadingMore(true)
     try {
-      const response = await fetchJobs(jobs.length, filters.query)
+      const version = requestVersion.current
+      const response = await fetchJobs(jobs.length, filters.query, filters)
+      if (version !== requestVersion.current) return
       setJobs((current) => [
         ...current,
         ...response.jobs.filter((job) => !current.some((existing) => existing.id === job.id)),
@@ -106,6 +139,66 @@ export default function App() {
       setLoadingMore(false)
     }
   }
+
+  useEffect(() => {
+    const previous = window.history.scrollRestoration
+    window.history.scrollRestoration = 'manual'
+    const navigate = () => {
+      const id = routeJobId()
+      setSelectedId(id)
+      setJobPage(Boolean(id))
+      setJobPageError(null)
+      window.requestAnimationFrame(() => window.scrollTo(0, id ? 0 : resultsScroll.current))
+    }
+    window.addEventListener('popstate', navigate)
+    return () => {
+      window.history.scrollRestoration = previous
+      window.removeEventListener('popstate', navigate)
+    }
+  }, [])
+
+  const openJob = (id: string) => {
+    if (!jobPage) resultsScroll.current = window.scrollY
+    window.history.pushState({ fjJob: true }, '', `/jobs/${encodeURIComponent(id)}`)
+    setSelectedId(id)
+    setJobPage(true)
+    setJobPageError(null)
+    window.scrollTo(0, 0)
+  }
+
+  const backToResults = () => {
+    if (window.history.state?.fjJob) {
+      window.history.back()
+      return
+    }
+    window.history.replaceState(null, '', '/')
+    setJobPage(false)
+    setSelectedId(null)
+    window.requestAnimationFrame(() => window.scrollTo(0, resultsScroll.current))
+  }
+
+  useEffect(() => {
+    if (!jobPage || !selectedId || knownJobs[selectedId]) return
+    let cancelled = false
+    void fetchJob(selectedId)
+      .then((job) => {
+        if (!cancelled) setKnownJobs((current) => ({ ...current, [job.id]: job }))
+      })
+      .catch(() => {
+        if (!cancelled)
+          setJobPageError('This job is unavailable. It may have been removed by the publisher.')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [jobPage, selectedId, knownJobs])
+
+  useEffect(() => {
+    document.title =
+      jobPage && selectedId && knownJobs[selectedId]
+        ? `${knownJobs[selectedId].title} — FJ - Find Jobs`
+        : 'FJ - Find Jobs'
+  }, [jobPage, selectedId, knownJobs])
 
   useEffect(() => {
     if (account.mode !== 'signed-in') return
@@ -206,7 +299,7 @@ export default function App() {
       }
       return [...current, { jobId, savedAt: new Date().toISOString(), status: 'saved' }]
     })
-    setToast(savedIds.has(jobId) ? 'Removed from saved' : 'Saved in this browser')
+    setToast(savedIds.has(jobId) ? 'Removed from saved' : 'Job saved')
   }
 
   const markApplied = (jobId: string) => {
@@ -229,7 +322,7 @@ export default function App() {
         },
       ]
     })
-    setToast('Marked as applied (local only)')
+    setToast('Marked as applied')
   }
 
   const applySuggestion = (suggestion: CvSuggestion) => {
@@ -252,11 +345,18 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="brand">
-          <span className="brand__mark" />
-          Find Jobs
-          <span className="brand__sub">Make your next move.</span>
-        </span>
+        <a
+          className="brand"
+          href="/"
+          onClick={(event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+            event.preventDefault()
+            if (jobPage) backToResults()
+          }}
+        >
+          <span className="brand__monogram">FJ</span>
+          <span>Find Jobs</span>
+        </a>
 
         <div className="topbar__spacer" />
 
@@ -302,249 +402,287 @@ export default function App() {
         </div>
       </header>
 
-      <div className="workspace">
-        <section className="profile-tools" data-open={preferencesOpen}>
-          <button
-            type="button"
-            className="profile-tools__toggle"
-            aria-expanded={preferencesOpen}
-            onClick={() => setPreferencesOpen(!preferencesOpen)}
-          >
-            <SlidersHorizontal size={16} /> Your preferences & filters
+      {jobPage ? (
+        <main className="job-page">
+          <button type="button" className="btn btn--ghost back-to-results" onClick={backToResults}>
+            <ArrowLeft size={16} /> Back to results
           </button>
-          <aside className="rail">
-            <ProfilePanel
+          {jobPageError ? (
+            <div className="empty" role="alert">
+              <h1>Job unavailable</h1>
+              <p>{jobPageError}</p>
+            </div>
+          ) : !selected ? (
+            <div className="empty" role="status">
+              <span className="spinner" />
+              <p>Opening job…</p>
+            </div>
+          ) : (
+            <JobDetail
+              key={selected.job.id}
+              scored={selected}
+              salary={selectedSalary}
               profile={profile}
-              onChange={setProfile}
-              onReset={() => setProfile(EMPTY_PROFILE)}
+              rates={rates}
+              displayCurrency={displayCurrency}
+              saved={savedIds.has(selected.job.id)}
+              applied={appliedIds.has(selected.job.id)}
+              onSave={() => toggleSave(selected.job.id)}
+              onApply={() => markApplied(selected.job.id)}
             />
-            <CvImport onApply={applySuggestion} />
-            <FilterBar
-              filters={filters}
-              onChange={setFilters}
-              onReset={() => setFilters(DEFAULT_FILTERS)}
-            />
-          </aside>
-        </section>
+          )}
+          <p className="site-disclaimer">{DISCLAIMER}</p>
+        </main>
+      ) : (
+        <div className="workspace">
+          <section className="profile-tools" data-open={preferencesOpen}>
+            <button
+              type="button"
+              className="profile-tools__toggle"
+              aria-expanded={preferencesOpen}
+              onClick={() => setPreferencesOpen(!preferencesOpen)}
+            >
+              <SlidersHorizontal size={16} /> Your preferences & filters
+            </button>
+            <aside className="rail">
+              <ProfilePanel
+                profile={profile}
+                onChange={setProfile}
+                onReset={() => setProfile(EMPTY_PROFILE)}
+              />
+              <details className="cv-disclosure">
+                <summary>Or use your CV</summary>
+                <CvImport onApply={applySuggestion} />
+              </details>
+              <FilterBar
+                filters={filters}
+                onChange={setFilters}
+                onReset={() => setFilters(DEFAULT_FILTERS)}
+              />
+            </aside>
+          </section>
 
-        <main className="content">
-          <div className="page-intro">
-            <span className="eyebrow">A little closer to your next chapter</span>
-            <h1>Good work starts with the right opportunity.</h1>
-            <p>
-              Browse real openings. Add your skills to find a better fit, and keep the jobs you like
-              in one place.
-            </p>
-          </div>
-          {account.mode === 'anonymous' && (
-            <p className="local-note">
-              Your profile and saved jobs stay on this device.{' '}
-              {health?.accessLoginUrl && (
-                <button type="button" onClick={requireSignIn}>
-                  Sign in to sync them.
-                </button>
-              )}
-            </p>
-          )}
-          {account.syncError && (
-            <div className="banner banner--demo" role="alert">
-              Your latest changes couldn’t sync. Please check your connection and try again.
+          <main className="content">
+            <div className="page-intro">
+              <span className="eyebrow">FJ - Find Jobs</span>
+              <h1>Welcome. Find work that fits your skills.</h1>
+              <p>
+                Explore opportunities in Nigeria and around the world, across professions. Add your
+                skills for better matches, save what interests you, and apply through the original
+                listing.
+              </p>
             </div>
-          )}
-          {dataNote && (
-            <div className="banner banner--info">
-              <span>{dataNote}</span>
-            </div>
-          )}
-
-          {loadError && (
-            <div className="banner banner--demo">
-              <span>
-                We couldn’t load jobs right now. Please check your connection and try again.
-              </span>
-            </div>
-          )}
-
-          <nav className="tabs" aria-label="Your job search">
-            {TABS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                className="tab"
-                aria-current={tab === id ? 'page' : undefined}
-                onClick={() => setTab(id)}
-              >
-                <Icon size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />
-                {label}
-                {id === 'saved' && saved.length > 0 && (
-                  <span className="tab__count">{saved.length}</span>
+            <p className="site-disclaimer intro-disclaimer">{DISCLAIMER}</p>
+            {account.mode === 'anonymous' && (
+              <p className="local-note">
+                Your profile and saved jobs stay on this device.{' '}
+                {health?.accessLoginUrl && (
+                  <button type="button" onClick={requireSignIn}>
+                    Sign in to sync them.
+                  </button>
                 )}
-                {id === 'alerts' && alerts.length > 0 && (
-                  <span className="tab__count">{alerts.length}</span>
-                )}
-              </button>
-            ))}
-          </nav>
-
-          {tab === 'opportunities' && (
-            <>
-              <div className="toolbar">
-                <div className="toolbar__search">
-                  <label className="visually-hidden" htmlFor="search">
-                    Search roles
-                  </label>
-                  <div className="searchfield">
-                    <Search size={14} className="searchfield__icon" />
-                    <input
-                      id="search"
-                      className="input"
-                      value={filters.query}
-                      placeholder="Search title, company, skill…"
-                      onChange={(event) => setFilters({ ...filters, query: event.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <label className="visually-hidden" htmlFor="sort">
-                  Sort
-                </label>
-                <select
-                  id="sort"
-                  className="select"
-                  style={{ width: 'auto' }}
-                  value={sort}
-                  onChange={(event) => setSort(event.target.value as SortKey)}
+              </p>
+            )}
+            {account.mode === 'signed-in' && account.hasLocalData && (
+              <div className="banner banner--info">
+                <span>Your jobs and preferences from before sign-in are still available.</span>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() =>
+                    void account
+                      .importLocalData()
+                      .then(() => setToast('Device data merged into your account'))
+                      .catch(() => setToast('Could not import device data. Please try again.'))
+                  }
                 >
-                  <option value="relevance">Best match</option>
-                  <option value="newest">Newest first</option>
-                  <option value="salary-desc">Salary, high to low</option>
-                  <option value="salary-asc">Salary, low to high</option>
-                </select>
+                  Import device data
+                </button>
+              </div>
+            )}
+            {account.syncError && (
+              <div className="banner banner--demo" role="alert">
+                Your latest changes couldn’t sync. Please check your connection and try again.
+              </div>
+            )}
+            {dataNote && (
+              <div className="banner banner--info">
+                <span>{dataNote}</span>
+              </div>
+            )}
 
-                <div className="toolbar__spacer" />
-
-                <span className="resultcount">
-                  {sorted.jobs.length} {sorted.jobs.length === 1 ? 'job' : 'jobs'}
-                  {total > jobs.length ? ` · ${total.toLocaleString()} available` : ''}
+            {loadError && (
+              <div className="banner banner--demo">
+                <span>
+                  We couldn’t load jobs right now. Please check your connection and try again.
                 </span>
               </div>
+            )}
 
-              {sorted.mixedPeriods && (
-                <div className="banner banner--info">
-                  <span>
-                    These results mix pay periods. Amounts are grouped by period and never
-                    annualised, so figures with different periods are not directly comparable.
+            <nav className="tabs" aria-label="Your job search">
+              {TABS.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="tab"
+                  aria-current={tab === id ? 'page' : undefined}
+                  onClick={() => setTab(id)}
+                >
+                  <Icon size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />
+                  {label}
+                  {id === 'saved' && saved.length > 0 && (
+                    <span className="tab__count">{saved.length}</span>
+                  )}
+                  {id === 'alerts' && alerts.length > 0 && (
+                    <span className="tab__count">{alerts.length}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+
+            {tab === 'opportunities' && (
+              <>
+                <div className="toolbar">
+                  <div className="toolbar__search">
+                    <label className="visually-hidden" htmlFor="search">
+                      Search roles
+                    </label>
+                    <div className="searchfield">
+                      <Search size={14} className="searchfield__icon" />
+                      <input
+                        id="search"
+                        className="input"
+                        value={filters.query}
+                        placeholder="Search title, company, skill…"
+                        onChange={(event) => setFilters({ ...filters, query: event.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <label className="visually-hidden" htmlFor="sort">
+                    Sort
+                  </label>
+                  <select
+                    id="sort"
+                    className="select"
+                    style={{ width: 'auto' }}
+                    value={sort}
+                    onChange={(event) => setSort(event.target.value as SortKey)}
+                  >
+                    <option value="relevance">Best match</option>
+                    <option value="newest">Newest first</option>
+                    <option value="salary-desc">Salary, high to low</option>
+                    <option value="salary-asc">Salary, low to high</option>
+                  </select>
+
+                  <div className="toolbar__spacer" />
+
+                  <span className="resultcount">
+                    {sorted.jobs.length} {sorted.jobs.length === 1 ? 'job' : 'jobs'}
+                    {total > jobs.length ? ` · ${total.toLocaleString()} available` : ''}
                   </span>
                 </div>
-              )}
 
-              <div className="results">
-                <div className="joblist">
-                  {loading ? (
-                    <div className="empty" role="status">
-                      <span className="spinner" />
-                      <p>Finding your next opportunity…</p>
-                    </div>
-                  ) : sorted.jobs.length === 0 ? (
-                    <div className="empty">
-                      <p className="empty__title">No roles match</p>
-                      <p>
-                        {jobs.length === 0
-                          ? 'New openings will appear here once they’ve been checked. Please check back shortly.'
-                          : 'Try loosening a filter or clearing your search.'}
-                      </p>
-                    </div>
-                  ) : (
-                    sorted.jobs.map((entry) => (
-                      <JobRow
-                        key={entry.job.id}
-                        scored={entry}
-                        selected={entry.job.id === selectedId}
-                        salary={salaryView(entry.job, rates, displayCurrency)}
-                        onSelect={() => {
-                          setSelectedId(entry.job.id)
-                          if (window.innerWidth < 1400)
-                            window.setTimeout(
-                              () =>
-                                document
-                                  .querySelector('.detail')
-                                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-                              30,
-                            )
-                        }}
-                      />
-                    ))
-                  )}
-                  {jobs.length < total && (
-                    <button
-                      type="button"
-                      className="btn load-more"
-                      disabled={loadingMore}
-                      onClick={() => void loadMore()}
-                    >
-                      {loadingMore ? 'Loading…' : 'Load more jobs'}
-                    </button>
-                  )}
+                {rates?.source !== 'fallback' && rates?.date && (
+                  <p className="currency-note">
+                    Salary estimates in {displayCurrency} · rates dated {rates.date}
+                    {rates.source === 'exchangerate-api' && (
+                      <>
+                        {' '}
+                        ·{' '}
+                        <a
+                          href="https://www.exchangerate-api.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Rates by ExchangeRate-API
+                        </a>
+                      </>
+                    )}
+                  </p>
+                )}
+
+                {sorted.mixedPeriods && (
+                  <div className="banner banner--info">
+                    <span>
+                      These results mix pay periods. Amounts are grouped by period and never
+                      annualised, so figures with different periods are not directly comparable.
+                    </span>
+                  </div>
+                )}
+
+                <div className="results">
+                  <div className="joblist">
+                    {loading ? (
+                      <div className="empty" role="status">
+                        <span className="spinner" />
+                        <p>Finding your next opportunity…</p>
+                      </div>
+                    ) : sorted.jobs.length === 0 ? (
+                      <div className="empty">
+                        <p className="empty__title">No roles match</p>
+                        <p>
+                          {jobs.length === 0
+                            ? 'No current openings for this search. Try another location or profession.'
+                            : 'Try loosening a filter or clearing your search.'}
+                        </p>
+                      </div>
+                    ) : (
+                      sorted.jobs.map((entry) => (
+                        <JobRow
+                          key={entry.job.id}
+                          scored={entry}
+                          selected={entry.job.id === selectedId}
+                          salary={salaryView(entry.job, rates, displayCurrency)}
+                          onSelect={() => openJob(entry.job.id)}
+                        />
+                      ))
+                    )}
+                    {jobs.length < total && (
+                      <button
+                        type="button"
+                        className="btn load-more"
+                        disabled={loadingMore}
+                        onClick={() => void loadMore()}
+                      >
+                        {loadingMore ? 'Loading…' : 'Load more jobs'}
+                      </button>
+                    )}
+                  </div>
                 </div>
+              </>
+            )}
 
-                <JobDetail
-                  scored={selected}
-                  salary={selectedSalary}
-                  rates={rates}
-                  displayCurrency={displayCurrency}
-                  saved={selected ? savedIds.has(selected.job.id) : false}
-                  applied={selected ? appliedIds.has(selected.job.id) : false}
-                  onSave={() => selected && toggleSave(selected.job.id)}
-                  onApply={() => selected && markApplied(selected.job.id)}
-                />
-              </div>
-            </>
-          )}
-
-          {tab === 'saved' && (
-            <SavedPanel
-              saved={saved}
-              jobs={Object.values(knownJobs)}
-              onOpen={(jobId) => {
-                if (knownJobs[jobId]) {
-                  setSelectedId(jobId)
-                  setTab('opportunities')
-                  return
+            {tab === 'saved' && (
+              <SavedPanel
+                saved={saved}
+                jobs={Object.values(knownJobs)}
+                onOpen={openJob}
+                onRemove={(jobId) =>
+                  setSaved((current) => current.filter((entry) => entry.jobId !== jobId))
                 }
-                void fetchJob(jobId)
-                  .then((job) => {
-                    setKnownJobs((current) => ({ ...current, [job.id]: job }))
-                    setSelectedId(job.id)
-                    setTab('opportunities')
-                  })
-                  .catch(() =>
-                    setToast('This saved job is unavailable right now. Please try again later.'),
-                  )
-              }}
-              onRemove={(jobId) =>
-                setSaved((current) => current.filter((entry) => entry.jobId !== jobId))
-              }
-            />
-          )}
+              />
+            )}
 
-          {tab === 'alerts' && (
-            <AlertsPanel
-              alerts={alerts}
-              telegramConfigured={Boolean(health?.telegramConfigured)}
-              telegramLinked={telegramLinked}
-              signedIn={account.mode === 'signed-in'}
-              canDeliver={
-                account.entitlements.includes('alerts') &&
-                telegramLinked &&
-                Boolean(health?.telegramConfigured)
-              }
-              onChange={setAlerts}
-              onLinkTelegram={linkTelegram}
-              onRequireSignIn={requireSignIn}
-            />
-          )}
-        </main>
-      </div>
+            {tab === 'alerts' && (
+              <AlertsPanel
+                alerts={alerts}
+                telegramConfigured={Boolean(health?.telegramConfigured)}
+                telegramLinked={telegramLinked}
+                signedIn={account.mode === 'signed-in'}
+                canDeliver={
+                  account.entitlements.includes('alerts') &&
+                  telegramLinked &&
+                  Boolean(health?.telegramConfigured)
+                }
+                onChange={setAlerts}
+                onLinkTelegram={linkTelegram}
+                onRequireSignIn={requireSignIn}
+              />
+            )}
+          </main>
+        </div>
+      )}
 
       {toast && (
         <div className="toast" role="status">

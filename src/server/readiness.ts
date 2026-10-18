@@ -45,6 +45,9 @@ const REQUIRED_TABLES = [
   'ingestion_runs',
   'billing_events',
   'ai_usage',
+  'job_translations',
+  'job_advice_cache',
+  'service_cache',
 ]
 
 /**
@@ -274,7 +277,7 @@ export async function buildReadiness(env: Env): Promise<ReadinessReport> {
       name: 'AI extraction',
       status: 'ok',
       required: false,
-      detail: `The Workers AI binding is present. ${config.aiDailyLimit} analyses per account per day, ${config.aiGlobalDailyLimit} for the service.`,
+      detail: `${env.OPENROUTER_API_KEY ? 'OpenRouter is configured' : 'The Workers AI binding is present'}. ${config.aiDailyLimit} analyses per account per day, ${config.aiGlobalDailyLimit} for the service.`,
       action: null,
     })
   } else {
@@ -284,14 +287,15 @@ export async function buildReadiness(env: Env): Promise<ReadinessReport> {
       status: 'warn',
       required: false,
       detail: 'No AI binding is present, so CV text is read with keyword extraction.',
-      action: 'Bind a Workers AI model to the AI binding to turn the model on.',
+      action:
+        'Set the encrypted OPENROUTER_API_KEY secret to enable translation, tailored tips and AI CV suggestions.',
     })
   }
 
   /* ---------- rates ---------- */
 
-  const rates = await getRates(config.appMode !== 'test')
-  if (rates.source === 'frankfurter') {
+  const rates = await getRates(config.appMode !== 'test', env.DB)
+  if (rates.source !== 'fallback') {
     checks.push({
       id: 'rates',
       name: 'Reference rates',
@@ -308,7 +312,8 @@ export async function buildReadiness(env: Env): Promise<ReadinessReport> {
       required: false,
       detail:
         'Live exchange rates are unavailable. Salaries remain in the employer’s original currency.',
-      action: 'Check outbound access to api.frankfurter.app from this deployment.',
+      action:
+        'Check outbound access to open.er-api.com and api.frankfurter.app from this deployment.',
     })
   }
 

@@ -33,7 +33,7 @@ export function createPoliteFetch(
 
     const policy = await policyFor(host, fetchImpl)
 
-    if (policy.rules && !allowedBy(policy.rules, new URL(url).pathname)) {
+    if (policy.rules && !allowedBy(policy.rules, new URL(url).pathname + new URL(url).search)) {
       throw new SourceError(
         `robots.txt does not allow ${new URL(url).pathname} on ${host}`,
         sourceId,
