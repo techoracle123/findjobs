@@ -1,14 +1,26 @@
 # FJ - Find Jobs release status
 
-Updated 18 October 2026, 20:00 UTC. **Public job browsing is restored.**
-Deployment [39161116586](https://github.com/techoracle123/findjobs/actions/runs/39161116586)
-published the recovery and passed **all 16 browser checks against the actual live site**.
-It observed **372 genuine public listings**. A subsequent independent live query
-returned **106 Nigerian listings**, and its individual-job endpoint worked.
-These are observations, not guaranteed or verified vacancies.
+Updated 18 October 2026, 21:06 UTC. **Expanded public discovery is live: 8,546 distinct
+public listings, including 689 Nigerian listings**, observed after publication
+at 20:43 UTC. The API successfully returned a real listing at offset 5,000 and
+the complete description of a Nigerian employer-board role. Counts fluctuate;
+these are publisher-listed opportunities, not verified or guaranteed vacancies.
 
-Full account/AI/ingestion readiness remains degraded: Cloudflare D1 migrations
-still encounter the free account's daily read allowance. No paid plan was enabled.
+**Latest deployment [39166093001](https://github.com/techoracle123/findjobs/actions/runs/39166093001)
+SUCCEEDED: all 17 actual live-site browser tests passed in 22.4 seconds**, including
+broad-corpus metadata, pagination beyond 5,000 results and complete job descriptions.
+
+**Automatic discovery refresh is deployed every 12 hours.** The Cloudflare cron
+runs at **00:00 and 12:00 UTC (01:00 and 13:00 Nigeria time)**. Per-publisher
+queue jobs collect current listings; a delayed publication task allows up to
+20 minutes for collection/retries. Edge/isolate caches may add a short propagation
+delay. The first initial collection ran during deployment; the first natural cron
+execution is still upcoming. This is a durable Cloudflare schedule, not a claim
+that this workspace timer guarantees regular updates.
+
+Account persistence and database-backed AI remain degraded by D1's daily quota.
+The public discovery collector, storage, publication and schedule no longer need
+D1. No paid hosting/billing change was made.
 
 ## Chosen address
 
@@ -22,26 +34,47 @@ The recovery intentionally permits a browsing-only deployment on the specific
 D1 daily-quota failure, including an existing project. Other migration errors
 still fail the deployment. It checks actual job responses and deep links before
 reporting public browsing recovered, exports `STORAGE_DEGRADED=true`, and does
-not report database readiness or deploy ingestion workers in that state.
+not report database readiness. The **database-independent** discovery producer
+and consumer are now deployed even in that state; legacy D1 ingestion is not
+reported restored.
 
-## Database-independent browsing recovery
+## Durable, regularly refreshed public discovery
 
-- Database failures no longer turn the public feed into an empty list/error screen.
-  The API fetches real public MyJobMag, We Work Remotely, One Acre Fund,
-  GiveDirectly and Arbeitnow listings through existing publisher parsers.
-- Publisher robots exclusions, crawl delays and request timeouts apply. Each
-  feed contributes at most 100 parsed jobs. Observations are coalesced per isolate
-  and cached for 30 minutes in memory and the Cloudflare Cache API.
-- Stable IDs match normal ingestion. Posted dates, original application links
-  and actual observation timestamps are retained. Closed/expired listings are
-  excluded. No runtime fixture, invented job, auth bypass or paid-AI budget bypass.
-- Search, filters, totals, pagination and direct job links use the same snapshot
-  while the database is unavailable. Healthy database queries can still work.
-- Listing-based application pointers remain available; metered model calls are
-  not attempted when the database-backed limiter/budget is unavailable. An
-  unavailable translation keeps the original text with an honest explanation.
-- If every permitted publisher fails and the snapshot has expired, return an
-  honest service error, not fabricated/stale availability.
+- The small 372-job emergency feed is no longer the primary corpus. The primary
+  feed is a Cloudflare KV-backed publication with 8,546 distinct listings from
+  **48 successful publishers** in the initial collection. **154 candidates** were
+  attempted; 106 unavailable/disallowed candidates contributed no invented jobs.
+- Added 25 employer-board candidates spanning healthcare, education, financial
+  services, energy/agriculture, non-profits and general operations. Only real,
+  successfully retrieved postings count. The full source registry now has 244
+  candidates; this is not a claim that all 244 work.
+- Eligible public Greenhouse/Lever boards and publisher RSS/public JSON sources
+  are collected independently, with robots exclusions, crawl delays and deadlines.
+  Restricted Remotive redistribution and robots-blocked publishers stay excluded.
+- The durable path does **not** apply the emergency 100-jobs-per-source limit.
+  Oversized payloads fail a safety bound rather than silently inflating success.
+- Canonical application URLs deduplicate tracking variants. Exact employer/title/
+  location syndications across sources are also collapsed, while distinct roles
+  and locations remain. Actual original dates, links and observation times remain.
+- Full descriptions are stored separately; search indexes contain short excerpts.
+  Opening a job fetches its full record, never treats the excerpt as the complete
+  description. Search/filter/pagination operates across the full published corpus,
+  not only the first 200 results loaded in the browser.
+- A publication pointer changes only after its immutable index shards are stored.
+  Failed publisher refreshes retain prior observations only within a 36-hour age
+  limit; stale sources cannot stay open indefinitely through other publishers.
+  A successful source returning no openings replaces its prior source index.
+- KV bulk reads and bounded storage waits reduce cold-region latency. Public cache
+  writes run in the actual Pages request's `waitUntil`, not on the response path.
+- `/api/feed-status` exposes actual corpus count, publication time, refresh interval,
+  source coverage and the number of newly added IDs compared with the prior cycle.
+  The interface shows publication time and “Updates every 12 hours.”
+- The five-source emergency fetch remains a bounded last resort if durable public
+  storage is unavailable. No runtime fixtures, invented listings, auth bypass or
+  unmetered model calls are used. Original text/listing-based pointers remain the
+  honest fallback when metered AI storage is unavailable.
+- Re-deploying a fresh publication reuses it rather than recrawling all publishers
+  or rewriting all records. Normal twice-daily refresh remains the cron's job.
 
 The old hostname and shared database are retained. Signed-in account records use
 the same database. Browser-only data is origin-specific: saves on the old address
@@ -112,7 +145,7 @@ session or proof of every AI feature.
 - New ordered/country/freshness/source-status indexes reduce scans and sorts.
 - Public source inspection no longer rewrites every registry row. Deployment
   registers sources explicitly and updates metadata only when it changes.
-- 114 unit tests and 143 Workers/D1 tests pass locally; production build,
+- 115 unit tests and 149 Workers/D1 tests pass locally; production build,
   TypeScript, ESLint and formatting pass. The local live-data smoke suite has
   14 passing checks, including sign-up/recovery dialog behavior.
 - **All 16 browser tests pass locally** against genuine public-feed data. The
@@ -121,10 +154,16 @@ session or proof of every AI feature.
 - CI can run that browser suite in an isolated staging-mode preview by freshly
   ingesting public One Acre Fund/MyJobMag feeds into an isolated local database.
   It refuses to substitute fictional listings if those sources fail.
-  That isolated CI is not an email delivery test. Latest code CI **39161121973**
+  That isolated CI is not an email delivery test. Code CI **39165506142**
   passed unit/worker/build/audit and all 16 real-feed preview browser checks.
   Separately, deployment **39161116586** passed all 16 browser checks against
   **the actual live site** in 24.8 seconds, during the database quota outage.
+  That earlier 16-test result applied to the emergency feed. Expanded-feed runs
+  exposed intermittent HTTP waits; bulk reads and bounded waits were added.
+  The new 17th browser check explicitly requires at least 2,000 real results,
+  12-hour refresh metadata, deep pagination and a complete detail response.
+  The final expanded-feed deployment **39166093001 passed all 17 tests in 22.4s**;
+  the timeout failures described above are superseded by that successful run.
 - Preview on port 5173 retains 10 genuine source listings and current open FX data,
   without using a synthetic runtime fixture. No local OpenRouter secret is stored.
 

@@ -7,7 +7,9 @@ A simple, skill-first job discovery service for Nigeria and the world, across pr
 The selected address is **https://fj-find-jobs.pages.dev**. Deployment now targets
 this exact project. **Public browsing is restored**, including Nigerian filters,
 search and dedicated job pages. A database-independent, robots-aware public-feed
-path observed 372 real listings during the recovery deployment. Cloudflare's
+snapshot now serves **8,546 distinct public listings**, including **689 Nigerian**
+listings at the latest check. The Cloudflare producer refreshes discovery every
+**12 hours**, independently of this workspace or D1. Cloudflare's
 exhausted daily D1 allowance still degrades account syncing and ingestion; this
 is not full account/AI readiness. See [launch status](docs/LAUNCH-STATUS.md).
 
@@ -17,7 +19,8 @@ tests. Empty feeds stay empty. Unavailable exchange rates do not become made-up
 conversions. Payments and the plan screen are disabled.
 
 The encrypted OpenRouter key is now detected. Cloudflare Access's actual email-code
-page is configured for the chosen hostname. All 16 live browser checks now pass.
+page is configured for the chosen hostname. Live discovery, pagination beyond 5,000 results and full job-detail responses
+are checked during deployment.
 Full database-backed account/AI checks still need storage recovery, and real
 email/chat delivery needs user confirmation.
 
