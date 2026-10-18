@@ -9,6 +9,7 @@ on:
       - scripts/deploy-cloudflare.mjs
       - scripts/cloudflare-integrations.mjs
       - scripts/check-live.mjs
+      - scripts/check-openrouter.mjs
       - src/**
       - functions/**
       - public/**
@@ -61,6 +62,10 @@ jobs:
       - run: npm run test:unit
       - run: npm run test:worker
       - run: npm run build
+      - name: Verify OpenRouter independently with public job text
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: node scripts/check-openrouter.mjs
       - name: Provision database and queue, migrate, and deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
