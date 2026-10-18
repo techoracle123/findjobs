@@ -4,6 +4,7 @@ import type { ApiHealth, CvSuggestion, Job, Profile, RatesPayload } from './shar
 import {
   fetchHealth,
   fetchJobs,
+  fetchJob,
   fetchRates,
   createTelegramLink,
   fetchTelegramStatus,
@@ -32,6 +33,7 @@ const TABS: { id: Tab; label: string; icon: typeof Radar }[] = [
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'CHF', 'SGD', 'BRL', 'INR', 'JPY', 'NGN']
 
 export default function App() {
+  const [knownJobs, setKnownJobs] = useState<Record<string, Job>>({})
   const [jobs, setJobs] = useState<Job[]>([])
   const [rates, setRates] = useState<RatesPayload | null>(null)
   const [health, setHealth] = useState<ApiHealth | null>(null)
@@ -154,10 +156,37 @@ export default function App() {
     [visible, sort, rates, displayCurrency],
   )
 
-  const selected = useMemo(
-    () => scored.find((entry) => entry.job.id === selectedId) ?? null,
-    [scored, selectedId],
-  )
+  useEffect(() => {
+    setKnownJobs((current) => ({
+      ...current,
+      ...Object.fromEntries(jobs.map((job) => [job.id, job])),
+    }))
+  }, [jobs])
+
+  useEffect(() => {
+    const missing = saved.filter((entry) => !knownJobs[entry.jobId])
+    if (!missing.length) return
+    let cancelled = false
+    void Promise.all(missing.map((entry) => fetchJob(entry.jobId).catch(() => null))).then(
+      (loaded) => {
+        if (!cancelled && loaded.some(Boolean))
+          setKnownJobs((current) => ({
+            ...current,
+            ...Object.fromEntries(
+              loaded.filter((job): job is Job => job !== null).map((job) => [job.id, job]),
+            ),
+          }))
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [saved, knownJobs])
+
+  const selected = useMemo(() => {
+    const job = selectedId ? knownJobs[selectedId] : null
+    return job ? scoreJob(job, profile) : null
+  }, [knownJobs, selectedId, profile])
 
   const selectedSalary = useMemo(
     () => (selected ? salaryView(selected.job, rates, displayCurrency) : null),
@@ -475,10 +504,22 @@ export default function App() {
           {tab === 'saved' && (
             <SavedPanel
               saved={saved}
-              jobs={jobs}
+              jobs={Object.values(knownJobs)}
               onOpen={(jobId) => {
-                setSelectedId(jobId)
-                setTab('opportunities')
+                if (knownJobs[jobId]) {
+                  setSelectedId(jobId)
+                  setTab('opportunities')
+                  return
+                }
+                void fetchJob(jobId)
+                  .then((job) => {
+                    setKnownJobs((current) => ({ ...current, [job.id]: job }))
+                    setSelectedId(job.id)
+                    setTab('opportunities')
+                  })
+                  .catch(() =>
+                    setToast('This saved job is unavailable right now. Please try again later.'),
+                  )
               }}
               onRemove={(jobId) =>
                 setSaved((current) => current.filter((entry) => entry.jobId !== jobId))

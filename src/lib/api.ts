@@ -85,6 +85,10 @@ export function fetchJobs(offset = 0, query = ''): Promise<JobsResponse> {
   return request<JobsResponse>(`/api/jobs?${params}`)
 }
 
+export async function fetchJob(id: string): Promise<Job> {
+  return (await request<{ job: Job }>(`/api/jobs/${encodeURIComponent(id)}`)).job
+}
+
 export function fetchRates(): Promise<RatesPayload> {
   return request<RatesPayload>('/api/rates')
 }

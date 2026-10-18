@@ -1,14 +1,25 @@
-# Role Signal
+# Find Jobs
 
 A skill-first global tech-job opportunity desk. The interface is a dense results list rather than a marketing template: compact job results, eligibility context, an explainable skill-fit score, and clear source and freshness labels on every row.
 
 ## Current status
 
-This is a **working application, not yet a paid public service**. The account, ingestion, billing and alerting pipelines are implemented and tested, but the pieces that need a real account with a real provider — Cloudflare Access, a payment provider, a Telegram bot, live job sources — are not connected in this repository. The UI says so plainly instead of pretending.
+The public board is deployed at **https://find-jobs-1is.pages.dev**. Cloudflare assigned
+this hostname instead of the requested `find-jobs.pages.dev`; the exact requested
+hostname is not available to this project.
 
-The eight bundled job records and their salaries are fictional, clearly labelled preview data. They exist so the ranking, scoring and eligibility logic have something to work against.
+Jobs come from live public sources. Runtime demo fallbacks are removed, historical
+fictional rows are purged by migration 0011, and synthetic fixtures exist only for
+tests. Empty feeds stay empty. Unavailable exchange rates do not become made-up
+conversions. Payments and the plan screen are disabled.
 
-The default ranking is eligibility-first (eligible overlap, unknown, then restricted), followed by an explainable 0–100 match score and recency. The score weights required skills (48%), useful skills (14%), role family (18%), seniority (10%) and work mode (10%); missing details are neutral, and eligibility is separate. The work-eligibility picker searches every ISO alpha-2 region except Antarctica. Salary conversion uses dated reference rates; salary sorting never annualises different pay periods.
+**Not fully production-ready yet:** account sign-in requires additional Cloudflare
+Access token permissions; Telegram needs a rotated bot token saved as a GitHub
+Actions secret. See [launch status](docs/LAUNCH-STATUS.md) for verified results and
+remaining owner actions. Deployment success alone does not mean these integrations
+are operational.
+
+The default ranking is eligibility-first (eligible overlap, unknown, then restricted), followed by an explainable 0–100 match score and recency. The score weights required skills (48%), useful skills (14%), role family (18%), seniority (10%) and work mode (10%); missing details are neutral, and eligibility is separate. The work-eligibility picker searches every ISO alpha-2 region except Antarctica. Salary conversion uses dated live rates when available; salary sorting never annualises different pay periods.
 
 ## What is implemented
 

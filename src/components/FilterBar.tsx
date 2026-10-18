@@ -70,7 +70,7 @@ export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
         <div className="field">
           <span className="field__label">Verification</span>
           <div className="chiprow">
-            {(['verified', 'unverified', 'stale'] as VerificationLevel[]).map((level) => (
+            {(['verified', 'unverified'] as VerificationLevel[]).map((level) => (
               <button
                 key={level}
                 type="button"
@@ -83,28 +83,6 @@ export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
                 {VERIFICATION_LABELS[level]}
               </button>
             ))}
-          </div>
-        </div>
-
-        <div className="field">
-          <span className="field__label">Closed roles</span>
-          <div className="chiprow">
-            <button
-              type="button"
-              className="chipbtn"
-              aria-pressed={!filters.includeClosed}
-              onClick={() => onChange({ ...filters, includeClosed: false })}
-            >
-              Hide
-            </button>
-            <button
-              type="button"
-              className="chipbtn"
-              aria-pressed={filters.includeClosed}
-              onClick={() => onChange({ ...filters, includeClosed: true })}
-            >
-              Show
-            </button>
           </div>
         </div>
 

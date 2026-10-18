@@ -1,5 +1,8 @@
 # Go live: what I need from you, and how to get it to me
 
+> **Current deployment and remaining blockers:** see [LAUNCH-STATUS.md](LAUNCH-STATUS.md).
+> Use GitHub encrypted secrets rather than chat or shell commands to supply credentials.
+
 Everything below is either a credential only you can create, a decision only you
 can make, or work I will do. Nothing here needs to be pasted into a chat.
 

@@ -42,11 +42,11 @@ export function SavedPanel({ saved, jobs, onOpen, onRemove }: SavedPanelProps) {
               style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}
             >
               <span className="jobrow__main">
-                <span className="jobrow__title">{job ? job.title : entry.jobId}</span>
+                <span className="jobrow__title">{job ? job.title : 'Saved job'}</span>
                 <span className="jobrow__company">
                   {job
                     ? `${job.company} · ${job.locationLabel}`
-                    : 'This role is no longer in the feed.'}
+                    : 'Open this saved job to check its latest details.'}
                 </span>
                 <span className="jobrow__meta">
                   <span
@@ -62,12 +62,7 @@ export function SavedPanel({ saved, jobs, onOpen, onRemove }: SavedPanelProps) {
                 </span>
               </span>
               <span className="jobrow__aside">
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => onOpen(entry.jobId)}
-                  disabled={!job}
-                >
+                <button type="button" className="btn btn--sm" onClick={() => onOpen(entry.jobId)}>
                   Open
                 </button>
                 <button

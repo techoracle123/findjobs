@@ -172,8 +172,9 @@ export async function findJob(
   id: string,
   now: number = Date.now(),
 ): Promise<Job | null> {
-  const { jobs } = await listJobs(db, now)
-  return jobs.find((job) => job.id === id) ?? null
+  if (!db) return null
+  const row = await db.prepare(`${SELECT} AND j.is_demo = 0 AND j.id = ?1`).bind(id).first<JobRow>()
+  return row ? mapRow(row, now) : null
 }
 
 export interface JobSearch {
