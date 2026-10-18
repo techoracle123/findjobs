@@ -5,13 +5,16 @@
  * independently and concurrently, the number of sources is limited by the
  * queue rather than by how long a single Worker invocation may run.
  */
+import { refreshPublicSource, publishPublicSnapshot } from './server/public-feed'
 import { runIngestion } from './server/ingest'
 import { deliverNewAlerts } from './server/alerts'
 import { logger } from './server/logging'
 import type { Env } from './server/env'
 
 export interface IngestMessage {
-  sourceId: string
+  sourceId?: string
+  operation?: string
+  run?: string
 }
 
 export default {
@@ -23,6 +26,33 @@ export default {
     let sawNewPosting = false
 
     for (const message of batch.messages) {
+      if (message.body?.operation?.startsWith('public-')) {
+        try {
+          if (!env.PUBLIC_JOBS) throw new Error('No public snapshot binding')
+          if (message.body.operation === 'public-publish') {
+            const snapshot = await publishPublicSnapshot(env.PUBLIC_JOBS)
+            logger.info('public feed published', {
+              jobs: snapshot.jobs.length,
+              sources: snapshot.sourceCount,
+              added: snapshot.added,
+            })
+          } else {
+            await refreshPublicSource(
+              env.PUBLIC_JOBS,
+              message.body.sourceId || '',
+              message.body.run || String(Date.now()),
+            )
+          }
+          message.ack()
+        } catch {
+          logger.warn('public refresh failed; preserving previous observation', {
+            sourceId: message.body.sourceId,
+            operation: message.body.operation,
+          })
+          message.retry({ delaySeconds: 60 })
+        }
+        continue
+      }
       const sourceId = message.body?.sourceId
       if (!sourceId) {
         message.ack()

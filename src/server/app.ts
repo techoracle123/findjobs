@@ -21,6 +21,7 @@ import { telegramRoutes } from './routes/telegram'
 import { insightRoutes } from './routes/insights'
 import { publicDataCache } from './public-cache'
 import { livePublicEnabled, livePublicJobs, searchLivePublic } from './live-public'
+import { publishedPublicJobs, findPublishedJob } from './public-feed'
 import type { JobSearch } from './jobs'
 
 export const app = new Hono<AppEnv>()
@@ -105,6 +106,21 @@ app.get('/api/health', async (c) => {
   })
 })
 
+app.get('/api/feed-status', async (c) => {
+  const snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
+  if (!snapshot) return c.json({ available: false, refreshHours: 12 }, 503)
+  return c.json({
+    available: true,
+    total: snapshot.jobs.length,
+    sourceCount: snapshot.sourceCount,
+    attemptedSources: snapshot.attemptedSources,
+    olderSources: snapshot.olderSources,
+    updatedAt: snapshot.refreshedAt,
+    refreshHours: 12,
+    added: snapshot.added,
+  })
+})
+
 app.get('/api/jobs', async (c) => {
   const env = c.env ?? {}
   const url = new URL(c.req.url)
@@ -112,6 +128,36 @@ app.get('/api/jobs', async (c) => {
   const status = url.searchParams.get('status')
   const limit = numberParam(url, 'limit')
   const offset = numberParam(url, 'offset')
+
+  const search: JobSearch = {
+    query,
+    country: url.searchParams.get('country')?.trim().toUpperCase().slice(0, 2) || undefined,
+    roleFamilies: (url.searchParams.get('roles') || '').split(',').filter(Boolean).slice(0, 30),
+    workModes: (url.searchParams.get('modes') || '').split(',').filter(Boolean).slice(0, 3),
+    seniorities: (url.searchParams.get('levels') || '').split(',').filter(Boolean).slice(0, 8),
+    status: status === 'all' || status === 'closed' ? status : 'open',
+    limit,
+    offset,
+  }
+
+  const published = await publishedPublicJobs(env.PUBLIC_JOBS)
+  if (published) {
+    const result = searchLivePublic(published.jobs, search)
+    return c.json({
+      ...result,
+      jobs: result.jobs.map((job) => ({ ...job, detailKey: undefined })),
+      dataSource: 'public-snapshot',
+      updatedAt: published.refreshedAt,
+      refreshHours: published.refreshHours,
+      sourceCount: published.sourceCount,
+      ...(published.olderSources
+        ? {
+            warning:
+              'Some publishers could not be refreshed this cycle. Check the original listing before applying.',
+          }
+        : {}),
+    })
+  }
 
   // Without any paging or filtering the whole feed is returned, which is
   // what the interface wants while the corpus is small. Once it is not
@@ -139,17 +185,6 @@ app.get('/api/jobs', async (c) => {
       dataSource: source,
       ...(warning ? { warning } : {}),
     })
-  }
-
-  const search: JobSearch = {
-    query,
-    country: url.searchParams.get('country')?.trim().toUpperCase().slice(0, 2) || undefined,
-    roleFamilies: (url.searchParams.get('roles') || '').split(',').filter(Boolean).slice(0, 30),
-    workModes: (url.searchParams.get('modes') || '').split(',').filter(Boolean).slice(0, 3),
-    seniorities: (url.searchParams.get('levels') || '').split(',').filter(Boolean).slice(0, 8),
-    status: status === 'all' || status === 'closed' ? status : 'open',
-    limit,
-    offset,
   }
 
   let result
@@ -180,7 +215,8 @@ app.get('/api/jobs', async (c) => {
 
 app.get('/api/jobs/:id', async (c) => {
   const env = c.env ?? {}
-  let job
+  let job = await findPublishedJob(env.PUBLIC_JOBS, c.req.param('id'))
+  if (job) return c.json({ job })
   try {
     job = await findJob(env.DB, c.req.param('id'))
   } catch (error) {

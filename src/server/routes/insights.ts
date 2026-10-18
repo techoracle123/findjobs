@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { franc } from 'franc-min'
 import type { AppEnv } from '../env'
 import type { ApplicationTip, Job, JobAdvice, JobTranslation } from '../../shared/types'
+import { findPublishedJob } from '../public-feed'
 import { findJob } from '../jobs'
 import { livePublicEnabled, livePublicJobs } from '../live-public'
 import { cleanJobText } from '../sources/html'
@@ -29,6 +30,8 @@ async function hash(text: string): Promise<string> {
 }
 
 async function availableJob(c: AppContext): Promise<Job | null> {
+  const published = await findPublishedJob(c.env?.PUBLIC_JOBS, c.req.param('id') || '')
+  if (published) return published
   try {
     const job = await findJob(c.env?.DB, c.req.param('id') || '')
     if (job) return job

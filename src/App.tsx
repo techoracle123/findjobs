@@ -77,6 +77,7 @@ export default function App() {
   const [rates, setRates] = useState<RatesPayload | null>(null)
   const [health, setHealth] = useState<ApiHealth | null>(null)
   const [total, setTotal] = useState(0)
+  const [feedUpdatedAt, setFeedUpdatedAt] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [dataNote, setDataNote] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -117,6 +118,7 @@ export default function App() {
       if (version !== requestVersion.current) return
       setJobs(jobsResponse.jobs)
       setTotal(jobsResponse.total ?? jobsResponse.jobs.length)
+      setFeedUpdatedAt(jobsResponse.updatedAt || null)
       setDataNote(jobsResponse.warning ?? null)
       setRates(ratesResponse)
       setHealth(healthResponse)
@@ -609,6 +611,16 @@ export default function App() {
                   </span>
                 </div>
 
+                {feedUpdatedAt && (
+                  <p className="hint" style={{ margin: '8px 0 12px' }}>
+                    Refreshed{' '}
+                    {new Date(feedUpdatedAt).toLocaleString(undefined, {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })}{' '}
+                    · Updates every 12 hours
+                  </p>
+                )}
                 <details className="match-help">
                   <summary>
                     <span className="match-help__ring" aria-hidden="true" /> What does the green

@@ -1,0 +1,83 @@
+/** Trusted deployment only. Publisher data + encrypted CF credential; no user data. */
+import { build } from 'esbuild'
+import { mkdir } from 'node:fs/promises'
+import { pathToFileURL } from 'node:url'
+import { resolve } from 'node:path'
+
+export async function bootstrapPublicFeed(api, auth) {
+  const listed = await api('/storage/kv/namespaces?per_page=100')
+  let ns = listed.result.find((item) => item.title === 'fj-public-jobs')
+  if (!ns)
+    ns = (
+      await api('/storage/kv/namespaces', { method: 'POST', body: { title: 'fj-public-jobs' } })
+    ).result
+  if (!ns?.id) throw new Error('Public storage provisioning failed')
+  const base = `https://api.cloudflare.com/client/v4/accounts/${auth.account}/storage/kv/namespaces/${ns.id}/values/`
+  const kv = {
+    async get(key) {
+      const response = await fetch(base + encodeURIComponent(key), {
+        headers: { Authorization: `Bearer ${auth.token}` },
+        signal: AbortSignal.timeout(60000),
+      })
+      if (response.status === 404) return null
+      if (!response.ok) throw new Error(`Public snapshot read failed (HTTP ${response.status})`)
+      return response.json()
+    },
+    async put(key, value, options) {
+      const response = await fetch(
+        `${base}${encodeURIComponent(key)}?expiration_ttl=${options.expirationTtl}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${auth.token}`,
+            'Content-Type': 'application/octet-stream',
+          },
+          body: value,
+          signal: AbortSignal.timeout(60000),
+        },
+      )
+      if (!response.ok) throw new Error(`Public snapshot write failed (HTTP ${response.status})`)
+    },
+  }
+  await mkdir('diagnostics', { recursive: true })
+  const outfile = resolve('diagnostics/public-feed-runtime.mjs')
+  await build({
+    entryPoints: ['src/server/public-feed.ts'],
+    outfile,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    logLevel: 'silent',
+  })
+  const { PUBLIC_SOURCES, refreshPublicSource, publishPublicSnapshot } = await import(
+    pathToFileURL(outfile).href
+  )
+  const run = String(Date.now())
+  let cursor = 0,
+    healthy = 0,
+    failed = 0
+  await Promise.all(
+    Array.from({ length: 4 }, async () => {
+      while (cursor < PUBLIC_SOURCES.length) {
+        const source = PUBLIC_SOURCES[cursor++]
+        try {
+          const count = await refreshPublicSource(kv, source.id, run)
+          healthy++
+          console.log(`Public publisher: ${source.id}, ${count} open listings`)
+        } catch {
+          failed++
+          console.log(`Public publisher unavailable/disallowed: ${source.id}`)
+        }
+      }
+    }),
+  )
+  const snapshot = await publishPublicSnapshot(kv)
+  console.log(
+    `::notice title=Expanded public feed::${snapshot.jobs.length} distinct real listings; ${healthy} publishers fetched, ${failed} unavailable/disallowed. Refresh interval 12 hours. No D1 dependency.`,
+  )
+  if (snapshot.jobs.length < 2000)
+    throw new Error(
+      'Expanded feed did not reach 2,000 genuine listings; existing site kept unchanged',
+    )
+  return { id: ns.id, count: snapshot.jobs.length }
+}

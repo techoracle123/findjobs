@@ -10,6 +10,7 @@ on:
       - scripts/cloudflare-integrations.mjs
       - scripts/check-live.mjs
       - scripts/check-openrouter.mjs
+      - scripts/bootstrap-public-feed.mjs
       - src/**
       - functions/**
       - public/**

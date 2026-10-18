@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { stripVTControlCharacters } from 'node:util'
 import ts from 'typescript'
+import { bootstrapPublicFeed } from './bootstrap-public-feed.mjs'
 import {
   annotation,
   provisionAccess,
@@ -99,7 +100,7 @@ export async function provision(api, projectName) {
   return { databaseId: database.uuid, productionBranch: project.production_branch }
 }
 
-export function deploymentConfig(text, filename, databaseId, vars = {}) {
+export function deploymentConfig(text, filename, databaseId, vars = {}, publicNamespace) {
   const parsed = ts.parseConfigFileTextToJson(filename, text)
   if (parsed.error) throw new Error(`Cannot parse ${filename}`)
   const config = parsed.config
@@ -108,6 +109,7 @@ export function deploymentConfig(text, filename, databaseId, vars = {}) {
   config.d1_databases = config.d1_databases.map((db) =>
     db.binding === 'DB' ? { ...db, database_id: databaseId } : db,
   )
+  if (publicNamespace) config.kv_namespaces = [{ binding: 'PUBLIC_JOBS', id: publicNamespace }]
   config.vars = { ...config.vars, ...vars, APP_MODE: 'production', BILLING_PROVIDER: 'fake' }
   return `${JSON.stringify(config, null, 2)}\n`
 }
@@ -217,6 +219,7 @@ export async function main() {
   const project = process.env.CLOUDFLARE_PAGES_PROJECT || 'fj-find-jobs'
   if (!/^[a-z0-9][a-z0-9-]{0,57}[a-z0-9]$/.test(project))
     throw new Error('Invalid Pages project name.')
+  const publicStorage = await bootstrapPublicFeed(api, auth)
   const { databaseId, productionBranch } = await provision(api, project)
   const projectInfo = (await api(`/pages/projects/${project}`)).result
   const hostname = projectInfo.subdomain || `${project}.pages.dev`
@@ -301,7 +304,7 @@ export async function main() {
     for (const file of files) {
       const text = await readFile(file, 'utf8')
       originals.set(file, text)
-      await writeFile(file, deploymentConfig(text, file, databaseId, vars))
+      await writeFile(file, deploymentConfig(text, file, databaseId, vars, publicStorage.id))
     }
     let quotaBlocked = false
     try {
@@ -332,6 +335,13 @@ export async function main() {
       productionBranch,
       '--commit-dirty=true',
     ])
+    wrangler(['deploy', '--config', 'wrangler.ingest-consumer.jsonc'])
+    wrangler(['deploy', '--config', 'wrangler.ingest.jsonc'])
+    annotation(
+      'notice',
+      '12-hour discovery refresh active',
+      'Cloudflare cron queues independent publisher refreshes at 00:00 and 12:00 UTC. No workspace timer or D1 quota required.',
+    )
     if (quotaBlocked) {
       const recovered = await publicJson(`${url}/api/jobs?status=open&limit=5`, 18)
       if (
@@ -372,12 +382,10 @@ export async function main() {
         `Database check passed at ${url}; deploying ingestion workers next.`,
       )
     }
-    wrangler(['deploy', '--config', 'wrangler.ingest-consumer.jsonc'])
     if (telegram)
       await workerSecrets(api, 'role-signal-ingest-consumer', {
         TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN.trim(),
       })
-    wrangler(['deploy', '--config', 'wrangler.ingest.jsonc'])
     if (telegram) {
       await telegram.register()
       annotation(

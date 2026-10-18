@@ -34,56 +34,7 @@ export async function fetchLivePublic(
   const groups = await Promise.allSettled(
     SOURCES.map(async (id) => {
       const source = SEED_SOURCES.find((item) => item.id === id)!
-      const parser = getParser(source.parser)!
-      const raw = await parser.fetchPostings(
-        {
-          id,
-          listingUrl: source.listingUrl,
-          options: {
-            company: source.company,
-            companyLabel: source.companyLabel,
-            country: source.country,
-          },
-          verification: 'unverified',
-          verificationReason: 'A public opportunity; verify with the employer.',
-        },
-        createPoliteFetch(
-          id,
-          'RoleSignalBot/1.0 (+https://fj-find-jobs.pages.dev; public job discovery)',
-          fetcher,
-        ),
-      )
-      return Promise.all(
-        raw
-          .slice(0, 100)
-          .filter(
-            (item) =>
-              item.title && item.externalId && /^https?:\/\//i.test(item.applyUrl || item.url),
-          )
-          .map(async (item) => {
-            const bytes = await crypto.subtle.digest(
-              'SHA-256',
-              new TextEncoder().encode(`${id}:${item.externalId}`),
-            )
-            const hash = [...new Uint8Array(bytes)]
-              .map((byte) => byte.toString(16).padStart(2, '0'))
-              .join('')
-            const job = normalizePosting(item, {
-              now,
-              verification: 'unverified',
-              verificationReason: 'A public opportunity; verify with the employer.',
-              sourceKind: parser.kind,
-              sourcePlatform: parser.platform,
-            })
-            return {
-              ...job,
-              id: `job_${hash.slice(0, 24)}`,
-              sourceName: source.name,
-              sourceUrl: item.url,
-              postedAt: job.postedAt || '',
-            } satisfies Job
-          }),
-      )
+      return fetchPublicSource(source, fetcher, now, 100)
     }),
   )
   const jobs = [
@@ -96,6 +47,64 @@ export async function fetchLivePublic(
   ]
   if (!jobs.length) throw new Error('Live public sources are temporarily unavailable')
   return { fetchedAt: now, jobs }
+}
+
+export async function fetchPublicSource(
+  source: (typeof SEED_SOURCES)[number],
+  fetcher: typeof fetch = fetch,
+  now = Date.now(),
+  limit = 10000,
+): Promise<Job[]> {
+  const id = source.id
+  const parser = getParser(source.parser)!
+  const raw = await parser.fetchPostings(
+    {
+      id,
+      listingUrl: source.listingUrl,
+      options: {
+        company: source.company,
+        companyLabel: source.companyLabel,
+        country: source.country,
+      },
+      verification: 'unverified',
+      verificationReason: 'A public opportunity; verify with the employer.',
+    },
+    createPoliteFetch(
+      id,
+      'RoleSignalBot/1.0 (+https://fj-find-jobs.pages.dev; public job discovery)',
+      fetcher,
+    ),
+  )
+  return Promise.all(
+    raw
+      .slice(0, limit)
+      .filter(
+        (item) => item.title && item.externalId && /^https?:\/\//i.test(item.applyUrl || item.url),
+      )
+      .map(async (item) => {
+        const bytes = await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(`${id}:${item.externalId}`),
+        )
+        const hash = [...new Uint8Array(bytes)]
+          .map((byte) => byte.toString(16).padStart(2, '0'))
+          .join('')
+        const job = normalizePosting(item, {
+          now,
+          verification: 'unverified',
+          verificationReason: 'A public opportunity; verify with the employer.',
+          sourceKind: parser.kind,
+          sourcePlatform: parser.platform,
+        })
+        return {
+          ...job,
+          id: `job_${hash.slice(0, 24)}`,
+          sourceName: source.name,
+          sourceUrl: item.url,
+          postedAt: job.postedAt || '',
+        } satisfies Job
+      }),
+  )
 }
 
 export async function livePublicJobs(origin: string): Promise<Job[]> {

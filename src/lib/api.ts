@@ -44,9 +44,12 @@ export class ApiError extends Error {
 }
 
 export interface JobsResponse {
+  updatedAt?: string
+  refreshHours?: number
+  sourceCount?: number
   jobs: Job[]
   total?: number
-  dataSource: 'd1' | 'fixture' | 'live-public'
+  dataSource: 'd1' | 'fixture' | 'live-public' | 'public-snapshot'
   warning?: string
 }
 

@@ -40,12 +40,10 @@ export function createPoliteFetch(
       )
     }
 
-    const since = Date.now() - policy.lastRequestAt
-    if (policy.lastRequestAt > 0 && since < policy.crawlDelayMs) {
-      await new Promise((resolve) => setTimeout(resolve, policy.crawlDelayMs - since))
-    }
+    const slot = Math.max(Date.now(), policy.lastRequestAt + policy.crawlDelayMs)
+    policy.lastRequestAt = slot
+    if (slot > Date.now()) await new Promise((resolve) => setTimeout(resolve, slot - Date.now()))
 
-    policy.lastRequestAt = Date.now()
     if (onRequest) await onRequest(host)
 
     // A host that accepts the connection and then says nothing must not

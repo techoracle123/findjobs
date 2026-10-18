@@ -9,6 +9,7 @@
  * the queue. The queue is what lets a registry of thousands of sources be
  * refreshed without one invocation having to fetch all of them.
  */
+import { enqueuePublicRefresh } from './server/public-schedule'
 import { ensureSources, runDueSources, runIngestion } from './server/ingest'
 import { logger } from './server/logging'
 import type { Env } from './server/env'
@@ -35,6 +36,14 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (env.PUBLIC_FEED_ONLY === '1') {
+      ctx.waitUntil(
+        enqueuePublicRefresh(env).then((queued) => {
+          logger.info('12-hour public refresh queued', { queued })
+        }),
+      )
+      return
+    }
     const db = env.DB
     if (!db) {
       logger.error('scheduled ingestion skipped: no database binding')

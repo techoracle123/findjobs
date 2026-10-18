@@ -8,6 +8,8 @@ export interface AiBinding {
 }
 
 export interface Env {
+  PUBLIC_JOBS?: KVNamespace
+  PUBLIC_FEED_ONLY?: string
   DB?: D1Database
   AI?: AiBinding
   /** Encrypted server-side secret; never expose to the client bundle. */
