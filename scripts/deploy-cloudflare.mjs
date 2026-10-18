@@ -335,6 +335,11 @@ export async function main() {
       productionBranch,
       '--commit-dirty=true',
     ])
+    const expanded = await publicJson(`${url}/api/feed-status`, 18)
+    if (expanded.total < 2000 || expanded.refreshHours !== 12)
+      throw new Error(
+        'Expanded public discovery is not ready; refusing to claim thousands of regularly refreshed listings.',
+      )
     wrangler(['deploy', '--config', 'wrangler.ingest-consumer.jsonc'])
     wrangler(['deploy', '--config', 'wrangler.ingest.jsonc'])
     annotation(

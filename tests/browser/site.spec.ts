@@ -207,3 +207,37 @@ test('match rings are visible on phones, explained, and never show a numeric gra
     true,
   )
 })
+
+test('expanded live corpus is paginated, regularly refreshed and opens complete listings', async ({
+  request,
+}, testInfo) => {
+  const status = await request.get('/api/feed-status', { timeout: 20000 })
+  if (!status.ok() && !String(testInfo.project.use.baseURL).startsWith('https://'))
+    test.skip(
+      true,
+      'Isolated preview uses a small genuine-source D1 dataset, not the production snapshot.',
+    )
+  expect(status.ok()).toBe(true)
+  const metadata = await status.json()
+  expect(metadata.total).toBeGreaterThanOrEqual(2000)
+  expect(metadata.refreshHours).toBe(12)
+  expect(metadata.sourceCount).toBeGreaterThan(10)
+  expect(Date.now() - Date.parse(metadata.updatedAt)).toBeLessThan(36 * 3600000)
+  const offset = Math.min(5000, Math.floor(metadata.total / 2))
+  const response = await request.get(`/api/jobs?status=open&offset=${offset}&limit=2`, {
+    timeout: 20000,
+  })
+  expect(response.ok()).toBe(true)
+  const feed = await response.json()
+  expect(feed.dataSource).toBe('public-snapshot')
+  expect(feed.total).toBe(metadata.total)
+  expect(feed.jobs).toHaveLength(2)
+  expect(feed.jobs[0].isDemo).toBe(false)
+  expect(feed.jobs[0].descriptionPreview).toBe(true)
+  const detail = await request.get(`/api/jobs/${feed.jobs[0].id}`, { timeout: 20000 })
+  expect(detail.ok()).toBe(true)
+  const { job } = await detail.json()
+  expect(job.descriptionPreview).not.toBe(true)
+  expect(job.description.length).toBeGreaterThanOrEqual(feed.jobs[0].description.length)
+  expect(job.applyUrl || job.sourceUrl).toMatch(/^https?:\/\//)
+})
