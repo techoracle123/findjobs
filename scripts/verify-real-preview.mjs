@@ -36,7 +36,10 @@ run('gh', [
   '--dir',
   dir,
 ])
-const snapshot = JSON.parse(await readFile(join(dir, 'live-jobs.json'), 'utf8'))
+const snapshotText = await readFile(join(dir, 'test-results', 'live-jobs.json'), 'utf8').catch(() =>
+  readFile(join(dir, 'live-jobs.json'), 'utf8'),
+)
+const snapshot = JSON.parse(snapshotText)
 if (
   !snapshot.capturedAt ||
   Date.now() - Date.parse(snapshot.capturedAt) > 3 * 86400000 ||

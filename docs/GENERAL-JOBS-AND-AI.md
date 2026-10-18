@@ -71,22 +71,20 @@ than assuming that a configured provider has passed a live test.
 
 ## Salary conversion
 
-ExchangeRate-API open-access daily reference rates include NGN. Frankfurter is a
-secondary provider. Rates are validated and cached in memory and D1 for 24 hours;
-only currencies used by the app are exposed. Conversion never invents a salary,
-changes the pay period, or claims to be a bank/settlement rate. The original amount,
-approximation marker, provider attribution and rate date remain available. When
-conversion is unavailable, the original currency is shown. An unstated pay period
-is explicitly unknown rather than assumed annual.
+CC0-licensed open currency data includes NGN. Independently hosted mirrors are
+tried before the central-bank fallback. Rates are validated and cached in memory
+and D1 for 24 hours, exposing only the app's supported fiat currencies. Conversion
+never invents a salary, changes the period or claims to be a bank quote. The
+original amount and approximation marker remain; the reference date is available
+under “About this estimate”, not in an API-branded results banner. Unavailable
+currencies retain the employer's original amount.
 
-Provider attribution/caching requirements:
-https://www.exchangerate-api.com/docs/free .
+Public data and CC0 license: https://github.com/fawazahmed0/exchange-api
 
-## Alternative Pages names
+## Selected Pages name
 
-The deployment checks/reserves `fj-find-jobs` and `find-jobs-fj` as small empty
-Pages projects, reusing them on subsequent runs. Only Cloudflare's returned
-`subdomain` proves the assignment; no NXDOMAIN-based availability claims. The
-runner reports whether each exact requested name was assigned or suffixed.
-These reservations do not move the live app, change its login domain, or serve
-an alternative deployment yet. The current public URL is unchanged.
+The user selected **fj-find-jobs.pages.dev**. Workflow and deployer target that
+exact reserved project. The older project/database remain for safety; no silent
+cross-origin transfer of browser-only data is claimed. See LAUNCH-STATUS.md for
+the database-quota blocker and the distinction between UI publication and a fully
+operational release. The other reserved name is not an additional live deployment.

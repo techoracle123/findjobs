@@ -1,3 +1,6 @@
+> Current release/outage status is in [LAUNCH-STATUS.md](LAUNCH-STATUS.md).
+> The chosen hostname is fj-find-jobs.pages.dev; older examples below are historical.
+
 # Go live: what I need from you, and how to get it to me
 
 > **Current deployment and remaining blockers:** see [LAUNCH-STATUS.md](LAUNCH-STATUS.md).

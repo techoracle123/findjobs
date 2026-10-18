@@ -4,26 +4,24 @@ A simple, skill-first job discovery service for Nigeria and the world, across pr
 
 ## Current status
 
-The public board is deployed at **https://find-jobs-1is.pages.dev**. Cloudflare assigned
-this hostname instead of the requested `find-jobs.pages.dev`; the exact requested
-hostname is not available to this project.
+The selected address is **https://fj-find-jobs.pages.dev**. Deployment now targets
+this exact project. **The latest full release is blocked by Cloudflare's exhausted
+free daily D1 read quota**; it must not be described as production-ready. See
+[launch status](docs/LAUNCH-STATUS.md) for the current outage and recovery details.
 
 Jobs come from live public sources. Runtime demo fallbacks are removed, historical
 fictional rows are purged by migration 0011, and synthetic fixtures exist only for
 tests. Empty feeds stay empty. Unavailable exchange rates do not become made-up
 conversions. Payments and the plan screen are disabled.
 
-**Remaining setup:** OpenRouter needs a rotated `OPENROUTER_API_KEY` encrypted
-repository secret. Cloudflare Access is now provisioned and the real email-code
-login page is verified. Telegram bot/webhook checks also pass; completing email
-login and confirming chat delivery still require a real user. See [launch status](docs/LAUNCH-STATUS.md) for verified results and
-remaining owner actions. Deployment success alone does not mean these integrations
-are operational.
+The encrypted OpenRouter key is now detected. Cloudflare Access's actual email-code
+page is configured for the chosen hostname. Production job/account/AI checks still
+need database access restored, and real email/chat delivery needs user confirmation.
 
-The default ranking is eligibility-first (eligible overlap, unknown, then restricted), followed by an explainable 0–100 match score and recency. The score weights required skills (48%), useful skills (14%), role family (18%), seniority (10%) and work mode (10%); missing details are neutral, and eligibility is separate. The work-eligibility picker searches every ISO alpha-2 region except Antarctica. Salary conversion uses dated live rates when available; salary sorting never annualises different pay periods.
+The default ranking is eligibility-first (eligible overlap, unknown, then restricted), followed by internal skill/preference overlap and recency. Visitors see a green match ring, not a numeric grade. The score weights required skills (48%), useful skills (14%), role family (18%), seniority (10%) and work mode (10%); missing details are neutral, and eligibility is separate. The work-eligibility picker searches every ISO alpha-2 region except Antarctica. Salary conversion uses dated live rates when available; salary sorting never annualises different pay periods.
 
 See [general jobs and secure AI](docs/GENERAL-JOBS-AND-AI.md) for the new sources,
-English translation, tailored tips, salary conversions and reserved name alternatives.
+English translation, tailored tips, salary conversions and the chosen hostname.
 
 ## What is implemented
 
@@ -31,13 +29,15 @@ English translation, tailored tips, salary conversions and reserved name alterna
 
 - Simple results with job, employer, location and salary; dedicated `/jobs/:id` pages with working browser history, saved state and original application links. No repetitive verification/eligibility/source badges.
 - Skill/preference scoring remains explainable, with optional detail on the job page. Country, profession, arrangement and experience filters operate in D1 before pagination.
-- Explainable 0–100 score across five weighted components, each showing the weight it carries and what it earned. Components that cannot be compared are excluded from the total rather than counted as failures, so a sparse posting is not penalised for being sparse.
+- Number-free match rings with a plain-language explanation and optional qualitative skill/preference detail. Internal weighted scoring remains deterministic. Components that cannot be compared are excluded from the total rather than counted as failures, so a sparse posting is not penalised for being sparse.
 - Work-eligibility picker covering every ISO 3166-1 alpha-2 region except Antarctica. The list is **generated** from `i18n-iso-countries` (`npm run data:generate`), never hand-maintained.
 - Profile and skill signal with forgiving matching: `node.js`, `NodeJS` and `node` are one skill; `TS` is `TypeScript`.
 - CV import for PDF, DOCX and TXT, parsed in the browser. Only the extracted text is sent for suggestions — the file is never uploaded or stored.
 - Salary conversion into a chosen display currency using dated reference rates, with the rate date shown. Currencies with no rate keep the employer's original currency. Pay periods are never annualised and mixed results say so.
 
 **Accounts (Cloudflare Access)**
+
+- Simple sign-up/sign-in and email-code recovery. No password to create, forget or reset. The first verified email sign-in creates the account.
 
 - Identity comes from Cloudflare Access. The `Cf-Access-Jwt-Assertion` token is **cryptographically verified** against the team's published JWKS, with issuer and audience checked. The `Cf-Access-Authenticated-User-Email` header is never trusted on its own — it can be forged by anyone who can reach the Worker.
 - Public browsing stays anonymous. Only `/api/account/*`, `/api/billing/*` and `/api/telegram/*` require an identity.
@@ -46,7 +46,7 @@ English translation, tailored tips, salary conversions and reserved name alterna
 
 **Sources and ingestion**
 
-- A source registry: a table of sources, each with a parser, a kind, a refresh tier, a per-hour rate limit, a country and a verification policy. It is seeded with 209 real public feeds and grows by adding rows rather than code.
+- A source registry: a table of sources, each with a parser, a kind, a refresh tier, a per-hour rate limit, a country and a verification policy. It has 219 configured public-source candidates and grows by adding rows rather than code; source candidates are not a claim that every endpoint works.
 - Ten parsers, which is what makes "thousands of sources" tractable: one parser covers many employers, so a registry of thousands of sources needs only a handful of readers. Greenhouse, Lever, Ashby, Recruitee, SmartRecruiters and Workday read the public JSON endpoints those platforms expose; a schema.org `JobPosting` reader picks up any careers page that publishes structured data; an RSS reader picks up any employer job feed; Arbeitnow and Remotive cover the public aggregators.
 - One normalisation path for every source: role family, seniority, work mode, country, skills, salary, whether it is open and whether it is verified are derived once, in one place.
 - Postings are upserted by content hash, so a re-run is idempotent, a changed posting is updated, and a posting the source has dropped is closed rather than left to rot.

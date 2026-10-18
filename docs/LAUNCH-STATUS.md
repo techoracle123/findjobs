@@ -1,125 +1,111 @@
-# FJ - Find Jobs launch status
+# FJ - Find Jobs release status
 
-Verified 18 October 2026. This report distinguishes working deployment checks
-from integrations that still need a real user or an encrypted credential.
+Updated 18 October 2026. **This release is not fully live yet.** Cloudflare D1
+rejected deployment migrations with code 7500: the account has exhausted its
+free daily database row-read allowance. No paid hosting plan has been enabled.
 
-## Live app
+## Chosen address
 
-**https://find-jobs-1is.pages.dev**
+**https://fj-find-jobs.pages.dev** is now the selected deployment project, not
+just a reservation. The workflow and the deployer's default both target it.
+Cloudflare Access for this exact hostname is configured; its real email-code
+page was fetched successfully. Telegram registration will move to this hostname
+only after the full deployment passes its database checks.
 
-- 3,190 current, non-synthetic open listings reported by public feeds/boards;
-  **620 in Nigeria**. Counts change as sources refresh. These are source
-  observations, not employer verification or endorsements.
-- New Nigerian feeds: MyJobMag (100 individual listings) and Hot Nigerian Jobs
-  (520 individual listings). We Work Remotely added 88 international/remote
-  listings. Inaccessible sources remain failures, not invented jobs.
-- General professions alongside technology; country, profession, work arrangement
-  and experience filters run against D1 before pagination.
-- Simple FJ branding, welcome and a clear referral-only/non-affiliation disclaimer.
-  Repetitive verification, eligibility and API/source badges are removed from rows.
-- Dedicated `/jobs/:id` pages support deep links, reload, normal/modified clicks,
-  browser back/forward and returning to the current results/scroll position.
-- HTML/encoded markup and the Arbeitnow promotional footer are removed. Original
-  listing links retain necessary publisher credit, without ATS/API labels on rows.
-- Salary conversion includes NGN, with dated reference rates, approximation
-  markers, original amounts, provider attribution and honest unavailable states.
-  Unstated periods and ambiguous currency symbols are not guessed.
-- Local profile/save/reload works without signing in. Device data can be merged
-  after sign-in without silently losing it. Telegram alert changes include
-  channel-only edits. Payments remain disabled.
-- Real-data preview restored on port 5173 with 10 genuine production-feed listings (6 Nigerian, 4 international);
-  no synthetic fixture is used at runtime. The deployed site has the full feed.
+A first deployment to an otherwise empty reserved project may publish the new
+interface while the database is unavailable, rather than leaving an origin error.
+That path intentionally FAILS the release, does not invent a job feed, does not
+skip arbitrary migration errors, and never replaces an existing working app.
+It does not count as successful account, AI, ingestion or production verification.
 
-## Cloudflare Access: configured and login page verified
+The old hostname and shared database are retained. Signed-in account records use
+the same database. Browser-only data is origin-specific: saves on the old address
+are not silently transferred. They can be imported into an account there before
+switching addresses.
 
-The permission fix worked. The remaining 403 was specifically
-`access.api.error.not_enabled`, meaning the Zero Trust organization did not yet
-exist—not a reason to keep changing token permissions.
+## Implemented
 
-The deployer now uses Cloudflare's documented organization creation endpoint only
-for that explicit state. It does not treat ordinary authorization failures as
-permission to create resources. Cloudflare generated the team domain, and the
-runner then configured email-code identity and a login-path-only application.
+- Clear **Sign up** and **Sign in** actions; native accessible account dialog,
+  focus containment, Escape/close and focus restoration.
+- Passwordless email codes. The first email sign-in creates the account; existing
+  users use the same email. “Forgot password or can’t sign in?” explains how to
+  request a fresh code, check spam and use the latest code. There is no password
+  database or pretend password-reset form. Real email delivery still needs a user.
+- Validated post-login job return paths; external/protocol-relative redirects and
+  forged production identity headers are rejected.
+- A hand-authored SVG **briefcase/FJ monogram**, shared by the logo and favicon.
+- Number-free green match rings, now visible on mobile as well as desktop. A
+  fuller ring means greater overlap with supplied skills/preferences, not a grade,
+  employer verification, offer probability or hiring prediction. The interface
+  explains this once; optional job detail explains the actual matching signals.
+- Unknown profession, experience and work arrangement do not penalize the match.
+- Broker/referral positioning and a stronger **always verify the employer,
+  requirements and original listing** warning. No affiliation/endorsement claims.
+- No API-branded salary banner. CC0 open currency data, with two mirrors and a
+  central-bank fallback, replaces the attribution-required provider. NGN is
+  supported, original salary/period are retained and estimate details are optional.
+- Dedicated job pages, saved jobs/preferences, skills/CV discovery, international
+  and Nigerian filters remain. Payments remain disabled.
 
-Verified:
+## More real opportunities
 
-- Public `/` and job APIs remain public.
-- `/api/auth/login` redirects to Cloudflare Access.
-- Following that URL reaches the real **Email / Send login code** sign-in page.
-- Account endpoints still reject anonymous requests and forged identity headers.
-- Signed JWT issuer, audience, expiry and signature checks are covered by worker
-  tests. The bare email header is never trusted.
+The Greenhouse adapter previously requested HTML from a website URL. It now uses
+its documented public JSON endpoint. Active automatically failed Greenhouse
+boards are scheduled to retry; operator-disabled boards are not re-enabled.
 
-**Still requires a real user:** receipt of the email code and completing a signed-in
-account session. No real inbox/code was used by the agent, so successful delivery
-and a completed real-user login are not claimed.
+Confirmed public employer boards added: **One Acre Fund, GiveDirectly, GiveWell,
+Acumen**. Their published openings include agriculture, research, fundraising,
+finance, operations and development work, including Nigerian roles. General
+interest/talent-pool entries are excluded; genuine published dates and application
+deadlines are retained. Unexpected payloads fail instead of closing existing jobs.
 
-Successful bootstrap deployment:
-https://github.com/techoracle123/findjobs/actions/runs/39152392018
+There are **219 configured source candidates**, not 219 verified working boards.
+The last successful production check before the outage observed **3,190 listings,
+620 Nigerian**, from existing public sources. These are historical observations,
+not a live availability count during the outage. New board ingestion counts await
+restoration of database access. Remotive restrictions and robots exclusions remain.
 
-## OpenRouter: implemented, credential not yet present
+## OpenRouter
 
-The runner reports **`OPENROUTER_API_KEY` is missing**. Revoke the key exposed in
-chat and save a replacement as an encrypted repository secret at:
-https://github.com/techoracle123/findjobs/settings/secrets/actions/new
+The encrypted **OPENROUTER_API_KEY is now detected** and is configured server-side.
+The exposed chat key was not reused. Do not paste credentials into chat.
 
-Code is in place for automatic English descriptions, cached translations,
-job/skill-specific application tips and CV suggestions. Requests are server-only,
-bounded, quota-limited and use no-data-collection provider routing. Source/CV text
-is untrusted model input; output is validated and rendered as plain text.
+Translation and tailored advice code is ready, with caching, bounded requests,
+validated plain-text output, quotas and honest original/listing-based fallback.
+**Live model requests remain unverified while D1 is unavailable**, because both
+features first retrieve an actual job from the database. Secret presence alone
+is not proof that credits, routing and inference work.
 
-Until the secret is provided, non-English text remains original with an honest
-notice, CV extraction uses keywords, and application advice is explicitly
-listing-based. **Live AI translation/advice has not been claimed or tested with
-an owner credential.** Offline tests exercise the provider boundary, translation
-cache, fallback, quotas and output validation.
+## Read-efficiency and checks
 
-See [general jobs and secure AI](GENERAL-JOBS-AND-AI.md) for implementation details.
+- Public GET data has short edge caches. Account data, AI routes, writes, cookie
+  responses, private/no-store responses and failures are never cached.
+- New ordered/country/freshness/source-status indexes reduce scans and sorts.
+- Public source inspection no longer rewrites every registry row. Deployment
+  registers sources explicitly and updates metadata only when it changes.
+- 114 unit tests and 138 Workers/D1 tests pass locally; production build,
+  TypeScript, ESLint and formatting pass. The local live-data smoke suite has
+  14 passing checks, including sign-up/recovery dialog behavior.
+- The browser suite covers **320, 390, 414, 768, 1024, 1280, 1600 and 1920px**,
+  navigation, saved state, content, account help and number-free mobile rings.
+- CI can run that browser suite in an isolated staging-mode preview using the
+  most recent genuine public-feed artifact. It refuses fictional or stale input.
+  That is NOT a successful production/Access/email delivery test. See Actions for
+  the current run outcome; the new production browser stage remains blocked.
+- Preview on port 5173 retains 10 genuine source listings and current open FX data,
+  without using a synthetic runtime fixture. No local OpenRouter secret is stored.
 
-## Telegram: bot and webhook verified
+## Hosting blocker
 
-The encrypted bot credential is now available. Deployment verifies
-**@FindJobsForMeBot**, registers the secret-authenticated webhook on the actual
-live hostname and confirms it with `getWebhookInfo`.
+Cloudflare Free includes 5 million rows read and 100,000 written daily. Limits
+reset at **00:00 UTC (01:00 Nigeria time)**. An owner can alternatively upgrade
+Workers hosting (minimum US$5/month plus possible excess usage charges). This is
+separate from enabling payments in FJ; the agent has not authorized any upgrade.
 
-Linking uses a 43-character one-use random token, hashed in D1, with a 15-minute
-expiry. Only private chats are accepted. Standard Telegram `message` updates,
-webhook secrets, replay rejection and confirmation messages are regression-tested.
+Docs: https://developers.cloudflare.com/d1/platform/pricing/
 
-**Still requires a real user:** sign in, link the bot, and confirm delivery to
-that chat. Bot/webhook configuration alone is not proof of end-to-end delivery.
-Any credential previously exposed in chat must be rotated, not merely copied into
-a secret.
+First blocked release: https://github.com/techoracle123/findjobs/actions/runs/39155920179
 
-## Alternative names: exact assignments reserved
+PR: https://github.com/techoracle123/findjobs/pull/1
 
-Cloudflare assigned both exact names to projects in this account:
-
-- **`fj-find-jobs.pages.dev`** — closest to the FJ branding.
-- **`find-jobs-fj.pages.dev`** — closest to the earlier requested name.
-
-These are empty project reservations, **not additional live app deployments**.
-The current live app has not been moved or deleted. Availability is proven by
-Cloudflare's actual assignment, not by a missing DNS record. The earlier requested
-`find-jobs.pages.dev` was not assigned to this project.
-
-## Checks
-
-- TypeScript, ESLint, formatting, production build and dependency audit pass CI.
-- **108 unit tests**, **124 Workers/D1 integration tests** and **11 local smoke
-  checks** pass.
-- **10 live Playwright tests** pass: four responsive widths (390/768/1280/1600),
-  saving/preferences/reload, real APIs/security, dedicated-page deep links and
-  history/scroll, application advice/content, Nigeria/general professions, and
-  public browsing versus Access sign-in availability. Once Access was bootstrapped,
-  the sign-in test exercised the real redirect, not its unavailable fallback.
-- Successful full run with Access bootstrapped: **39152392018**, 10 browser tests in
-  15.1 seconds. The final UI/currency/preview-diagnostic update passed in
-  **39152548727**, with 10 browser tests in 14.7 seconds.
-- PR: https://github.com/techoracle123/findjobs/pull/1
-- Working branch: `arena/be298902-findjobs`.
-
-Publisher restrictions are respected: Remotive redistribution is disabled;
-Reddit/social sources are not scraped behind authentication. Newly registered
-Accor/H&M/IKEA candidates were blocked by their host's robots policy and are not
-represented as working sources.
+Branch: `arena/be298902-findjobs`.
