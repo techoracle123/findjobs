@@ -1,6 +1,6 @@
-# Find Jobs
+# FJ - Find Jobs
 
-A skill-first global tech-job opportunity desk. The interface is a dense results list rather than a marketing template: compact job results, eligibility context, an explainable skill-fit score, and clear source and freshness labels on every row.
+A simple, skill-first job discovery service for Nigeria and the world, across professions. FJ links to opportunities; it is not affiliated with employers and does not verify or endorse listings. Compact results open dedicated job pages with back-to-results navigation.
 
 ## Current status
 
@@ -13,20 +13,24 @@ fictional rows are purged by migration 0011, and synthetic fixtures exist only f
 tests. Empty feeds stay empty. Unavailable exchange rates do not become made-up
 conversions. Payments and the plan screen are disabled.
 
-**Not fully production-ready yet:** account sign-in requires additional Cloudflare
-Access token permissions; Telegram needs a rotated bot token saved as a GitHub
-Actions secret. See [launch status](docs/LAUNCH-STATUS.md) for verified results and
+**Not fully production-ready yet:** the latest retry still receives a Cloudflare
+Access API 403; OpenRouter needs a rotated `OPENROUTER_API_KEY` repository secret.
+Telegram bot and webhook setup now pass deployment checks, but a real user chat
+still needs an end-to-end confirmation. See [launch status](docs/LAUNCH-STATUS.md) for verified results and
 remaining owner actions. Deployment success alone does not mean these integrations
 are operational.
 
 The default ranking is eligibility-first (eligible overlap, unknown, then restricted), followed by an explainable 0–100 match score and recency. The score weights required skills (48%), useful skills (14%), role family (18%), seniority (10%) and work mode (10%); missing details are neutral, and eligibility is separate. The work-eligibility picker searches every ISO alpha-2 region except Antarctica. Salary conversion uses dated live rates when available; salary sorting never annualises different pay periods.
 
+See [general jobs and secure AI](docs/GENERAL-JOBS-AND-AI.md) for the new sources,
+English translation, tailored tips, salary conversions and reserved name alternatives.
+
 ## What is implemented
 
 **Opportunity desk**
 
-- Dense results list with a score badge, eligibility verdict, pay period, freshness and source on every row, and a detail panel that explains exactly how the score was reached.
-- Eligibility-first ranking: eligible roles outrank unknown ones, which outrank restricted ones, regardless of score. The reasoning is shown, never hidden.
+- Simple results with job, employer, location and salary; dedicated `/jobs/:id` pages with working browser history, saved state and original application links. No repetitive verification/eligibility/source badges.
+- Skill/preference scoring remains explainable, with optional detail on the job page. Country, profession, arrangement and experience filters operate in D1 before pagination.
 - Explainable 0–100 score across five weighted components, each showing the weight it carries and what it earned. Components that cannot be compared are excluded from the total rather than counted as failures, so a sparse posting is not penalised for being sparse.
 - Work-eligibility picker covering every ISO 3166-1 alpha-2 region except Antarctica. The list is **generated** from `i18n-iso-countries` (`npm run data:generate`), never hand-maintained.
 - Profile and skill signal with forgiving matching: `node.js`, `NodeJS` and `node` are one skill; `TS` is `TypeScript`.

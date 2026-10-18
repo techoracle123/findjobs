@@ -29,7 +29,7 @@ export function credentials(env) {
 }
 
 export function client({ token, account }, fetcher = fetch) {
-  return async (path, { method = 'GET', body, optional = false } = {}) => {
+  return async (path, { method = 'GET', body, optional = false, diagnostic = false } = {}) => {
     const response = await fetcher(`${API}/accounts/${account}${path}`, {
       method,
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -41,8 +41,18 @@ export function client({ token, account }, fetcher = fetch) {
     if (!response.ok || data.success !== true) {
       // Do not print raw responses: they may contain sensitive account details.
       const codes = (data.errors ?? []).map((error) => error.code).join(', ')
+      const detail =
+        diagnostic && method === 'GET' && /^\/access\//.test(path)
+          ? (data.errors ?? [])
+              .map((error) =>
+                String(error.message ?? '')
+                  .replaceAll(token, '[REDACTED]')
+                  .slice(0, 300),
+              )
+              .join('; ')
+          : ''
       throw new Error(
-        `Cloudflare ${method} ${path} failed (HTTP ${response.status}; codes: ${codes || 'unknown'}). Check token permissions and account access.`,
+        `Cloudflare ${method} ${path} failed (HTTP ${response.status}; codes: ${codes || 'unknown'}). ${detail || 'Check token permissions and account access.'}`,
       )
     }
     return data
@@ -174,7 +184,15 @@ export async function main() {
     access = await provisionAccess(api, project, hostname)
     annotation('notice', 'Sign-in configured', 'Cloudflare Access email sign-in is configured.')
   } catch (error) {
-    annotation('warning', 'Sign-in needs account permission', error.message)
+    annotation('warning', 'Sign-in provisioning blocked', error.message)
+    for (const path of ['/access/apps', '/access/identity_providers']) {
+      try {
+        await api(path, { diagnostic: true })
+        annotation('notice', 'Access permission diagnostic', `${path} is readable.`)
+      } catch (failure) {
+        annotation('warning', 'Access permission diagnostic', failure.message)
+      }
+    }
   }
   const telegram = await telegramSetup(
     process.env.TELEGRAM_BOT_TOKEN?.trim(),

@@ -23,8 +23,9 @@ than assuming that a configured provider has passed a live test.
   including multiply escaped markup. Paragraphs/list items survive as plain text;
   scripts/styles and the specific Arbeitnow promotional footer do not.
 - The publisher-provided MyJobMag individual-job feed and Hot Nigerian Jobs RSS
-  add Nigerian occupations; We Work Remotely and Accor/H&M/IKEA public ATS boards
-  broaden international coverage. An inaccessible or empty feed is reported by
+  add Nigerian occupations; We Work Remotely broadens international coverage. Accor/H&M/IKEA are
+  additional ATS candidates in the registry; the first live attempt was blocked
+  by their host’s robots policy, so no successful ingestion is claimed for them. An inaccessible or empty feed is reported by
   the registry, not replaced with fictional listings. Collected recruitment
   roundups and supplier/procurement notices are not treated as individual jobs.
 - Reviewed publisher feed directory: https://www.myjobmag.com/feeds/

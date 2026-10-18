@@ -11,8 +11,18 @@ async function json(path) {
 const health = await json('/api/health')
 const rates = await json('/api/rates')
 const jobs = await json('/api/jobs?status=open&limit=200')
-const nigeria = await json('/api/jobs?status=open&limit=200&country=NG')
+let nigeria = await json('/api/jobs?status=open&limit=200&country=NG')
+// Source refreshes are queued, not instant. Wait boundedly for the first Nigerian ingestion.
+for (let attempt = 0; !nigeria.total && attempt < 12; attempt++) {
+  await new Promise((resolve) => setTimeout(resolve, 10000))
+  nigeria = await json('/api/jobs?status=open&limit=200&country=NG')
+}
 const sources = await json('/api/sources')
+for (const source of sources.sources || [])
+  if (['myjobmag-ng', 'hotnigerianjobs', 'weworkremotely'].includes(source.id))
+    console.log(
+      `::notice title=Live source status::${JSON.stringify({ id: source.id, status: source.lastStatus || source.last_status, jobs: source.liveJobs ?? source.live_jobs, error: source.lastError || source.last_error })}`,
+    )
 console.log(
   JSON.stringify(
     {

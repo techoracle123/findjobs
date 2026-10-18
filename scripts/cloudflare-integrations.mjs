@@ -11,7 +11,7 @@ export function annotation(level, title, message) {
 /** A path-scoped Access app protects login, while the board remains public.
  * Other API requests verify its signed CF_Authorization cookie themselves. */
 export async function provisionAccess(api, project, hostname = `${project}.pages.dev`) {
-  let org = (await api('/access/organizations', { optional: true }))?.result
+  let org = (await api('/access/organizations', { optional: true, diagnostic: true }))?.result
   if (!org) {
     org = (
       await api('/access/organizations', {
