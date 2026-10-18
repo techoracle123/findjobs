@@ -40,7 +40,7 @@ accountRoutes.get('/account', async (c) => {
   if (!c.env?.DB) return c.json({ error: 'storage_unavailable' }, 503)
 
   const snapshot = await loadAccount(c.env.DB, user.id)
-  return c.json(snapshot)
+  return c.json({ ...snapshot, entitlements: [...new Set([...snapshot.entitlements, 'alerts'])] })
 })
 
 /** The signed-in account's profile. */

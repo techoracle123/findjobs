@@ -45,6 +45,7 @@ export function createPoliteFetch(
       await new Promise((resolve) => setTimeout(resolve, policy.crawlDelayMs - since))
     }
 
+    policy.lastRequestAt = Date.now()
     if (onRequest) await onRequest(host)
 
     // A host that accepts the connection and then says nothing must not
@@ -67,7 +68,6 @@ export function createPoliteFetch(
 async function policyFor(host: string, fetchImpl: typeof fetch): Promise<HostPolicy> {
   const cached = cache.get(host)
   if (cached && Date.now() - cached.fetchedAt < ROBOTS_TTL_MS) {
-    cached.lastRequestAt = Date.now()
     return cached
   }
 

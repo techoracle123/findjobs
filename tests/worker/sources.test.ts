@@ -44,7 +44,7 @@ describe('greenhouse parser', () => {
     expect(sre.remote).toBe(false)
     expect(sre.description).toContain('Kubernetes')
     expect(sre.description).not.toContain('<p>')
-    expect(sre.publishedAt).toBe('2026-10-16T09:00:00Z')
+    expect(sre.publishedAt).toBeNull() // Greenhouse's updated_at is not a publication date.
     expect(sre.tags).toContain('Engineering')
   })
 

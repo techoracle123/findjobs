@@ -16,8 +16,7 @@ export function SavedPanel({ saved, jobs, onOpen, onRemove }: SavedPanelProps) {
         <div className="empty">
           <p className="empty__title">Nothing saved yet</p>
           <p>
-            Save a role from the opportunities list and it will appear here. Saved roles live in
-            this browser only.
+            Save a job you like and come back to it here. Sign in to keep your list across devices.
           </p>
         </div>
       </div>

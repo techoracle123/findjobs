@@ -79,7 +79,7 @@ export const greenhouse: SourceParser = {
         return {
           externalId: String(job.id),
           title: String(job.title ?? '').trim(),
-          company: metadata.get('company') ?? company,
+          company: String(source.options.companyLabel ?? metadata.get('company') ?? company),
           description: stripHtml(job.content ?? ''),
           url: job.absolute_url ?? `https://boards.greenhouse.io/${company}/jobs/${job.id}`,
           applyUrl: job.absolute_url ?? '',
@@ -90,7 +90,7 @@ export const greenhouse: SourceParser = {
             ...(job.offices ?? []).map((entry) => entry.name ?? ''),
           ].filter(Boolean),
           jobType: metadata.get('employment type') ?? metadata.get('type') ?? '',
-          publishedAt: job.updated_at ?? null,
+          publishedAt: null,
           validThrough: null,
           closed: false,
           salary: null,
@@ -126,12 +126,10 @@ export const lever: SourceParser = {
   async fetchPostings(source, fetchImpl = fetch) {
     const company = slugOf(source)
     const url = `https://api.lever.co/v0/postings/${encodeURIComponent(company)}?mode=json`
-    const payload = (await readJson(url, source.id, fetchImpl)) as {
-      postings?: LeverPosting[]
-      data?: LeverPosting[]
-    }
+    const payload = (await readJson(url, source.id, fetchImpl)) as
+      LeverPosting[] | { postings?: LeverPosting[]; data?: LeverPosting[] }
 
-    const postings = payload.postings ?? payload.data ?? []
+    const postings = Array.isArray(payload) ? payload : (payload.postings ?? payload.data ?? [])
     return postings
       .filter((posting) => posting.id && posting.text)
       .map((posting) => {
@@ -146,7 +144,7 @@ export const lever: SourceParser = {
         return {
           externalId: String(posting.id),
           title: String(posting.text ?? '').trim(),
-          company: posting.categories?.team ?? company,
+          company: String(source.options.companyLabel ?? company),
           description,
           url: posting.hostedUrl ?? `https://jobs.lever.co/${company}/${posting.id}`,
           applyUrl: posting.applyUrl ?? posting.hostedUrl ?? '',

@@ -1,4 +1,4 @@
-name: Deploy Cloudflare staging
+name: Deploy Find Jobs
 
 on:
   workflow_dispatch:
@@ -7,6 +7,14 @@ on:
     paths:
       - .github/workflows/deploy.yml
       - scripts/deploy-cloudflare.mjs
+      - scripts/cloudflare-integrations.mjs
+      - src/**
+      - functions/**
+      - public/**
+      - migrations/**
+      - wrangler*.jsonc
+      - package*.json
+      - index.html
 
 permissions:
   contents: read
@@ -22,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      CLOUDFLARE_PAGES_PROJECT: role-signal
+      CLOUDFLARE_PAGES_PROJECT: find-jobs
       WRANGLER_SEND_METRICS: 'false'
       CI: 'true'
     steps:
@@ -56,4 +64,20 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: node scripts/deploy-cloudflare.mjs
+      - name: Install Chromium for live browser checks
+        run: npx playwright install --with-deps chromium
+      - name: Test the live site at phone, tablet, and desktop widths
+        env:
+          LIVE_SITE_URL: https://find-jobs.pages.dev
+        run: npx playwright test
+      - name: Save browser screenshots and test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: find-jobs-browser-report
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7

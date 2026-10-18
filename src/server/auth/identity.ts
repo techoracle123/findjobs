@@ -20,7 +20,17 @@ export async function resolveIdentity(
   config: AppConfig,
   now: number = Date.now(),
 ): Promise<AccessIdentity | null> {
-  const token = extractBearer(request.headers.get('authorization'))
+  const cookie = request.headers
+    .get('cookie')
+    ?.split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('CF_Authorization='))
+    ?.slice('CF_Authorization='.length)
+  const token =
+    extractBearer(request.headers.get('authorization')) ||
+    request.headers.get(ACCESS_JWT_HEADER) ||
+    cookie ||
+    null
 
   if (token && config.access.teamDomain && config.access.aud) {
     return verifyAccessToken(token, config.access, now)

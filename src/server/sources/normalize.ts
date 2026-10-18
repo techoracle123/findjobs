@@ -51,7 +51,7 @@ export function inferRoleFamily(title: string, tags: string[], description: stri
   }
 
   const best = [...scores.entries()].sort((a, b) => b[1] - a[1])[0]
-  return best ? best[0] : 'backend'
+  return best ? best[0] : 'unknown'
 }
 
 export function inferSeniority(title: string, description: string): Seniority {
@@ -68,13 +68,14 @@ export function inferSeniority(title: string, description: string): Seniority {
     }
   }
 
-  return best ?? 'mid'
+  return best ?? 'unknown'
 }
 
 export function inferWorkMode(remote: boolean, title: string): WorkMode {
   if (remote) return 'remote'
   if (/hybrid/i.test(title)) return 'hybrid'
-  return 'onsite'
+  if (/on[ -]?site|in[ -]?office/i.test(title)) return 'onsite'
+  return 'unknown'
 }
 
 /**
@@ -159,6 +160,14 @@ export function extractSalary(text: string): RawSalary | null {
 
   const currency = CURRENCY_PATTERNS.find((entry) => entry.pattern.test(text))?.currency ?? null
 
+  // A number in prose (years of experience, dates, headcount) is not a salary.
+  if (!currency) return null
+  const compensation = text.match(
+    /[^.!?\n]*(?:salary|compensation|pay range|base pay|[$€£¥₹₦]|USD|EUR|GBP)[^.!?\n]*/i,
+  )?.[0]
+  if (!compensation) return null
+  text = compensation
+
   const range = text.match(
     /(?:[$€£¥₹₦]|EUR|USD|GBP|CHF|SEK|NOK|DKK|PLN|CAD|AUD|SGD|INR|BRL|NGN|JPY)?\s*(\d[\d.,]*)\s*(k|K)?\s*(?:-|–|—|to)\s*(?:[$€£¥₹₦]|EUR|USD|GBP|CHF|SEK|NOK|DKK|PLN|CAD|AUD|SGD|INR|BRL|NGN|JPY)?\s*(\d[\d.,]*)\s*(k|K)?/,
   )
@@ -233,19 +242,20 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
     company: raw.company,
     roleFamily: inferRoleFamily(raw.title, raw.tags, raw.description),
     seniority: inferSeniority(raw.title, raw.description),
-    workMode: inferWorkMode(raw.remote, raw.title),
+    workMode: inferWorkMode(raw.remote, `${raw.title} ${raw.location}`),
     locationCountry: inferCountry(raw.location),
     locationLabel: raw.location || 'Location not stated',
     salaryMin: salary?.min ?? 0,
     salaryMax: salary?.max ?? 0,
-    salaryCurrency: salary?.currency ?? 'USD',
+    salaryCurrency: salary?.currency ?? '',
     salaryPeriod: salary?.period ?? 'year',
     description: raw.description.slice(0, 4000),
     requiredSkills: required,
     usefulSkills: useful,
     eligibleCountries: [],
     sponsorship: 'unknown' as Sponsorship,
-    postedAt: raw.publishedAt,
+    postedAt:
+      raw.publishedAt && Number.isFinite(Date.parse(raw.publishedAt)) ? raw.publishedAt : null,
     isDemo: false,
     applyUrl: raw.applyUrl || raw.url,
     companyUrl: raw.companyUrl,

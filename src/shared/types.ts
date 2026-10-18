@@ -1,6 +1,7 @@
-export type WorkMode = 'remote' | 'hybrid' | 'onsite'
+export type WorkMode = 'remote' | 'hybrid' | 'onsite' | 'unknown'
 
-export type Seniority = 'intern' | 'junior' | 'mid' | 'senior' | 'staff' | 'lead' | 'principal'
+export type Seniority =
+  'unknown' | 'intern' | 'junior' | 'mid' | 'senior' | 'staff' | 'lead' | 'principal'
 
 export type EligibilityTier = 'eligible' | 'unknown' | 'restricted'
 

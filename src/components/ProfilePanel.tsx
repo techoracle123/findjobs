@@ -49,7 +49,7 @@ export function ProfilePanel({ profile, onChange, onReset }: ProfilePanelProps) 
   return (
     <section className="panel">
       <div className="panel__head">
-        <h2 className="panel__title">Your signal</h2>
+        <h2 className="panel__title">Your preferences</h2>
         <div style={{ flex: 1 }} />
         <button
           type="button"
@@ -97,12 +97,12 @@ export function ProfilePanel({ profile, onChange, onReset }: ProfilePanelProps) 
             }}
           />
           <span className="field__hint">
-            Matching ignores punctuation and case, so “node.js” also matches “NodeJS”.
+            Add a few skills to see which jobs could be a good fit.
           </span>
         </div>
 
         <div className="field">
-          <span className="field__label">Target role families</span>
+          <span className="field__label">Roles you’re interested in</span>
           <div className="chiprow">
             {ROLE_FAMILIES.map((family) => (
               <button
@@ -124,7 +124,7 @@ export function ProfilePanel({ profile, onChange, onReset }: ProfilePanelProps) 
         </div>
 
         <div className="field">
-          <span className="field__label">Target level</span>
+          <span className="field__label">Experience level</span>
           <div className="chiprow">
             {SENIORITIES.map((level) => (
               <button

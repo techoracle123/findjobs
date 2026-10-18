@@ -107,7 +107,7 @@ describe('Cloudflare deployment automation', () => {
     expect(api).toHaveBeenCalledTimes(1)
   })
 
-  it('parses JSONC, preserves bindings, and enforces safe staging', () => {
+  it('parses JSONC, preserves bindings, and enforces safe production', () => {
     const config = JSON.parse(
       deploymentConfig(
         `{
@@ -124,7 +124,7 @@ describe('Cloudflare deployment automation', () => {
     expect(config.d1_databases[1].database_id).toBe('keep')
     expect(config.vars).toEqual({
       BILLING_PRICE_PRO: '5000',
-      APP_MODE: 'staging',
+      APP_MODE: 'production',
       BILLING_PROVIDER: 'fake',
     })
     expect(config.queues.producers[0].binding).toBe('INGEST_QUEUE')

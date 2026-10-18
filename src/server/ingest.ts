@@ -33,7 +33,7 @@ export interface IngestionOptions {
 }
 
 export const USER_AGENT =
-  'RoleSignalBot/1.0 (+https://rolesignal.dev/bot; job feed aggregator; respects robots.txt)'
+  'FindJobsBot/1.0 (+https://find-jobs.pages.dev; public job feed aggregator)'
 
 const encoder = new TextEncoder()
 
@@ -78,40 +78,45 @@ export interface SourceRow {
  * not undone by a deploy.
  */
 export async function ensureSources(db: D1Database): Promise<void> {
+  const statements: D1PreparedStatement[] = []
   for (const source of SEED_SOURCES) {
     const config = JSON.stringify({
       company: source.company,
       companyLabel: source.companyLabel,
     })
 
-    await db
-      .prepare(
-        `INSERT INTO sources (id, name, adapter, kind, platform, listing_url, homepage, enabled,
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO sources (id, name, adapter, kind, platform, listing_url, homepage, enabled,
           verification, refresh_tier, rate_limit_per_hour, country, tags, config, last_status)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'pending')
          ON CONFLICT(id) DO UPDATE SET name = ?2, adapter = ?3, kind = ?4, platform = ?5,
            listing_url = ?6, verification = ?8, refresh_tier = ?9, rate_limit_per_hour = ?10,
            country = ?11, tags = ?12, config = ?13`,
-      )
-      .bind(
-        source.id,
-        source.name,
-        source.parser,
-        source.kind,
-        source.parser === 'jsonld' || source.parser === 'rss' ? null : source.parser,
-        source.listingUrl,
-        source.enabled ? 1 : 0,
-        // The parser knows whether what it reads can be trusted: a posting
-        // read from the employer's own board can, a posting read from an
-        // aggregator cannot.
-        getParser(source.parser)?.verification ?? 'unverified',
-        source.tier,
-        source.rateLimitPerHour,
-        source.country,
-        JSON.stringify(source.tags),
-        config,
-      )
-      .run()
+        )
+        .bind(
+          source.id,
+          source.name,
+          source.parser,
+          source.kind,
+          source.parser === 'jsonld' || source.parser === 'rss' ? null : source.parser,
+          source.listingUrl,
+          source.enabled ? 1 : 0,
+          // The parser knows whether what it reads can be trusted: a posting
+          // read from the employer's own board can, a posting read from an
+          // aggregator cannot.
+          getParser(source.parser)?.verification ?? 'unverified',
+          source.tier,
+          source.rateLimitPerHour,
+          source.country,
+          JSON.stringify(source.tags),
+          config,
+        ),
+    )
+  }
+  for (let offset = 0; offset < statements.length; offset += 50) {
+    await db.batch(statements.slice(offset, offset + 50))
   }
 }
 
@@ -141,13 +146,15 @@ async function recordEvent(
   type: string,
   detail: string | null,
   sourceId: string | null,
+  writes: D1PreparedStatement[],
 ): Promise<void> {
-  await db
-    .prepare(
-      'INSERT INTO job_events (id, job_id, type, detail, source_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
-    )
-    .bind(`evt_${crypto.randomUUID()}`, jobId, type, detail, sourceId, new Date().toISOString())
-    .run()
+  writes.push(
+    db
+      .prepare(
+        'INSERT INTO job_events (id, job_id, type, detail, source_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
+      )
+      .bind(`evt_${crypto.randomUUID()}`, jobId, type, detail, sourceId, new Date().toISOString()),
+  )
 }
 
 interface ExistingJob {
@@ -166,17 +173,14 @@ async function upsertJob(
   externalId: string,
   contentHash: string,
   now: number,
+  existing: ExistingJob | null,
+  writes: D1PreparedStatement[],
 ): Promise<UpsertOutcome> {
-  const existing = await db
-    .prepare('SELECT content_hash, job_status, verification, first_seen_at FROM jobs WHERE id = ?1')
-    .bind(job.id)
-    .first<ExistingJob>()
-
   const nowIso = new Date(now).toISOString()
 
   if (!existing) {
-    await writeJob(db, job, sourceId, externalId, contentHash, nowIso, nowIso)
-    await recordEvent(db, job.id, 'opened', 'first seen', sourceId)
+    await writeJob(db, job, sourceId, externalId, contentHash, nowIso, nowIso, writes)
+    await recordEvent(db, job.id, 'opened', 'first seen', sourceId, writes)
     return 'inserted'
   }
 
@@ -185,18 +189,19 @@ async function upsertJob(
 
   if (existing.content_hash === contentHash) {
     // Unchanged: refresh the times and the expiry, and leave the row alone.
-    await db
-      .prepare(
-        `UPDATE jobs SET expired_at = NULL, last_seen_at = ?2,
+    writes.push(
+      db
+        .prepare(
+          `UPDATE jobs SET expired_at = NULL, last_seen_at = ?2,
           job_status = CASE WHEN job_status = 'closed' AND ?3 = 0 THEN 'open' ELSE job_status END,
           closed_at = CASE WHEN job_status = 'closed' AND ?3 = 0 THEN NULL ELSE closed_at END
          WHERE id = ?1`,
-      )
-      .bind(job.id, nowIso, isClosed ? 1 : 0)
-      .run()
+        )
+        .bind(job.id, nowIso, isClosed ? 1 : 0),
+    )
 
     if (wasClosed && !isClosed) {
-      await recordEvent(db, job.id, 'reopened', 'it is being advertised again', sourceId)
+      await recordEvent(db, job.id, 'reopened', 'it is being advertised again', sourceId, writes)
       return 'reopened'
     }
     return 'unchanged'
@@ -210,14 +215,22 @@ async function upsertJob(
     contentHash,
     existing.first_seen_at ?? nowIso,
     nowIso,
+    writes,
   )
 
   if (!wasClosed && isClosed) {
-    await recordEvent(db, job.id, 'closed', job.closedReason ?? 'the source closed it', sourceId)
+    await recordEvent(
+      db,
+      job.id,
+      'closed',
+      job.closedReason ?? 'the source closed it',
+      sourceId,
+      writes,
+    )
     return 'closed'
   }
   if (wasClosed && !isClosed) {
-    await recordEvent(db, job.id, 'reopened', 'it is being advertised again', sourceId)
+    await recordEvent(db, job.id, 'reopened', 'it is being advertised again', sourceId, writes)
     return 'reopened'
   }
 
@@ -232,12 +245,14 @@ async function writeJob(
   contentHash: string,
   firstSeenAt: string,
   lastSeenAt: string,
+  writes: D1PreparedStatement[],
 ): Promise<void> {
   const skills = JSON.stringify([...job.requiredSkills, ...job.usefulSkills])
 
-  await db
-    .prepare(
-      `INSERT INTO jobs (id, title, company, role_family, seniority, work_mode, location_country,
+  writes.push(
+    db
+      .prepare(
+        `INSERT INTO jobs (id, title, company, role_family, seniority, work_mode, location_country,
         location_label, salary_min, salary_max, salary_currency, salary_period, description,
         required_skills, useful_skills, eligible_countries, sponsorship, source_name, source_url,
         posted_days_ago, posted_at, is_demo, source_id, external_id, content_hash, expired_at,
@@ -254,54 +269,55 @@ async function writeJob(
          verified_at = ?26, job_status = ?27, closed_at = ?28, closed_reason = ?29,
          first_seen_at = ?30, last_seen_at = ?31, apply_url = ?32, company_url = ?33,
          source_kind = ?34, source_platform = ?35`,
-    )
-    .bind(
-      job.id,
-      job.title,
-      job.company,
-      job.roleFamily,
-      job.seniority,
-      job.workMode,
-      job.locationCountry,
-      job.locationLabel,
-      job.salaryMin,
-      job.salaryMax,
-      job.salaryCurrency,
-      job.salaryPeriod,
-      job.description,
-      JSON.stringify(job.requiredSkills),
-      JSON.stringify(job.usefulSkills),
-      JSON.stringify(job.eligibleCountries),
-      job.sponsorship,
-      job.sourceName,
-      job.sourceUrl,
-      job.postedAt,
-      sourceId,
-      externalId,
-      contentHash,
-      job.verification ?? 'unverified',
-      job.verificationReason ?? null,
-      job.verifiedAt ?? null,
-      job.jobStatus ?? 'open',
-      job.closedAt ?? null,
-      job.closedReason ?? null,
-      firstSeenAt,
-      lastSeenAt,
-      job.applyUrl ?? null,
-      job.companyUrl ?? null,
-      job.sourceKind ?? null,
-      job.sourcePlatform ?? null,
-    )
-    .run()
+      )
+      .bind(
+        job.id,
+        job.title,
+        job.company,
+        job.roleFamily,
+        job.seniority,
+        job.workMode,
+        job.locationCountry,
+        job.locationLabel,
+        job.salaryMin,
+        job.salaryMax,
+        job.salaryCurrency,
+        job.salaryPeriod,
+        job.description,
+        JSON.stringify(job.requiredSkills),
+        JSON.stringify(job.usefulSkills),
+        JSON.stringify(job.eligibleCountries),
+        job.sponsorship,
+        job.sourceName,
+        job.sourceUrl,
+        job.postedAt,
+        sourceId,
+        externalId,
+        contentHash,
+        job.verification ?? 'unverified',
+        job.verificationReason ?? null,
+        job.verifiedAt ?? null,
+        job.jobStatus ?? 'open',
+        job.closedAt ?? null,
+        job.closedReason ?? null,
+        firstSeenAt,
+        lastSeenAt,
+        job.applyUrl ?? null,
+        job.companyUrl ?? null,
+        job.sourceKind ?? null,
+        job.sourcePlatform ?? null,
+      ),
+  )
 
   // Keep the search index in step with the canonical row.
-  await db.prepare('DELETE FROM jobs_fts WHERE job_id = ?1').bind(job.id).run()
-  await db
-    .prepare(
-      'INSERT INTO jobs_fts (job_id, title, company, description, skills) VALUES (?1, ?2, ?3, ?4, ?5)',
-    )
-    .bind(job.id, job.title, job.company, job.description, skills)
-    .run()
+  writes.push(db.prepare('DELETE FROM jobs_fts WHERE job_id = ?1').bind(job.id))
+  writes.push(
+    db
+      .prepare(
+        'INSERT INTO jobs_fts (job_id, title, company, description, skills) VALUES (?1, ?2, ?3, ?4, ?5)',
+      )
+      .bind(job.id, job.title, job.company, job.description, skills),
+  )
 }
 
 /**
@@ -390,16 +406,29 @@ export async function runIngestion(
     const postings = await parser.fetchPostings(sourceRef, politeFetch)
     result.fetched = postings.length
     const seen = new Set<string>()
+    const previous = await db
+      .prepare(
+        'SELECT id, content_hash, job_status, verification, first_seen_at FROM jobs WHERE source_id = ?1',
+      )
+      .bind(sourceId)
+      .all<ExistingJob & { id: string }>()
+    const existingJobs = new Map((previous.results ?? []).map((job) => [job.id, job]))
+    const writes: D1PreparedStatement[] = []
 
     for (const raw of postings) {
-      if (!raw.externalId || !raw.title) {
+      if (
+        !raw.externalId ||
+        !raw.title ||
+        seen.has(raw.externalId) ||
+        !/^https?:\/\//i.test(raw.applyUrl || raw.url)
+      ) {
         result.skipped += 1
         continue
       }
       seen.add(raw.externalId)
 
       const jobId = await jobIdFor(sourceId, raw.externalId)
-      const contentHash = await sha256(contentHashOf(raw))
+      const contentHash = await sha256('live-v2:' + contentHashOf(raw))
       const normalised = normalizePosting(raw, {
         verification: sourceRef.verification,
         verificationReason: sourceRef.verificationReason,
@@ -413,55 +442,78 @@ export async function runIngestion(
         id: jobId,
         sourceName: row.name || parser.name,
         sourceUrl: raw.url || sourceRef.listingUrl || parser.homepage,
-        postedAt: normalised.postedAt ?? nowIso,
+        postedAt: normalised.postedAt ?? '',
       }
 
-      await db
-        .prepare(
-          `INSERT INTO source_postings (source_id, external_id, job_id, payload, content_hash, last_seen_at)
+      writes.push(
+        db
+          .prepare(
+            `INSERT INTO source_postings (source_id, external_id, job_id, payload, content_hash, last_seen_at)
            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
            ON CONFLICT(source_id, external_id) DO UPDATE SET job_id = ?3, payload = ?4,
              content_hash = ?5, last_seen_at = ?6, expired_at = NULL`,
-        )
-        .bind(sourceId, raw.externalId, jobId, JSON.stringify(raw), contentHash, nowIso)
-        .run()
+          )
+          .bind(sourceId, raw.externalId, jobId, JSON.stringify(raw), contentHash, nowIso),
+      )
 
-      const outcome = await upsertJob(db, job, sourceId, raw.externalId, contentHash, now)
+      const outcome = await upsertJob(
+        db,
+        job,
+        sourceId,
+        raw.externalId,
+        contentHash,
+        now,
+        existingJobs.get(jobId) ?? null,
+        writes,
+      )
       if (outcome === 'inserted') result.inserted += 1
       else if (outcome === 'updated') result.updated += 1
       else if (outcome === 'closed') result.closed += 1
     }
 
+    for (let offset = 0; offset < writes.length; offset += 100) {
+      await db.batch(writes.slice(offset, offset + 100))
+    }
+
     if (options.closeMissing !== false) {
       const stale = await db
         .prepare(
-          `SELECT external_id, job_id FROM source_postings
-           WHERE source_id = ?1 AND expired_at IS NULL`,
+          `SELECT p.external_id, p.job_id, j.job_status FROM source_postings p LEFT JOIN jobs j ON j.id = p.job_id WHERE p.source_id = ?1 AND p.expired_at IS NULL`,
         )
         .bind(sourceId)
-        .all<{ external_id: string; job_id: string | null }>()
-
+        .all<{ external_id: string; job_id: string | null; job_status: string | null }>()
+      const closures: D1PreparedStatement[] = []
       for (const posting of stale.results ?? []) {
         if (seen.has(posting.external_id)) continue
-
-        // The source no longer lists it, so the role has closed.
-        await db
-          .prepare(
-            'UPDATE source_postings SET expired_at = ?3 WHERE source_id = ?1 AND external_id = ?2',
+        closures.push(
+          db
+            .prepare(
+              'UPDATE source_postings SET expired_at = ?3 WHERE source_id = ?1 AND external_id = ?2',
+            )
+            .bind(sourceId, posting.external_id, nowIso),
+        )
+        if (posting.job_id && posting.job_status !== 'closed') {
+          closures.push(
+            db
+              .prepare(
+                "UPDATE jobs SET job_status = 'closed', closed_at = ?2, closed_reason = 'it is no longer advertised by the source' WHERE id = ?1",
+              )
+              .bind(posting.job_id, nowIso),
           )
-          .bind(sourceId, posting.external_id, nowIso)
-          .run()
-
-        if (posting.job_id) {
-          // The role closed, but the row stays: knowing that a role existed
-          // and closed is more useful than pretending it never did. The
-          // interface offers it as closed rather than as something to apply
-          // for.
-          const closed = await closeJob(db, posting.job_id, sourceId, nowIso)
-          if (closed) result.closed += 1
+          await recordEvent(
+            db,
+            posting.job_id,
+            'closed',
+            'it is no longer advertised by the source',
+            sourceId,
+            closures,
+          )
+          result.closed += 1
         }
         result.expired += 1
       }
+      for (let offset = 0; offset < closures.length; offset += 100)
+        await db.batch(closures.slice(offset, offset + 100))
     }
 
     result.status = 'ok'
@@ -472,35 +524,6 @@ export async function runIngestion(
 
   await finishRun(db, runId, result)
   return result
-}
-
-/**
- * Marks a posting closed, keeping the row so the fact that it existed is
- * not lost. A role that reappears is reopened rather than duplicated.
- */
-async function closeJob(
-  db: D1Database,
-  jobId: string,
-  sourceId: string,
-  nowIso: string,
-): Promise<boolean> {
-  const row = await db
-    .prepare('SELECT job_status FROM jobs WHERE id = ?1')
-    .bind(jobId)
-    .first<{ job_status: string | null }>()
-
-  if (!row || row.job_status === 'closed') return false
-
-  await db
-    .prepare(
-      `UPDATE jobs SET job_status = 'closed', closed_at = ?2,
-        closed_reason = 'it is no longer advertised by the source' WHERE id = ?1`,
-    )
-    .bind(jobId, nowIso)
-    .run()
-
-  await recordEvent(db, jobId, 'closed', 'it is no longer advertised by the source', sourceId)
-  return true
 }
 
 async function ensureSourceRow(db: D1Database, row: SourceRow): Promise<void> {

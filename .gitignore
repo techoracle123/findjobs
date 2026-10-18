@@ -9,3 +9,6 @@ dist-smoke/
 *.sqlite
 *.tsbuildinfo
 .DS_Store
+
+test-results/
+playwright-report/

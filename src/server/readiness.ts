@@ -155,7 +155,7 @@ export async function buildReadiness(env: Env): Promise<ReadinessReport> {
       id: 'billing',
       name: 'Payments',
       status: 'ok',
-      required: production,
+      required: false,
       detail: `The ${provider.id} provider is configured. The paid plan is ${priceText}.`,
       action: null,
     })
@@ -181,8 +181,8 @@ export async function buildReadiness(env: Env): Promise<ReadinessReport> {
     checks.push({
       id: 'billing',
       name: 'Payments',
-      status: production ? 'missing' : 'warn',
-      required: production,
+      status: 'warn',
+      required: false,
       detail: `No payment provider is configured, so checkout is disabled and nobody can be charged.`,
       action:
         missingKeys.length > 0
@@ -306,7 +306,8 @@ export async function buildReadiness(env: Env): Promise<ReadinessReport> {
       name: 'Reference rates',
       status: 'warn',
       required: false,
-      detail: `The live rate feed is unreachable, so indicative rates dated ${rates.date} are being used.`,
+      detail:
+        'Live exchange rates are unavailable. Salaries remain in the employer’s original currency.',
       action: 'Check outbound access to api.frankfurter.app from this deployment.',
     })
   }

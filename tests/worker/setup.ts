@@ -11,6 +11,7 @@ import m0007 from '../../migrations/0007_rate_limits.sql?raw'
 import m0008 from '../../migrations/0008_source_scale.sql?raw'
 import m0009 from '../../migrations/0009_alert_deliveries.sql?raw'
 import m0010 from '../../migrations/0010_billing_events_and_ai_budget.sql?raw'
+import m0011 from '../../migrations/0011_live_only_and_telegram_links.sql?raw'
 
 /**
  * The real migration files, applied to the test database.
@@ -19,7 +20,7 @@ import m0010 from '../../migrations/0010_billing_events_and_ai_budget.sql?raw'
  * schema production runs, without pulling a Node-only migration reader into
  * the Workers runtime.
  */
-const MIGRATIONS = [m0001, m0002, m0003, m0004, m0005, m0006, m0007, m0008, m0009, m0010]
+const MIGRATIONS = [m0001, m0002, m0003, m0004, m0005, m0006, m0007, m0008, m0009, m0010, m0011]
 
 /**
  * Splits a migration file into individual statements, dropping the comment
@@ -51,4 +52,9 @@ beforeAll(async () => {
       }
     }
   }
+  // Synthetic rows are loaded only by tests, never by the live application.
+  for (const sql of splitStatements(m0002)) await env.DB.prepare(sql).run()
+  await env.DB.prepare(
+    "UPDATE jobs SET is_demo = 0, last_seen_at = datetime('now') WHERE id LIKE 'demo-%'",
+  ).run()
 })

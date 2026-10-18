@@ -1,5 +1,4 @@
 import { logger } from './logging'
-import { decodeBase64Url } from './auth/jwt'
 
 const API = 'https://api.telegram.org'
 
@@ -19,6 +18,7 @@ export class TelegramError extends Error {}
 
 async function call<T>(botToken: string, method: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API}/bot${botToken}/${method}`, {
+    signal: AbortSignal.timeout(10_000),
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -78,35 +78,45 @@ export function verifySecretToken(expected: string | null, received: string | nu
   return difference === 0
 }
 
-/**
- * A short-lived token that carries the account id across the Telegram deep
- * link. It is signed with the bot token, so a user cannot mint a link for
- * someone else's account.
- */
-export async function createLinkToken(botToken: string, userId: string): Promise<string> {
-  const expiresAt = Date.now() + 15 * 60 * 1000
-  const payload = `${userId}.${expiresAt}`
-  const signature = await hmacHex(botToken, payload)
-  return `${Buffer.from(payload).toString('base64url')}.${signature}`
+/** A random, single-use deep-link token. Only its hash is stored. */
+async function tokenHash(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+export async function createLinkToken(db: D1Database, userId: string): Promise<string> {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  const token = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+  const now = Date.now()
+  await db.batch([
+    db
+      .prepare('DELETE FROM telegram_link_tokens WHERE user_id = ?1 OR expires_at <= ?2')
+      .bind(userId, now),
+    db
+      .prepare(
+        'INSERT INTO telegram_link_tokens (token_hash, user_id, expires_at) VALUES (?1, ?2, ?3)',
+      )
+      .bind(await tokenHash(token), userId, now + 15 * 60 * 1000),
+  ])
+  return token
 }
 
 export async function verifyLinkToken(
-  botToken: string,
+  db: D1Database,
   token: string,
-  now: number = Date.now(),
+  now = Date.now(),
 ): Promise<string | null> {
-  const [encoded, signature] = token.split('.')
-  if (!encoded || !signature) return null
-
-  const payload = new TextDecoder().decode(decodeBase64Url(encoded))
-  const expected = await hmacHex(botToken, payload)
-  if (expected !== signature) return null
-
-  const [userId, expiresAt] = payload.split('.')
-  if (!userId || !expiresAt) return null
-  if (Number(expiresAt) < now) return null
-
-  return userId
+  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null
+  const row = await db
+    .prepare(
+      'DELETE FROM telegram_link_tokens WHERE token_hash = ?1 AND expires_at > ?2 RETURNING user_id',
+    )
+    .bind(await tokenHash(token), now)
+    .first<{ user_id: string }>()
+  return row?.user_id ?? null
 }
 
 export async function hmacHex(secret: string, message: string): Promise<string> {
@@ -136,7 +146,7 @@ export function formatAlertMessage(job: {
   salaryMax: number
   salaryCurrency: string
 }): string {
-  const lines = [`*${job.title}* — ${job.company}`, `${job.locationLabel}`]
+  const lines = [`${job.title} — ${job.company}`, `${job.locationLabel}`]
   if (job.salaryMax > 0) {
     lines.push(`${job.salaryMin}–${job.salaryMax} ${job.salaryCurrency}`)
   }

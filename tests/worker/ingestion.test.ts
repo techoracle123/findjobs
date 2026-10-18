@@ -44,14 +44,14 @@ describe('ingestion', () => {
     expect(result.error).toBeNull()
 
     const { jobs } = await listJobs(env.DB)
-    const ingested = jobs.filter((job) => !job.isDemo)
+    const ingested = jobs.filter((job) => !job.id.startsWith('demo-'))
     expect(ingested).toHaveLength(3)
 
     const backend = ingested.find((job) => job.title.includes('Senior Backend Engineer'))!
     expect(backend.company).toBe('Nordlicht Systems')
     expect(backend.roleFamily).toBe('backend')
     expect(backend.seniority).toBe('senior')
-    expect(backend.workMode).toBe('onsite')
+    expect(backend.workMode).toBe('unknown')
     expect(backend.locationCountry).toBe('DE')
     expect(backend.salaryCurrency).toBe('EUR')
     expect(backend.salaryMin).toBe(80_000)
@@ -66,7 +66,9 @@ describe('ingestion', () => {
     await runIngestion(env.DB, 'arbeitnow', { fetchImpl: fixtureFetch(arbeitnowFixture) })
     const { jobs } = await listJobs(env.DB)
 
-    const rust = jobs.filter((job) => !job.isDemo).find((job) => job.title === 'Rust Engineer')!
+    const rust = jobs
+      .filter((job) => !job.id.startsWith('demo-'))
+      .find((job) => job.title === 'Rust Engineer')!
     expect(rust.workMode).toBe('remote')
     expect(rust.locationCountry).toBe('')
     expect(rust.requiredSkills).toContain('Rust')
@@ -85,7 +87,7 @@ describe('ingestion', () => {
     expect(second.updated).toBe(0)
 
     const { jobs } = await listJobs(env.DB)
-    expect(jobs.filter((job) => !job.isDemo)).toHaveLength(3)
+    expect(jobs.filter((job) => !job.id.startsWith('demo-'))).toHaveLength(3)
   })
 
   it('updates a posting when the source changes it', async () => {
@@ -100,7 +102,7 @@ describe('ingestion', () => {
     expect(result.updated).toBe(1)
 
     const { jobs } = await listJobs(env.DB)
-    const ingested = jobs.filter((job) => !job.isDemo)
+    const ingested = jobs.filter((job) => !job.id.startsWith('demo-'))
     expect(ingested.some((job) => job.title === 'Staff Backend Engineer (Go)')).toBe(true)
     expect(ingested).toHaveLength(3)
   })
@@ -118,7 +120,7 @@ describe('ingestion', () => {
     // The role stays in the feed, marked closed, so people can see that it
     // existed rather than finding it silently missing.
     const { jobs } = await listJobs(env.DB)
-    const ingested = jobs.filter((job) => !job.isDemo)
+    const ingested = jobs.filter((job) => !job.id.startsWith('demo-'))
     expect(ingested).toHaveLength(3)
     const dropped = ingested.find((job) => job.title === 'Product Designer')
     expect(dropped?.jobStatus).toBe('closed')
@@ -223,7 +225,7 @@ describe('normalisation', () => {
 
   it('infers a seniority from the title', () => {
     expect(inferSeniority('Staff Engineer', '')).toBe('staff')
-    expect(inferSeniority('Engineer', '')).toBe('mid')
+    expect(inferSeniority('Engineer', '')).toBe('unknown')
   })
 
   it('only claims a country it can actually see', () => {

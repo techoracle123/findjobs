@@ -3,6 +3,13 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { stripVTControlCharacters } from 'node:util'
 import ts from 'typescript'
+import {
+  annotation,
+  provisionAccess,
+  telegramSetup,
+  pageSecrets,
+  workerSecrets,
+} from './cloudflare-integrations.mjs'
 
 const API = 'https://api.cloudflare.com/client/v4'
 const BRANCH = 'arena/be298902-findjobs'
@@ -79,7 +86,7 @@ export async function provision(api, projectName) {
   return { databaseId: database.uuid, productionBranch: project.production_branch }
 }
 
-export function deploymentConfig(text, filename, databaseId) {
+export function deploymentConfig(text, filename, databaseId, vars = {}) {
   const parsed = ts.parseConfigFileTextToJson(filename, text)
   if (parsed.error) throw new Error(`Cannot parse ${filename}`)
   const config = parsed.config
@@ -88,9 +95,7 @@ export function deploymentConfig(text, filename, databaseId) {
   config.d1_databases = config.d1_databases.map((db) =>
     db.binding === 'DB' ? { ...db, database_id: databaseId } : db,
   )
-  // Payments and Telegram remain deferred. Staging never enables local identity
-  // or fake purchase confirmation; protected endpoints still require Access.
-  config.vars = { ...config.vars, APP_MODE: 'staging', BILLING_PROVIDER: 'fake' }
+  config.vars = { ...config.vars, ...vars, APP_MODE: 'production', BILLING_PROVIDER: 'fake' }
   return `${JSON.stringify(config, null, 2)}\n`
 }
 
@@ -111,17 +116,39 @@ function wrangler(args) {
 export async function main() {
   const auth = credentials(process.env)
   const api = client(auth)
-  const project = process.env.CLOUDFLARE_PAGES_PROJECT || 'role-signal'
+  const project = process.env.CLOUDFLARE_PAGES_PROJECT || 'find-jobs'
   if (!/^[a-z0-9][a-z0-9-]{0,57}[a-z0-9]$/.test(project))
     throw new Error('Invalid Pages project name.')
   const { databaseId, productionBranch } = await provision(api, project)
+  let access = {}
+  try {
+    access = await provisionAccess(api, project)
+    annotation('notice', 'Sign-in configured', 'Cloudflare Access email sign-in is configured.')
+  } catch (error) {
+    annotation('warning', 'Sign-in needs account permission', error.message)
+  }
+  const telegram = await telegramSetup(process.env.TELEGRAM_BOT_TOKEN?.trim(), project)
+  if (!telegram)
+    annotation(
+      'warning',
+      'Telegram secret missing',
+      'Save a rotated TELEGRAM_BOT_TOKEN as a GitHub Actions repository secret. Never paste it in chat.',
+    )
+  const secrets = telegram
+    ? {
+        TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN.trim(),
+        TELEGRAM_WEBHOOK_SECRET: telegram.secret,
+      }
+    : {}
+  await pageSecrets(api, project, secrets)
+  const vars = { ...access, ...(telegram ? { TELEGRAM_BOT_USERNAME: telegram.username } : {}) }
   const files = ['wrangler.jsonc', 'wrangler.ingest.jsonc', 'wrangler.ingest-consumer.jsonc']
   const originals = new Map()
   try {
     for (const file of files) {
       const text = await readFile(file, 'utf8')
       originals.set(file, text)
-      await writeFile(file, deploymentConfig(text, file, databaseId))
+      await writeFile(file, deploymentConfig(text, file, databaseId, vars))
     }
     wrangler(['d1', 'migrations', 'apply', 'rolesignal', '--remote', '--config', 'wrangler.jsonc'])
     wrangler([
@@ -141,9 +168,13 @@ export async function main() {
         'Deployment uploaded, but the public readiness request failed. Inspect the deployment before retrying.',
       )
     const report = await response.json()
-    if (!report.ready || report.appMode !== 'staging' || report.provider !== 'fake') {
+    if (
+      report.checks?.find((check) => check.id === 'database')?.status !== 'ok' ||
+      report.appMode !== 'production' ||
+      report.provider !== 'fake'
+    ) {
       throw new Error(
-        'Deployment uploaded, but staging readiness checks failed. Inspect /api/readiness.',
+        'Deployment uploaded, but database or safe-mode checks failed. Inspect /api/readiness.',
       )
     }
     if (process.env.GITHUB_ACTIONS === 'true') {
@@ -152,14 +183,95 @@ export async function main() {
       )
     }
     wrangler(['deploy', '--config', 'wrangler.ingest-consumer.jsonc'])
+    if (telegram)
+      await workerSecrets(api, 'role-signal-ingest-consumer', {
+        TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN.trim(),
+      })
     wrangler(['deploy', '--config', 'wrangler.ingest.jsonc'])
-    console.log(
-      `Staging deployed: ${url}. Payments are disabled; sign-in requires Cloudflare Access setup.`,
+    if (telegram) {
+      await telegram.register()
+      annotation(
+        'notice',
+        'Telegram connected',
+        `@${telegram.username}: bot verified and webhook registered at ${url}/api/telegram/webhook`,
+      )
+    }
+    const sourcesResponse = await fetch(`${url}/api/sources`, {
+      signal: AbortSignal.timeout(60_000),
+    })
+    if (!sourcesResponse.ok) throw new Error('Source registry check failed.')
+    const sources = (await sourcesResponse.json()).sources ?? []
+    const queue = await findResource(
+      api,
+      '/queues',
+      (item) => item.queue_name === 'rolesignal-ingest',
     )
+    if (!queue?.queue_id) throw new Error('Ingestion queue could not be found after deployment.')
+    const due = sources.filter(
+      (source) =>
+        source.enabled &&
+        source.consecutiveFailures < 5 &&
+        (!source.lastRunAt || Date.now() - Date.parse(source.lastRunAt) > 3600_000),
+    )
+    for (let offset = 0; offset < due.length; offset += 100) {
+      await api(`/queues/${queue.queue_id}/messages/batch`, {
+        method: 'POST',
+        body: {
+          messages: due.slice(offset, offset + 100).map((source, index) => ({
+            body: { sourceId: source.id },
+            content_type: 'json',
+            delay_seconds: Math.floor((offset + index) / 5),
+          })),
+        },
+      })
+    }
+    let feed
+    for (let attempt = 0; attempt < 18; attempt++) {
+      const response = await fetch(`${url}/api/jobs?status=open&limit=20`, {
+        signal: AbortSignal.timeout(30_000),
+      })
+      if (!response.ok) throw new Error('Public job feed check failed.')
+      feed = await response.json()
+      if (feed.total > 0) break
+      await new Promise((resolve) => setTimeout(resolve, 10_000))
+    }
+    if (
+      !feed?.total ||
+      feed.jobs.some((job) => job.isDemo || !/^https?:\/\//i.test(job.applyUrl || job.sourceUrl))
+    ) {
+      const runs = await fetch(`${url}/api/sources/runs`).then((res) => res.json())
+      annotation(
+        'warning',
+        'Ingestion diagnostics',
+        JSON.stringify(
+          (runs.runs ?? [])
+            .slice(0, 5)
+            .map((run) => ({ source: run.source_id, status: run.status, error: run.error })),
+        ),
+      )
+      throw new Error(
+        'Deployment exists, but no usable live job feed was confirmed yet. No fictional jobs will be served.',
+      )
+    }
+    annotation(
+      'notice',
+      'Live jobs verified',
+      `${feed.total} real open jobs available at ${url}. ${due.length} sources queued for refresh. No demo data is served.`,
+    )
+    if (!report.ready)
+      annotation(
+        'warning',
+        'Production setup incomplete',
+        report.checks
+          .filter((check) => check.required && check.status !== 'ok')
+          .map((check) => check.action)
+          .join(' '),
+      )
+    console.log(`Find Jobs deployed: ${url}. Payments are disabled.`)
     if (process.env.GITHUB_STEP_SUMMARY) {
       await writeFile(
         process.env.GITHUB_STEP_SUMMARY,
-        `## Staging deployed\n\n${url}\n\nDatabase migrations and ingestion worker deployed. Payments and Telegram are deferred. Sign-in still needs Cloudflare Access configuration.\n`,
+        `## Find Jobs deployed\n\n${url}\n\n${feed.total} live open jobs. Payments disabled.\nSign-in: ${Object.keys(access).length ? 'configured' : 'requires Access permissions'}. Telegram: ${telegram ? 'bot and webhook verified' : 'requires encrypted bot token'}.\n`,
         { flag: 'a' },
       )
     }
@@ -172,8 +284,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {
     // Only our sanitised errors are safe to log. Unknown errors may contain credentials.
     const message = error instanceof Error ? error.message : 'Unknown deployment error'
-    const token = process.env.CLOUDFLARE_API_TOKEN
-    const safeMessage = token ? message.replaceAll(token, '[REDACTED]') : message
+    let safeMessage = message
+    for (const token of [process.env.CLOUDFLARE_API_TOKEN, process.env.TELEGRAM_BOT_TOKEN]) {
+      if (token) safeMessage = safeMessage.replaceAll(token, '[REDACTED]')
+    }
     console.error(safeMessage)
     if (process.env.GITHUB_ACTIONS === 'true') {
       const annotation = safeMessage

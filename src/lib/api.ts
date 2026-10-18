@@ -42,6 +42,7 @@ export class ApiError extends Error {
 
 export interface JobsResponse {
   jobs: Job[]
+  total?: number
   dataSource: 'd1' | 'fixture'
   warning?: string
 }
@@ -78,8 +79,10 @@ export function fetchHealth(): Promise<ApiHealth> {
   return request<ApiHealth>('/api/health')
 }
 
-export function fetchJobs(): Promise<JobsResponse> {
-  return request<JobsResponse>('/api/jobs')
+export function fetchJobs(offset = 0, query = ''): Promise<JobsResponse> {
+  const params = new URLSearchParams({ status: 'open', limit: '200', offset: String(offset) })
+  if (query.trim()) params.set('q', query.trim())
+  return request<JobsResponse>(`/api/jobs?${params}`)
 }
 
 export function fetchRates(): Promise<RatesPayload> {

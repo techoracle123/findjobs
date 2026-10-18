@@ -10,14 +10,18 @@ export interface AccessIdentity {
 }
 
 const CERTS_TTL_MS = 5 * 60 * 1000
-let certsCache: { keys: JsonWebKey[]; fetchedAt: number } | null = null
+let certsCache: { domain: string; keys: JsonWebKey[]; fetchedAt: number } | null = null
 
 /**
  * Cloudflare Access publishes the public keys used to sign identity tokens at
  * a well-known URL on the team domain.
  */
 export async function fetchAccessCerts(teamDomain: string): Promise<JsonWebKey[]> {
-  if (certsCache && Date.now() - certsCache.fetchedAt < CERTS_TTL_MS) {
+  if (
+    certsCache &&
+    certsCache.domain === teamDomain &&
+    Date.now() - certsCache.fetchedAt < CERTS_TTL_MS
+  ) {
     return certsCache.keys
   }
 
@@ -30,7 +34,7 @@ export async function fetchAccessCerts(teamDomain: string): Promise<JsonWebKey[]
 
   const body = (await response.json()) as { keys?: SigningKey[] }
   const keys = body.keys ?? []
-  certsCache = { keys, fetchedAt: Date.now() }
+  certsCache = { domain: teamDomain, keys, fetchedAt: Date.now() }
   return keys
 }
 

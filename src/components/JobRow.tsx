@@ -48,7 +48,7 @@ export function JobRow({ scored, selected, salary, onSelect }: JobRowProps) {
           hasProfile ? `${score} / 100 match` : 'Add skills to your profile to see a match score'
         }
       >
-        <span className="scorebadge__inner">{score}</span>
+        <span className="scorebadge__inner">{hasProfile ? score : '–'}</span>
       </span>
 
       <span className="jobrow__main">
@@ -86,15 +86,25 @@ export function JobRow({ scored, selected, salary, onSelect }: JobRowProps) {
           {formatRange(salary.min, salary.max, salary.currency)}
           <span>
             {' '}
-            {salary.period === 'year' ? '/yr' : salary.period === 'month' ? '/mo' : '/hr'}
+            {salary.max > 0 || salary.min > 0
+              ? salary.period === 'year'
+                ? '/yr'
+                : salary.period === 'month'
+                  ? '/mo'
+                  : '/hr'
+              : ''}
           </span>
         </span>
         <span
           className="chip chip--plain"
-          title={`${FRESHNESS_LABELS[freshness]} — posted ${formatRelativeTime(job.postedAt)}`}
+          title={`${FRESHNESS_LABELS[freshness]} — posted ${job.postedAt ? formatRelativeTime(job.postedAt) : job.lastSeenAt ? `Checked ${formatRelativeTime(job.lastSeenAt)}` : 'Date not stated'}`}
         >
           <Clock size={11} />
-          {formatRelativeTime(job.postedAt)}
+          {job.postedAt
+            ? formatRelativeTime(job.postedAt)
+            : job.lastSeenAt
+              ? `Checked ${formatRelativeTime(job.lastSeenAt)}`
+              : 'Date not stated'}
         </span>
         <span
           className="field__hint"

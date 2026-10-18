@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bell, Bookmark, Briefcase, CreditCard, Radar, RotateCw, Search } from 'lucide-react'
+import { Bell, Bookmark, Radar, RotateCw, Search, SlidersHorizontal } from 'lucide-react'
 import type { ApiHealth, CvSuggestion, Job, Profile, RatesPayload } from './shared/types'
 import {
   fetchHealth,
   fetchJobs,
-  fetchPlans,
   fetchRates,
   createTelegramLink,
   fetchTelegramStatus,
 } from './lib/api'
-import type { PlanDefinition } from './lib/api'
 import { readLocal, writeLocal } from './lib/storage'
 import { DEFAULT_FILTERS, filterJobs, salaryView, sortJobs } from './lib/ranking'
 import type { SortKey } from './lib/ranking'
@@ -21,16 +19,14 @@ import { JobRow } from './components/JobRow'
 import { JobDetail } from './components/JobDetail'
 import { SavedPanel } from './components/SavedPanel'
 import { AlertsPanel } from './components/AlertsPanel'
-import { PlanPanel } from './components/PlanPanel'
 import { useAccount } from './hooks/useAccount'
 
-type Tab = 'opportunities' | 'saved' | 'alerts' | 'plan'
+type Tab = 'opportunities' | 'saved' | 'alerts'
 
 const TABS: { id: Tab; label: string; icon: typeof Radar }[] = [
   { id: 'opportunities', label: 'Opportunities', icon: Radar },
   { id: 'saved', label: 'Saved', icon: Bookmark },
   { id: 'alerts', label: 'Alerts', icon: Bell },
-  { id: 'plan', label: 'Plan', icon: CreditCard },
 ]
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'CHF', 'SGD', 'BRL', 'INR', 'JPY', 'NGN']
@@ -39,7 +35,8 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [rates, setRates] = useState<RatesPayload | null>(null)
   const [health, setHealth] = useState<ApiHealth | null>(null)
-  const [plans, setPlans] = useState<PlanDefinition[]>([])
+  const [total, setTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [dataNote, setDataNote] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -51,6 +48,7 @@ export default function App() {
   const account = useAccount()
   const { profile, saved, alerts, setProfile, setSaved, setAlerts } = account
 
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('opportunities')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
@@ -64,33 +62,62 @@ export default function App() {
     setLoading(true)
     setLoadError(null)
     try {
-      const [jobsResponse, ratesResponse, healthResponse, planResponse] = await Promise.all([
-        fetchJobs(),
-        fetchRates(),
-        fetchHealth(),
-        fetchPlans(),
+      const [jobsResponse, ratesResponse, healthResponse] = await Promise.all([
+        fetchJobs(0, filters.query),
+        fetchRates().catch(() => null),
+        fetchHealth().catch(() => null),
       ])
       setJobs(jobsResponse.jobs)
+      setTotal(jobsResponse.total ?? jobsResponse.jobs.length)
+      setSelectedId((current) =>
+        jobsResponse.jobs.some((job) => job.id === current)
+          ? current
+          : (jobsResponse.jobs[0]?.id ?? null),
+      )
       setDataNote(jobsResponse.warning ?? null)
       setRates(ratesResponse)
       setHealth(healthResponse)
-      setPlans(planResponse.plans)
     } catch (cause) {
       setLoadError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filters.query])
 
   useEffect(() => {
-    void load()
+    const timer = window.setTimeout(() => void load(), 300)
+    return () => window.clearTimeout(timer)
   }, [load])
+
+  const loadMore = async () => {
+    setLoadingMore(true)
+    try {
+      const response = await fetchJobs(jobs.length, filters.query)
+      setJobs((current) => [
+        ...current,
+        ...response.jobs.filter((job) => !current.some((existing) => existing.id === job.id)),
+      ])
+      setTotal(response.total ?? total)
+    } catch {
+      setToast('We couldn’t load more jobs. Please try again.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   useEffect(() => {
     if (account.mode !== 'signed-in') return
-    void fetchTelegramStatus()
-      .then((status) => setTelegramLinked(status.linked))
-      .catch(() => setTelegramLinked(false))
+    const check = () =>
+      void fetchTelegramStatus()
+        .then((status) => setTelegramLinked(status.linked))
+        .catch(() => setTelegramLinked(false))
+    check()
+    window.addEventListener('focus', check)
+    const timer = window.setInterval(check, 15000)
+    return () => {
+      window.removeEventListener('focus', check)
+      window.clearInterval(timer)
+    }
   }, [account.mode])
 
   const requireSignIn = () => {
@@ -99,13 +126,13 @@ export default function App() {
       window.location.href = url
       return
     }
-    setToast('Sign-in is not configured on this deployment.')
+    setToast('Sign-in isn’t available right now. You can still save jobs on this device.')
   }
 
   const linkTelegram = async () => {
     try {
       const { url } = await createTelegramLink()
-      window.open(url, '_blank', 'noopener')
+      window.location.assign(url)
       setToast('Open Telegram to finish linking.')
     } catch (error) {
       setToast(error instanceof Error ? error.message : String(error))
@@ -193,43 +220,18 @@ export default function App() {
     setToast('Profile updated from CV suggestions')
   }
 
-  const demoCount = jobs.filter((job) => job.isDemo).length
-
   return (
     <div className="app">
       <header className="topbar">
         <span className="brand">
           <span className="brand__mark" />
-          Role Signal
-          <span className="brand__sub">Opportunity desk</span>
+          Find Jobs
+          <span className="brand__sub">Make your next move.</span>
         </span>
 
         <div className="topbar__spacer" />
 
         <div className="topbar__actions">
-          {health && (
-            <>
-              <span className="chip chip--plain" title="Application mode">
-                {health.appMode}
-              </span>
-              <span
-                className={`chip ${health.aiBinding ? 'chip--ok' : 'chip--plain'}`}
-                title="Workers AI binding"
-              >
-                AI {health.aiBinding ? 'on' : 'off'}
-              </span>
-              <span
-                className={`chip ${health.telegramConfigured ? 'chip--ok' : 'chip--plain'}`}
-                title="Telegram bot"
-              >
-                Telegram {health.telegramConfigured ? 'on' : 'off'}
-              </span>
-              <span className="chip chip--plain" title="Data source">
-                {health.dataSource === 'd1' ? 'D1' : 'bundled demo'}
-              </span>
-            </>
-          )}
-
           <label className="visually-hidden" htmlFor="display-currency">
             Display currency
           </label>
@@ -272,31 +274,54 @@ export default function App() {
       </header>
 
       <div className="workspace">
-        <aside className="rail">
-          <ProfilePanel
-            profile={profile}
-            onChange={setProfile}
-            onReset={() => setProfile(EMPTY_PROFILE)}
-          />
-          <CvImport onApply={applySuggestion} />
-          <FilterBar
-            filters={filters}
-            onChange={setFilters}
-            onReset={() => setFilters(DEFAULT_FILTERS)}
-          />
-        </aside>
+        <section className="profile-tools" data-open={preferencesOpen}>
+          <button
+            type="button"
+            className="profile-tools__toggle"
+            aria-expanded={preferencesOpen}
+            onClick={() => setPreferencesOpen(!preferencesOpen)}
+          >
+            <SlidersHorizontal size={16} /> Your preferences & filters
+          </button>
+          <aside className="rail">
+            <ProfilePanel
+              profile={profile}
+              onChange={setProfile}
+              onReset={() => setProfile(EMPTY_PROFILE)}
+            />
+            <CvImport onApply={applySuggestion} />
+            <FilterBar
+              filters={filters}
+              onChange={setFilters}
+              onReset={() => setFilters(DEFAULT_FILTERS)}
+            />
+          </aside>
+        </section>
 
         <main className="content">
-          {demoCount > 0 && (
-            <div className="banner banner--demo">
-              <Briefcase size={15} />
-              <span>
-                <strong>Preview dataset.</strong> These {demoCount} roles are fictional and sit on a
-                fictional board. They are not live vacancies and must not be presented as such.
-              </span>
+          <div className="page-intro">
+            <span className="eyebrow">A little closer to your next chapter</span>
+            <h1>Good work starts with the right opportunity.</h1>
+            <p>
+              Browse real openings. Add your skills to find a better fit, and keep the jobs you like
+              in one place.
+            </p>
+          </div>
+          {account.mode === 'anonymous' && (
+            <p className="local-note">
+              Your profile and saved jobs stay on this device.{' '}
+              {health?.accessLoginUrl && (
+                <button type="button" onClick={requireSignIn}>
+                  Sign in to sync them.
+                </button>
+              )}
+            </p>
+          )}
+          {account.syncError && (
+            <div className="banner banner--demo" role="alert">
+              Your latest changes couldn’t sync. Please check your connection and try again.
             </div>
           )}
-
           {dataNote && (
             <div className="banner banner--info">
               <span>{dataNote}</span>
@@ -306,20 +331,18 @@ export default function App() {
           {loadError && (
             <div className="banner banner--demo">
               <span>
-                The API could not be reached: {loadError}. Start it with{' '}
-                <code>npm run dev:api</code>.
+                We couldn’t load jobs right now. Please check your connection and try again.
               </span>
             </div>
           )}
 
-          <nav className="tabs" role="tablist">
+          <nav className="tabs" aria-label="Your job search">
             {TABS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
-                role="tab"
                 className="tab"
-                aria-selected={tab === id}
+                aria-current={tab === id ? 'page' : undefined}
                 onClick={() => setTab(id)}
               >
                 <Icon size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />
@@ -372,7 +395,8 @@ export default function App() {
                 <div className="toolbar__spacer" />
 
                 <span className="resultcount">
-                  {sorted.jobs.length} of {jobs.length}
+                  {sorted.jobs.length} {sorted.jobs.length === 1 ? 'job' : 'jobs'}
+                  {total > jobs.length ? ` · ${total.toLocaleString()} available` : ''}
                 </span>
               </div>
 
@@ -387,12 +411,17 @@ export default function App() {
 
               <div className="results">
                 <div className="joblist">
-                  {sorted.jobs.length === 0 ? (
+                  {loading ? (
+                    <div className="empty" role="status">
+                      <span className="spinner" />
+                      <p>Finding your next opportunity…</p>
+                    </div>
+                  ) : sorted.jobs.length === 0 ? (
                     <div className="empty">
                       <p className="empty__title">No roles match</p>
                       <p>
                         {jobs.length === 0
-                          ? 'The feed is empty. Check that the API is running.'
+                          ? 'New openings will appear here once they’ve been checked. Please check back shortly.'
                           : 'Try loosening a filter or clearing your search.'}
                       </p>
                     </div>
@@ -403,9 +432,29 @@ export default function App() {
                         scored={entry}
                         selected={entry.job.id === selectedId}
                         salary={salaryView(entry.job, rates, displayCurrency)}
-                        onSelect={() => setSelectedId(entry.job.id)}
+                        onSelect={() => {
+                          setSelectedId(entry.job.id)
+                          if (window.innerWidth < 1400)
+                            window.setTimeout(
+                              () =>
+                                document
+                                  .querySelector('.detail')
+                                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+                              30,
+                            )
+                        }}
                       />
                     ))
+                  )}
+                  {jobs.length < total && (
+                    <button
+                      type="button"
+                      className="btn load-more"
+                      disabled={loadingMore}
+                      onClick={() => void loadMore()}
+                    >
+                      {loadingMore ? 'Loading…' : 'Load more jobs'}
+                    </button>
                   )}
                 </div>
 
@@ -449,26 +498,18 @@ export default function App() {
                 Boolean(health?.telegramConfigured)
               }
               onChange={setAlerts}
-              onLinkTelegram={() => void linkTelegram()}
-              onRequireSignIn={requireSignIn}
-            />
-          )}
-
-          {tab === 'plan' && (
-            <PlanPanel
-              signedIn={account.mode === 'signed-in'}
-              billingEnabled={Boolean(health?.billingConfigured)}
-              plans={plans}
-              subscription={account.subscription}
-              entitlements={account.entitlements}
-              onRefresh={account.refresh}
+              onLinkTelegram={linkTelegram}
               onRequireSignIn={requireSignIn}
             />
           )}
         </main>
       </div>
 
-      {toast && <div className="toast">{toast}</div>}
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
     </div>
   )
 }

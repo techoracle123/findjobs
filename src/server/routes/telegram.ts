@@ -7,7 +7,7 @@ import {
   linkTelegram,
   recordAudit,
 } from '../auth/accounts'
-import { createLinkToken, verifyLinkToken, verifySecretToken } from '../telegram'
+import { createLinkToken, verifyLinkToken, verifySecretToken, sendMessage } from '../telegram'
 import { readJson, requireUser, unauthorized } from '../http'
 import { logger } from '../logging'
 
@@ -43,7 +43,8 @@ telegramRoutes.post('/telegram/link', async (c) => {
     )
   }
 
-  const token = await createLinkToken(config.telegram.botToken, user.id)
+  if (!c.env?.DB) return c.json({ error: 'storage_unavailable' }, 503)
+  const token = await createLinkToken(c.env.DB, user.id)
   const url = `https://t.me/${config.telegram.botUsername}?start=${encodeURIComponent(token)}`
 
   return c.json({ url, token })
@@ -66,19 +67,24 @@ telegramRoutes.post('/telegram/webhook', async (c) => {
   }
 
   const body = await readJson(c)
-  const update = body.update as { message?: { chat?: { id?: number }; text?: string } } | undefined
-  const message = update?.message
+  const message = body.message as
+    { chat?: { id?: number; type?: string }; text?: string } | undefined
   const chatId = message?.chat?.id
   const text = message?.text ?? ''
 
-  if (typeof chatId !== 'number' || !text.startsWith('/start')) {
+  if (
+    typeof chatId !== 'number' ||
+    message?.chat?.type !== 'private' ||
+    !/^\/start(?:@[A-Za-z0-9_]+)?(?:\s|$)/.test(text)
+  ) {
     return c.json({ ok: true })
   }
 
   const token = text.split(/\s+/)[1] ?? ''
   if (!token) return c.json({ ok: true })
 
-  const userId = await verifyLinkToken(config.telegram.botToken, token)
+  if (!c.env?.DB) return c.json({ error: 'storage_unavailable' }, 503)
+  const userId = await verifyLinkToken(c.env.DB, token)
   if (!userId) {
     logger.warn('telegram link token rejected')
     return c.json({ ok: true })
@@ -94,6 +100,12 @@ telegramRoutes.post('/telegram/webhook', async (c) => {
 
   await linkTelegram(c.env.DB, userId, chatId)
   await recordAudit(c.env.DB, userId, 'telegram.linked', { chatId })
+
+  await sendMessage(
+    config.telegram.botToken,
+    chatId,
+    'You’re connected to Find Jobs. Enable a job alert on the website and I’ll send new matches here.',
+  ).catch(() => logger.warn('telegram welcome message failed'))
 
   logger.info('telegram account linked', { userId })
   return c.json({ ok: true })

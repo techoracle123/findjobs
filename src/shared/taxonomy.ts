@@ -30,6 +30,7 @@ export const SENIORITIES: Seniority[] = [
 export const WORK_MODES: WorkMode[] = ['remote', 'hybrid', 'onsite']
 
 export const ROLE_FAMILY_LABELS: Record<string, string> = {
+  unknown: 'Other roles',
   frontend: 'Frontend',
   backend: 'Backend',
   fullstack: 'Full-stack',
@@ -45,6 +46,7 @@ export const ROLE_FAMILY_LABELS: Record<string, string> = {
 }
 
 export const SENIORITY_LABELS: Record<Seniority, string> = {
+  unknown: 'Level not stated',
   intern: 'Intern',
   junior: 'Junior',
   mid: 'Mid',
@@ -55,6 +57,7 @@ export const SENIORITY_LABELS: Record<Seniority, string> = {
 }
 
 export const WORK_MODE_LABELS: Record<WorkMode, string> = {
+  unknown: 'Work arrangement not stated',
   remote: 'Remote',
   hybrid: 'Hybrid',
   onsite: 'On-site',

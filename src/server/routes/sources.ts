@@ -16,7 +16,7 @@ export const sourceRoutes = new Hono<AppEnv>()
  */
 async function mayTrigger(c: AppContext): Promise<boolean> {
   const config = readConfig(c.env ?? {})
-  if (!config.isProduction) return true
+  if (config.isLocal || config.isTest) return true
   const user = await requireUser(c)
   return Boolean(user)
 }

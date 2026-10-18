@@ -3,7 +3,7 @@ import type { AppEnv } from './env'
 import { DEFAULT_APP_MODE } from './env'
 import { accessConfigured, readConfig, telegramConfigured } from './config'
 import { hasRealProvider } from './billing/provider'
-import { listJobs, findJob, searchJobs } from './jobs'
+import { listOpenJobs, findJob, searchJobs } from './jobs'
 import { getRates } from './rates'
 import { suggest } from './cv'
 import { scoreJob } from '../shared/scoring'
@@ -22,6 +22,17 @@ import { telegramRoutes } from './routes/telegram'
 export const app = new Hono<AppEnv>()
 
 app.use('*', requestContext)
+
+// Cookie-authenticated writes are same-origin. Signed provider webhooks are
+// verified separately and must remain callable by Telegram/payment servers.
+app.use('/api/*', async (c, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !c.req.path.endsWith('/webhook')) {
+    const origin = c.req.header('origin')
+    if (origin && origin !== new URL(c.req.url).origin)
+      return c.json({ error: 'invalid_origin' }, 403)
+  }
+  await next()
+})
 
 /**
  * Reads a numeric query parameter. An empty or unparseable value is absent,
@@ -46,14 +57,25 @@ function normaliseProfile(input: unknown): Profile {
   }
 }
 
+app.get('/api/auth/login', async (c) => {
+  const identity = await resolveIdentity(c.req.raw, readConfig(c.env ?? {}))
+  if (!identity)
+    return c.json(
+      {
+        error: 'sign_in_unavailable',
+        message: 'Sign-in is not available yet. You can still browse and save jobs on this device.',
+      },
+      503,
+    )
+  return c.redirect('/')
+})
+
 app.get('/api/health', async (c) => {
   const env = c.env ?? {}
   const config = readConfig(env)
-  const { jobs, source } = await listJobs(env.DB)
+  const { jobs, source } = await listOpenJobs(env.DB)
   const rates = await getRates(config.appMode !== 'test')
-  const accessLoginUrl = config.access.aud
-    ? `https://${config.access.teamDomain}/cdn-cgi/access/login?app_id=${encodeURIComponent(config.access.aud)}&aud=${encodeURIComponent(config.access.aud)}`
-    : null
+  const accessLoginUrl = accessConfigured(config) ? '/api/auth/login' : null
   return c.json({
     ok: true,
     appMode: config.appMode || DEFAULT_APP_MODE,
@@ -82,7 +104,7 @@ app.get('/api/jobs', async (c) => {
   // what the interface wants while the corpus is small. Once it is not
   // small, the caller asks for a page.
   if (!query && !status && limit === undefined && offset === undefined) {
-    const { jobs, source, warning } = await listJobs(env.DB)
+    const { jobs, source, warning } = await listOpenJobs(env.DB)
     return c.json({
       jobs,
       dataSource: source,
@@ -92,7 +114,7 @@ app.get('/api/jobs', async (c) => {
 
   const result = await searchJobs(env.DB, {
     query,
-    status: status === 'open' || status === 'closed' ? status : 'all',
+    status: status === 'all' || status === 'closed' ? status : 'open',
     limit,
     offset,
   })
@@ -120,7 +142,7 @@ app.post('/api/score', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const profile = normaliseProfile((body as { profile?: unknown }).profile)
   const env = c.env ?? {}
-  const { jobs } = await listJobs(env.DB)
+  const { jobs } = await listOpenJobs(env.DB)
   const requested = stringList((body as { jobIds?: unknown }).jobIds, 200)
   const selected = requested.length > 0 ? jobs.filter((job) => requested.includes(job.id)) : jobs
   const scored: ScoredJob[] = selected.map((job) => scoreJob(job, profile))

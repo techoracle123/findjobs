@@ -78,7 +78,8 @@ export function JobDetail({
         </div>
         <h2 className="detail__title">{job.title}</h2>
         <p className="detail__company">
-          {job.company} · {job.locationLabel} ({countryName(job.locationCountry)})
+          {job.company} · {job.locationLabel}
+          {job.locationCountry ? ` (${countryName(job.locationCountry)})` : ''}
         </p>
         <div className="btnrow">
           <button type="button" className="btn btn--sm" onClick={onSave}>
@@ -99,7 +100,7 @@ export function JobDetail({
             <ScoreBreakdown components={components} total={score} />
           ) : (
             <p className="detail__text" style={{ color: 'var(--muted)' }}>
-              Add skills to your profile and the score will be calculated against your signal.
+              Add your skills to see how this role matches your experience.
             </p>
           )}
         </div>
@@ -108,7 +109,7 @@ export function JobDetail({
           <h3 className="section__label">Skill fit</h3>
           {matchedSkills.length === 0 && missingSkills.length === 0 ? (
             <p className="detail__text" style={{ color: 'var(--muted)' }}>
-              No skill signal yet.
+              The listing doesn’t specify skills we can compare yet.
             </p>
           ) : (
             <div className="skillsplit">
@@ -148,7 +149,7 @@ export function JobDetail({
             <span className="kv__key">Hiring regions</span>
             <span className="kv__value">
               {job.eligibleCountries.length === 0
-                ? 'Not restricted'
+                ? 'Not stated by the employer'
                 : job.eligibleCountries.join(', ')}
             </span>
           </div>
@@ -170,7 +171,7 @@ export function JobDetail({
             <span className="kv__key">Posted range</span>
             <span className="kv__value">
               {formatRange(job.salaryMin, job.salaryMax, job.salaryCurrency)}
-              {PERIOD_LABELS[job.salaryPeriod]}
+              {job.salaryMax > 0 || job.salaryMin > 0 ? PERIOD_LABELS[job.salaryPeriod] : ''}
             </span>
           </div>
           {salary.converted ? (
@@ -201,7 +202,9 @@ export function JobDetail({
 
         <div>
           <h3 className="section__label">About the role</h3>
-          <p className="detail__text">{job.description}</p>
+          <p className="detail__text job-description">
+            {job.description || 'Read the full job description on the employer’s website.'}
+          </p>
         </div>
 
         <div>
@@ -227,7 +230,9 @@ export function JobDetail({
           <div className="kv">
             <span className="kv__key">Posted</span>
             <span className="kv__value">
-              {formatRelativeTime(job.postedAt)} · {FRESHNESS_LABELS[freshness]}
+              {job.postedAt
+                ? `${formatRelativeTime(job.postedAt)} · ${FRESHNESS_LABELS[freshness]}`
+                : 'Not stated by the employer'}
             </span>
           </div>
           {job.lastSeenAt && (

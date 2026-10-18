@@ -23,17 +23,6 @@ export async function subscribersFor(db: D1Database): Promise<AlertSubscriber[]>
 
   for (const subscriber of subscribers) {
     const alerts = await listAlerts(db, subscriber.userId)
-    const entitlements = await db
-      .prepare(
-        `SELECT feature FROM entitlements WHERE user_id = ?1
-           AND (expires_at IS NULL OR expires_at > ?2)`,
-      )
-      .bind(subscriber.userId, new Date().toISOString())
-      .all<{ feature: string }>()
-
-    const features = (entitlements.results ?? []).map((row) => row.feature)
-    if (!features.includes('alerts')) continue
-
     const deliverable = alerts.filter(
       (alert) => alert.enabled && alert.channels.includes('telegram'),
     )
@@ -61,14 +50,14 @@ export function jobMatchesAlert(job: Job, query: string): boolean {
   const haystack = [
     job.title,
     job.company,
-    job.locationLabel,
-    ...job.requiredSkills,
-    ...job.usefulSkills,
+    job.locationLabel ?? '',
+    ...(job.requiredSkills ?? []),
+    ...(job.usefulSkills ?? []),
   ]
     .join(' ')
     .toLowerCase()
 
-  return terms.some((term) => haystack.includes(term))
+  return terms.every((term) => haystack.includes(term))
 }
 
 /**
@@ -116,7 +105,13 @@ export async function deliverNewAlerts(
   for (const subscriber of subscribers) {
     for (const alert of subscriber.alerts) {
       for (const job of jobs) {
-        if (!jobMatchesAlert(job as unknown as Job, alert.query)) continue
+        if (
+          !jobMatchesAlert(
+            { ...job, locationLabel: job.location_label } as unknown as Job,
+            alert.query,
+          )
+        )
+          continue
 
         const already = await db
           .prepare(

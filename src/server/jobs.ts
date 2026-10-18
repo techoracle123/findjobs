@@ -7,7 +7,6 @@ import type {
   VerificationLevel,
   WorkMode,
 } from '../shared/types'
-import { demoJobs } from './fixtures'
 
 interface JobRow {
   id: string
@@ -66,8 +65,7 @@ function parseList(raw: string | null): string[] {
 }
 
 function mapRow(row: JobRow, now: number): Job {
-  const postedAt =
-    row.posted_at ?? new Date(now - (row.posted_days_ago ?? 0) * DAY_MS).toISOString()
+  const postedAt = row.posted_at ?? ''
 
   const status = (row.job_status || 'open') as JobStatus
   const lastSeen = row.last_seen_at ? Date.parse(row.last_seen_at) : null
@@ -130,39 +128,25 @@ export interface JobListResult {
   warning?: string
 }
 
-/**
- * Reads postings from D1 when the binding exists and the schema has been
- * migrated. If the database is missing, unmigrated or empty, the bundled demo
- * dataset is served instead so the preview is never a blank page.
- */
+/** Read real postings only. An empty or unavailable database never becomes demo data. */
 export async function listJobs(
   db: D1Database | undefined,
   now: number = Date.now(),
 ): Promise<JobListResult> {
-  if (!db) {
+  if (!db)
     return {
-      jobs: demoJobs(now),
-      source: 'fixture',
-      warning: 'No D1 binding is configured; serving the bundled demo dataset.',
+      jobs: [],
+      source: 'd1',
+      warning: 'Jobs are temporarily unavailable. Please try again shortly.',
     }
-  }
-
   try {
-    const result = await db.prepare(SELECT).all<JobRow>()
-    const rows = result.results ?? []
-    if (rows.length === 0) {
-      return {
-        jobs: demoJobs(now),
-        source: 'fixture',
-        warning: 'D1 contains no postings; serving the bundled demo dataset.',
-      }
-    }
-    return { jobs: rows.map((row) => mapRow(row, now)), source: 'd1' }
-  } catch (error) {
+    const result = await db.prepare(`${SELECT} AND j.is_demo = 0`).all<JobRow>()
+    return { jobs: (result.results ?? []).map((row) => mapRow(row, now)), source: 'd1' }
+  } catch {
     return {
-      jobs: demoJobs(now),
-      source: 'fixture',
-      warning: `D1 could not be read (${describe(error)}); serving the bundled demo dataset.`,
+      jobs: [],
+      source: 'd1',
+      warning: 'We could not load jobs just now. Please try again shortly.',
     }
   }
 }
@@ -179,7 +163,7 @@ export async function listOpenJobs(
   const result = await listJobs(db, now)
   return {
     ...result,
-    jobs: result.jobs.filter((job) => job.jobStatus !== 'closed'),
+    jobs: result.jobs.filter((job) => job.jobStatus !== 'closed' && job.verification !== 'stale'),
   }
 }
 
@@ -226,7 +210,7 @@ export async function searchJobs(
   const limit = Math.min(200, Math.max(1, search.limit ?? 50))
   const offset = Math.max(0, search.offset ?? 0)
   const now = search.now ?? Date.now()
-  const status = search.status ?? 'all'
+  const status = search.status ?? 'open'
   const query = (search.query ?? '').trim()
 
   if (!db) {
@@ -234,10 +218,13 @@ export async function searchJobs(
     return { jobs: jobs.slice(offset, offset + limit), total: jobs.length, limit, offset }
   }
 
-  const conditions: string[] = ['j.expired_at IS NULL']
+  const conditions: string[] = ['j.expired_at IS NULL', 'j.is_demo = 0']
   const binds: unknown[] = []
 
-  if (status === 'open') conditions.push("j.job_status = 'open'")
+  if (status === 'open') {
+    conditions.push("j.job_status = 'open'", 'datetime(j.last_seen_at) >= datetime(?)')
+    binds.push(new Date(now - STALE_AFTER_MS).toISOString())
+  }
   if (status === 'closed') conditions.push("j.job_status = 'closed'")
 
   if (search.verification && search.verification.length > 0) {
@@ -248,44 +235,31 @@ export async function searchJobs(
 
   if (query) {
     const match = buildMatchQuery(query)
-    const rows = await db
-      .prepare(`SELECT job_id FROM jobs_fts WHERE jobs_fts MATCH ?1 ORDER BY rank LIMIT 2000`)
-      .bind(match)
-      .all<{ job_id: string }>()
-
-    const found = (rows.results ?? []).map((row) => row.job_id)
-    if (found.length === 0) return { jobs: [], total: 0, limit, offset }
-    conditions.push(`j.id IN (${found.map(() => '?').join(',')})`)
-    binds.push(...found)
+    conditions.push('j.id IN (SELECT job_id FROM jobs_fts WHERE jobs_fts MATCH ?)')
+    binds.push(match)
   }
 
   const where = conditions.join(' AND ')
 
-  try {
-    const countRow = await db
-      .prepare(`SELECT COUNT(*) AS n FROM jobs j WHERE ${where}`)
-      .bind(...binds)
-      .first<{ n: number }>()
+  const countRow = await db
+    .prepare(`SELECT COUNT(*) AS n FROM jobs j WHERE ${where}`)
+    .bind(...binds)
+    .first<{ n: number }>()
 
-    const rows = await db
-      .prepare(
-        `SELECT ${COLUMNS} FROM jobs j WHERE ${where}
+  const rows = await db
+    .prepare(
+      `SELECT ${COLUMNS} FROM jobs j WHERE ${where}
          ORDER BY COALESCE(j.posted_at, '') DESC, j.id
          LIMIT ? OFFSET ?`,
-      )
-      .bind(...binds, limit, offset)
-      .all<JobRow>()
+    )
+    .bind(...binds, limit, offset)
+    .all<JobRow>()
 
-    return {
-      jobs: (rows.results ?? []).map((row) => mapRow(row, now)),
-      total: countRow?.n ?? 0,
-      limit,
-      offset,
-    }
-  } catch {
-    // The search index may not exist yet on an unmigrated database.
-    const { jobs } = await listJobs(db, now)
-    return { jobs: jobs.slice(offset, offset + limit), total: jobs.length, limit, offset }
+  return {
+    jobs: (rows.results ?? []).map((row) => mapRow(row, now)),
+    total: countRow?.n ?? 0,
+    limit,
+    offset,
   }
 }
 
@@ -302,9 +276,4 @@ export function buildMatchQuery(query: string): string {
     .map((term) => `"${term}"*`)
 
   return terms.length > 0 ? terms.join(' AND ') : '""'
-}
-
-function describe(error: unknown): string {
-  if (error instanceof Error) return error.message
-  return String(error)
 }

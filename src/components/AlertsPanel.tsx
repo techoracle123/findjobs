@@ -9,7 +9,7 @@ interface AlertsPanelProps {
   signedIn: boolean
   canDeliver: boolean
   onChange: (alerts: AlertPreference[]) => void
-  onLinkTelegram: () => void
+  onLinkTelegram: () => Promise<void>
   onRequireSignIn: () => void
 }
 
@@ -38,10 +38,10 @@ export function AlertsPanel({
     onChange([
       ...alerts,
       {
-        id: `alert-${Date.now()}`,
+        id: crypto.randomUUID(),
         label: trimmedLabel,
         query: query.trim(),
-        channels: telegramConfigured ? ['telegram'] : [],
+        channels: ['telegram'],
         enabled: false,
       },
     ])
@@ -63,7 +63,7 @@ export function AlertsPanel({
         return
       }
     }
-    update(alert.id, { enabled: !alert.enabled })
+    update(alert.id, { enabled: !alert.enabled, channels: ['telegram'] })
   }
 
   const link = async () => {
@@ -85,12 +85,20 @@ export function AlertsPanel({
         </span>
       </div>
       <div className="panel__body">
+        {!signedIn && (
+          <div className="banner banner--info">
+            <span>Sign in to receive job alerts.</span>
+            <button type="button" className="btn btn--sm" onClick={onRequireSignIn}>
+              Sign in
+            </button>
+          </div>
+        )}
         {!telegramConfigured && (
           <div className="banner banner--demo">
             <Bell size={15} />
             <span>
-              No Telegram bot is configured on this deployment, so nothing is delivered. These
-              preferences are still saved to your account.
+              Telegram alerts aren’t connected yet. You can set up a search now and turn on delivery
+              once the bot is ready.
             </span>
           </div>
         )}
@@ -98,8 +106,8 @@ export function AlertsPanel({
         {telegramConfigured && !telegramLinked && (
           <div className="banner banner--info">
             <span>
-              Link your Telegram account to receive matches. The link is signed and expires, so it
-              cannot be used to claim somebody else&apos;s account.
+              Connect Telegram, then tap Start in the bot chat. We’ll send you new jobs that match
+              your search.
             </span>
           </div>
         )}
@@ -149,7 +157,7 @@ export function AlertsPanel({
                     disabled={!alert.enabled && !canDeliver}
                     title={
                       !alert.enabled && !canDeliver
-                        ? 'Delivery needs a Desk+ plan and a linked Telegram chat'
+                        ? 'Sign in and connect Telegram to receive alerts'
                         : undefined
                     }
                   >
@@ -179,19 +187,20 @@ export function AlertsPanel({
             id="alert-label"
             className="input"
             value={label}
-            placeholder="Label, e.g. Rust roles in Europe"
+            placeholder="Give it a name, e.g. My next design role"
             onChange={(event) => setLabel(event.target.value)}
           />
           <input
             className="input"
             value={query}
-            placeholder="Optional keyword filter"
+            aria-label="Alert keywords"
+            placeholder="Keywords, e.g. python remote"
             onChange={(event) => setQuery(event.target.value)}
           />
           <div className="btnrow">
             <button type="button" className="btn btn--sm" onClick={add} disabled={!label.trim()}>
               <Plus size={13} />
-              Add preference
+              Create alert
             </button>
           </div>
         </div>
