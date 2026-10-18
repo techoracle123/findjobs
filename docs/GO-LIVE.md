@@ -363,3 +363,57 @@ is announced twice.
 
 Step 1 is the only hard block. Payment and Telegram can wait — the app runs
 without them and says so honestly.
+
+## Deploy from GitHub — no local terminal required
+
+When an agent workspace cannot reach Cloudflare, use the **Deploy Cloudflare
+staging** GitHub Actions workflow. GitHub runs the deployment on its own runner;
+it does not depend on the agent workspace's Cloudflare connectivity.
+
+### One-time browser setup (account owner)
+
+1. Revoke any token previously pasted into chat. Create a replacement scoped to
+   your account with **D1 Edit**, **Workers Queues Edit**, **Pages Edit**, and
+   **Workers Scripts Edit**. Do not paste it into a message or commit it.
+2. Open <https://github.com/techoracle123/findjobs/settings/secrets/actions>.
+3. Click **New repository secret**. Set the name to `CLOUDFLARE_API_TOKEN`, paste
+   the replacement token into the secret field, and save.
+4. Add another repository secret named `CLOUDFLARE_ACCOUNT_ID`, with the account
+   ID from your Cloudflare dashboard.
+5. Open <https://github.com/techoracle123/findjobs/actions>, select **Deploy
+   Cloudflare staging**, open its latest run for `arena/be298902-findjobs`, and
+   choose **Re-run all jobs**. The initial run deliberately stops if the secrets
+   are missing. No merging or local commands are required. Keep using this
+   branch: manual dispatch is available only after GitHub recognises the workflow
+   on the default branch.
+
+The agent's current GitHub connection cannot write repository secrets. Saving
+these two fields is an account-owner security step, not a coding task. Once
+saved, the agent can rerun and monitor the workflow using its existing Actions
+access. A token cannot be validated until the runner reaches Cloudflare.
+
+### What the workflow handles
+
+- Checks the code, runs unit/worker tests, and builds the app.
+- Looks up or creates the `rolesignal` D1 database and `rolesignal-ingest` queue.
+- Looks up or creates the `role-signal` Pages project.
+- Replaces placeholder database IDs in the runner's config files, applies remote
+  migrations, and deploys Pages and the ingestion worker. Config originals are
+  restored even on failure; no credentials are written into the configs.
+- Deploys to the existing project's production branch, or uses this session's
+  branch as the production branch of a new project, so the stable
+  `https://role-signal.pages.dev` address receives the app.
+- Checks the public readiness endpoint and writes the URL into the run summary.
+
+**This is a staging deployment, not a fully configured production launch.**
+Payments are explicitly set to `fake` (disabled), Telegram is deferred, and
+Cloudflare Access sign-in still requires its own application and environment
+configuration. Staging does not enable local test identities or fake payment
+confirmation. The public job board works anonymously; protected account routes
+remain unavailable until Access is configured.
+
+The workflow never runs on pull requests and never accepts tokens as workflow
+inputs. It creates billable-capable Cloudflare resources, including a scheduled
+worker and queue; usage and plan limits apply. Provisioning is idempotent, but it
+is not transactional: resources and successful uploads remain if a later step
+fails. Correct the failure and rerun; nothing is automatically deleted.

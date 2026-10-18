@@ -12,7 +12,7 @@ export const DEV_EMAIL_HEADER = 'x-dev-user-email'
  * In production this is always a verified Cloudflare Access token. In local
  * and test modes a header may stand in for Access, so the stack can be
  * exercised without an Access application — but only when the app is not
- * running in production, and the bypass is never used to *upgrade* an
+ * running in a hosted mode, and the bypass is never used to *upgrade* an
  * unverified request into a real one.
  */
 export async function resolveIdentity(
@@ -26,8 +26,8 @@ export async function resolveIdentity(
     return verifyAccessToken(token, config.access, now)
   }
 
-  if (config.isProduction) {
-    // Never fall back to headers in production.
+  if (!config.isLocal && !config.isTest) {
+    // Hosted staging, preview, production and unknown modes fail closed.
     return null
   }
 

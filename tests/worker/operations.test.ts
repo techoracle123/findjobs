@@ -4,6 +4,7 @@ import './setup'
 
 import { aiUsage, consumeAiQuota, releaseAiQuota, takeAiBudget } from '../../src/server/aiquota'
 import { readConfig } from '../../src/server/config'
+import { app } from '../../src/server/app'
 
 const BASE = 'http://localhost:8787'
 const DEV = { 'x-dev-user-email': 'ops@example.com' }
@@ -47,6 +48,23 @@ describe('the readiness report', () => {
     expect(billing?.status).not.toBe('ok')
     expect(billing?.action).toBeTruthy()
   })
+})
+
+describe('hosted deployment safety', () => {
+  it.each(['staging', 'preview', 'production', 'unknown'])(
+    'blocks fake purchase confirmation in %s',
+    async (mode) => {
+      const response = await app.fetch(
+        new Request(`${BASE}/api/billing/confirm`, {
+          method: 'POST',
+          headers: { ...DEV, 'content-type': 'application/json' },
+          body: JSON.stringify({ plan: 'pro' }),
+        }),
+        { ...env, APP_MODE: mode },
+      )
+      expect(response.status).toBe(404)
+    },
+  )
 })
 
 describe('the plan catalogue', () => {

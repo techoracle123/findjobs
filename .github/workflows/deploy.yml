@@ -1,0 +1,55 @@
+name: Deploy Cloudflare staging
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [arena/be298902-findjobs]
+    paths:
+      - .github/workflows/deploy.yml
+      - scripts/deploy-cloudflare.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # No pull_request trigger: untrusted PR code must never receive deploy secrets.
+    if: github.ref == 'refs/heads/arena/be298902-findjobs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_PAGES_PROJECT: role-signal
+      WRANGLER_SEND_METRICS: 'false'
+      CI: 'true'
+    steps:
+      - name: Check encrypted deployment credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo '::error::Save CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID at https://github.com/techoracle123/findjobs/settings/secrets/actions then rerun this job. No terminal needed.'
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.3'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run test:unit
+      - run: npm run test:worker
+      - run: npm run build
+      - name: Provision database and queue, migrate, and deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/deploy-cloudflare.mjs

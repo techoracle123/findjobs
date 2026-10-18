@@ -229,11 +229,11 @@ billingRoutes.post('/billing/webhook', async (c) => {
 
 /**
  * A stand-in for the provider's checkout completion, used by the local fake
- * provider. It is only available outside production.
+ * provider. It is only available in explicit local and test modes.
  */
 billingRoutes.post('/billing/confirm', async (c) => {
   const config = readConfig(c.env ?? {})
-  if (config.isProduction) return c.json({ error: 'not_found' }, 404)
+  if (!config.isLocal && !config.isTest) return c.json({ error: 'not_found' }, 404)
 
   const user = await requireUser(c)
   if (!user) return unauthorized(c)

@@ -182,6 +182,18 @@ describe('identity resolution', () => {
     expect(identity).toBeNull()
   })
 
+  it.each(['staging', 'preview', 'unknown'])(
+    'ignores dev identity in hosted %s mode',
+    async (mode) => {
+      expect(
+        await resolveIdentity(
+          request({ 'x-dev-user-email': 'dev@example.com' }),
+          readConfig({ APP_MODE: mode }),
+        ),
+      ).toBeNull()
+    },
+  )
+
   it('returns nothing for an anonymous request', async () => {
     const config = readConfig({ APP_MODE: 'local-preview' })
     expect(await resolveIdentity(request({}), config)).toBeNull()
