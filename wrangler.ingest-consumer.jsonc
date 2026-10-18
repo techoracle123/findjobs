@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "role-signal-ingest-consumer",
+  "main": "src/ingest-consumer.ts",
+  "compatibility_date": "2026-10-17",
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rolesignal",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "queues": {
+    "consumers": [
+      {
+        "queue": "rolesignal-ingest",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+      },
+    ],
+  },
+  "vars": {
+    "APP_MODE": "preview",
+  },
+}

@@ -1,4 +1,11 @@
-import type { Job, SalaryPeriod, Seniority, Sponsorship, WorkMode } from '../../shared/types'
+import type {
+  Job,
+  SalaryPeriod,
+  Seniority,
+  Sponsorship,
+  VerificationLevel,
+  WorkMode,
+} from '../../shared/types'
 import { ROLE_FAMILY_KEYWORDS, SENIORITY_KEYWORDS, SKILL_CATALOGUE } from '../../shared/skills'
 import { COUNTRIES } from '../../shared/countries'
 import type { RawPosting, RawSalary } from './types'
@@ -183,6 +190,14 @@ export function extractSalary(text: string): RawSalary | null {
   return null
 }
 
+export interface NormaliseContext {
+  verification: VerificationLevel
+  verificationReason: string
+  sourceKind: string
+  sourcePlatform?: string
+  now: number
+}
+
 export interface NormalisedPosting extends Omit<
   Job,
   'id' | 'sourceName' | 'sourceUrl' | 'postedAt'
@@ -193,13 +208,25 @@ export interface NormalisedPosting extends Omit<
 /**
  * Turns a source payload into the canonical posting shape. Everything the
  * application knows how to reason about — role family, seniority, work mode,
- * skills, salary — is derived here, once, for every source.
+ * skills, salary, whether it is open, whether it is verified — is derived
+ * here, once, for every source.
  */
-export function normalizePosting(raw: RawPosting): NormalisedPosting {
+export function normalizePosting(raw: RawPosting, context: NormaliseContext): NormalisedPosting {
   const text = `${raw.title}\n${raw.description}`
   const required = skillsFromTags(raw.tags)
   const useful = skillsFromText(text, required)
   const salary = raw.salary ?? extractSalary(raw.description)
+
+  const nowIso = new Date(context.now).toISOString()
+
+  // A posting that carries a validity date in the past has closed, whatever
+  // the source's listing still says.
+  const expired =
+    raw.validThrough !== null && !Number.isNaN(Date.parse(raw.validThrough))
+      ? Date.parse(raw.validThrough) < context.now
+      : false
+
+  const closed = raw.closed || expired
 
   return {
     title: raw.title,
@@ -220,5 +247,21 @@ export function normalizePosting(raw: RawPosting): NormalisedPosting {
     sponsorship: 'unknown' as Sponsorship,
     postedAt: raw.publishedAt,
     isDemo: false,
+    applyUrl: raw.applyUrl || raw.url,
+    companyUrl: raw.companyUrl,
+    verification: context.verification,
+    verificationReason: context.verificationReason,
+    verifiedAt: context.verification === 'verified' ? nowIso : undefined,
+    jobStatus: closed ? 'closed' : 'open',
+    closedAt: closed ? nowIso : undefined,
+    closedReason: raw.closed
+      ? 'the source marked it closed'
+      : expired
+        ? 'it passed its validity date'
+        : undefined,
+    firstSeenAt: nowIso,
+    lastSeenAt: nowIso,
+    sourceKind: context.sourceKind,
+    sourcePlatform: context.sourcePlatform,
   }
 }

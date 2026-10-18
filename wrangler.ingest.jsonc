@@ -12,10 +12,26 @@
       "migrations_dir": "migrations",
     },
   ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "INGEST_QUEUE",
+        "queue": "rolesignal-ingest",
+      },
+    ],
+    "consumers": [
+      {
+        "queue": "rolesignal-ingest",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+      },
+    ],
+  },
   "triggers": {
     // Ingestion runs every hour. The schedule is deliberately frequent enough
     // that postings do not go stale, but infrequent enough to stay well
-    // inside free-tier allowances.
+    // inside free-tier allowances. The queue spreads the work out.
     "crons": ["17 * * * *"],
   },
   "vars": {

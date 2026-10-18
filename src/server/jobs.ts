@@ -1,4 +1,12 @@
-import type { Job, SalaryPeriod, Seniority, Sponsorship, WorkMode } from '../shared/types'
+import type {
+  Job,
+  JobStatus,
+  SalaryPeriod,
+  Seniority,
+  Sponsorship,
+  VerificationLevel,
+  WorkMode,
+} from '../shared/types'
 import { demoJobs } from './fixtures'
 
 interface JobRow {
@@ -24,9 +32,28 @@ interface JobRow {
   posted_days_ago: number
   posted_at: string | null
   is_demo: number
+  verification: string | null
+  verification_reason: string | null
+  verified_at: string | null
+  job_status: string | null
+  closed_at: string | null
+  closed_reason: string | null
+  first_seen_at: string | null
+  last_seen_at: string | null
+  apply_url: string | null
+  company_url: string | null
+  source_kind: string | null
+  source_platform: string | null
 }
 
 const DAY_MS = 86_400_000
+
+/**
+ * A posting that has not been confirmed alive for this long is shown as
+ * stale rather than as current. The threshold is generous because a source
+ * on a daily tier is not expected to be checked every hour.
+ */
+const STALE_AFTER_MS = 3 * DAY_MS
 
 function parseList(raw: string | null): string[] {
   if (!raw) return []
@@ -41,6 +68,14 @@ function parseList(raw: string | null): string[] {
 function mapRow(row: JobRow, now: number): Job {
   const postedAt =
     row.posted_at ?? new Date(now - (row.posted_days_ago ?? 0) * DAY_MS).toISOString()
+
+  const status = (row.job_status || 'open') as JobStatus
+  const lastSeen = row.last_seen_at ? Date.parse(row.last_seen_at) : null
+
+  let verification = (row.verification || 'unverified') as VerificationLevel
+  if (status === 'open' && lastSeen !== null && !Number.isNaN(lastSeen)) {
+    if (now - lastSeen > STALE_AFTER_MS) verification = 'stale'
+  }
 
   return {
     id: row.id,
@@ -64,13 +99,30 @@ function mapRow(row: JobRow, now: number): Job {
     sourceUrl: row.source_url,
     postedAt,
     isDemo: Boolean(row.is_demo),
+    verification,
+    verificationReason: row.verification_reason ?? undefined,
+    verifiedAt: row.verified_at ?? undefined,
+    jobStatus: status,
+    closedAt: row.closed_at ?? undefined,
+    closedReason: row.closed_reason ?? undefined,
+    firstSeenAt: row.first_seen_at ?? undefined,
+    lastSeenAt: row.last_seen_at ?? undefined,
+    applyUrl: row.apply_url ?? row.source_url ?? undefined,
+    companyUrl: row.company_url ?? undefined,
+    sourceKind: row.source_kind ?? undefined,
+    sourcePlatform: row.source_platform ?? undefined,
   }
 }
 
-const SELECT = `SELECT id, title, company, role_family, seniority, work_mode, location_country,
-  location_label, salary_min, salary_max, salary_currency, salary_period, description,
-  required_skills, useful_skills, eligible_countries, sponsorship, source_name, source_url,
-  posted_days_ago, posted_at, is_demo FROM jobs WHERE expired_at IS NULL`
+const COLUMNS = `j.id, j.title, j.company, j.role_family, j.seniority, j.work_mode,
+  j.location_country, j.location_label, j.salary_min, j.salary_max, j.salary_currency,
+  j.salary_period, j.description, j.required_skills, j.useful_skills, j.eligible_countries,
+  j.sponsorship, j.source_name, j.source_url, j.posted_days_ago, j.posted_at, j.is_demo,
+  j.verification, j.verification_reason, j.verified_at, j.job_status, j.closed_at,
+  j.closed_reason, j.first_seen_at, j.last_seen_at, j.apply_url, j.company_url, j.source_kind,
+  j.source_platform`
+
+const SELECT = `SELECT ${COLUMNS} FROM jobs j WHERE j.expired_at IS NULL`
 
 export interface JobListResult {
   jobs: Job[]
@@ -115,6 +167,22 @@ export async function listJobs(
   }
 }
 
+/**
+ * The same list, but with closed roles left out. This is what the feed and
+ * the alerts use: a role that has closed should not be offered as something
+ * to apply for.
+ */
+export async function listOpenJobs(
+  db: D1Database | undefined,
+  now: number = Date.now(),
+): Promise<JobListResult> {
+  const result = await listJobs(db, now)
+  return {
+    ...result,
+    jobs: result.jobs.filter((job) => job.jobStatus !== 'closed'),
+  }
+}
+
 export async function findJob(
   db: D1Database | undefined,
   id: string,
@@ -122,6 +190,118 @@ export async function findJob(
 ): Promise<Job | null> {
   const { jobs } = await listJobs(db, now)
   return jobs.find((job) => job.id === id) ?? null
+}
+
+export interface JobSearch {
+  /** A free-text query, matched against the search index. */
+  query?: string
+  /** Which roles to include. */
+  status?: 'all' | 'open' | 'closed'
+  /** Which verification levels to include. */
+  verification?: VerificationLevel[]
+  limit?: number
+  offset?: number
+  now?: number
+}
+
+export interface JobSearchResult {
+  jobs: Job[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/**
+ * Searches postings in the database.
+ *
+ * A feed that grows to hundreds of thousands of rows cannot be shipped to
+ * the browser in one response, so the query, the filters and the paging
+ * happen in the database. The full-text index is used when there is a query;
+ * without one, the canonical table is scanned in posting order.
+ */
+export async function searchJobs(
+  db: D1Database | undefined,
+  search: JobSearch = {},
+): Promise<JobSearchResult> {
+  const limit = Math.min(200, Math.max(1, search.limit ?? 50))
+  const offset = Math.max(0, search.offset ?? 0)
+  const now = search.now ?? Date.now()
+  const status = search.status ?? 'all'
+  const query = (search.query ?? '').trim()
+
+  if (!db) {
+    const { jobs } = await listJobs(db, now)
+    return { jobs: jobs.slice(offset, offset + limit), total: jobs.length, limit, offset }
+  }
+
+  const conditions: string[] = ['j.expired_at IS NULL']
+  const binds: unknown[] = []
+
+  if (status === 'open') conditions.push("j.job_status = 'open'")
+  if (status === 'closed') conditions.push("j.job_status = 'closed'")
+
+  if (search.verification && search.verification.length > 0) {
+    const placeholders = search.verification.map(() => '?').join(',')
+    conditions.push(`j.verification IN (${placeholders})`)
+    binds.push(...search.verification)
+  }
+
+  if (query) {
+    const match = buildMatchQuery(query)
+    const rows = await db
+      .prepare(`SELECT job_id FROM jobs_fts WHERE jobs_fts MATCH ?1 ORDER BY rank LIMIT 2000`)
+      .bind(match)
+      .all<{ job_id: string }>()
+
+    const found = (rows.results ?? []).map((row) => row.job_id)
+    if (found.length === 0) return { jobs: [], total: 0, limit, offset }
+    conditions.push(`j.id IN (${found.map(() => '?').join(',')})`)
+    binds.push(...found)
+  }
+
+  const where = conditions.join(' AND ')
+
+  try {
+    const countRow = await db
+      .prepare(`SELECT COUNT(*) AS n FROM jobs j WHERE ${where}`)
+      .bind(...binds)
+      .first<{ n: number }>()
+
+    const rows = await db
+      .prepare(
+        `SELECT ${COLUMNS} FROM jobs j WHERE ${where}
+         ORDER BY COALESCE(j.posted_at, '') DESC, j.id
+         LIMIT ? OFFSET ?`,
+      )
+      .bind(...binds, limit, offset)
+      .all<JobRow>()
+
+    return {
+      jobs: (rows.results ?? []).map((row) => mapRow(row, now)),
+      total: countRow?.n ?? 0,
+      limit,
+      offset,
+    }
+  } catch {
+    // The search index may not exist yet on an unmigrated database.
+    const { jobs } = await listJobs(db, now)
+    return { jobs: jobs.slice(offset, offset + limit), total: jobs.length, limit, offset }
+  }
+}
+
+/**
+ * Turns what somebody typed into a full-text query. Every term has to be
+ * present, and a term with a wildcard at the end is treated as a prefix.
+ */
+export function buildMatchQuery(query: string): string {
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.replace(/["^*():]/g, ''))
+    .filter(Boolean)
+    .map((term) => `"${term}"*`)
+
+  return terms.length > 0 ? terms.join(' AND ') : '""'
 }
 
 function describe(error: unknown): string {

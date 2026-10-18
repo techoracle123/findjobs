@@ -9,6 +9,15 @@ import {
   PERIOD_LABELS,
 } from '../shared/format'
 import { roleFamilyLabel, seniorityLabel, workModeLabel } from '../shared/taxonomy'
+import {
+  applyLinkOf,
+  isClosed,
+  STATUS_LABELS,
+  statusOf,
+  VERIFICATION_DESCRIPTIONS,
+  VERIFICATION_LABELS,
+  verificationOf,
+} from '../shared/verification'
 import { countryName } from '../shared/countries'
 import { ScoreBreakdown } from './ScoreBreakdown'
 import type { SalaryView } from '../lib/ranking'
@@ -196,10 +205,24 @@ export function JobDetail({
         </div>
 
         <div>
-          <h3 className="section__label">Source &amp; freshness</h3>
+          <h3 className="section__label">Source, status &amp; freshness</h3>
           <div className="kv">
             <span className="kv__key">Source</span>
             <span className="kv__value">{job.sourceName}</span>
+          </div>
+          <div className="kv">
+            <span className="kv__key">Status</span>
+            <span className="kv__value">
+              {STATUS_LABELS[statusOf(job)]}
+              {job.closedAt ? ` · ${formatRelativeTime(job.closedAt)}` : ''}
+            </span>
+          </div>
+          <div className="kv">
+            <span className="kv__key">Verification</span>
+            <span className="kv__value">
+              {VERIFICATION_LABELS[verificationOf(job)]}
+              {job.verificationReason ? ` — ${job.verificationReason}` : ''}
+            </span>
           </div>
           <div className="kv">
             <span className="kv__key">Posted</span>
@@ -207,15 +230,28 @@ export function JobDetail({
               {formatRelativeTime(job.postedAt)} · {FRESHNESS_LABELS[freshness]}
             </span>
           </div>
+          {job.lastSeenAt && (
+            <div className="kv">
+              <span className="kv__key">Last confirmed</span>
+              <span className="kv__value">{formatRelativeTime(job.lastSeenAt)}</span>
+            </div>
+          )}
+          <p className="rate">{VERIFICATION_DESCRIPTIONS[verificationOf(job)]}</p>
+          {isClosed(job) && job.closedReason && (
+            <p className="rate">
+              This role closed: {job.closedReason}. It stays here so you know it existed, but it
+              will not be offered as something to apply for.
+            </p>
+          )}
           <a
             className="btn btn--sm"
             style={{ marginTop: 8 }}
-            href={job.sourceUrl}
+            href={applyLinkOf(job)}
             target="_blank"
             rel="noreferrer noopener"
           >
             <ExternalLink size={13} />
-            Open listing
+            {isClosed(job) ? 'View the original listing' : 'Apply for this role'}
           </a>
         </div>
       </div>

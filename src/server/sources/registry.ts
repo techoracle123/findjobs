@@ -1,18 +1,21 @@
-import type { SourceAdapter } from './types'
+import type { SourceParser } from './types'
 import { arbeitnow } from './arbeitnow'
 import { remotive } from './remotive'
+import { ATS_PARSERS } from './ats'
+import { FEED_PARSERS } from './feeds'
 
-const ADAPTERS: Record<string, SourceAdapter> = {
-  arbeitnow,
-  remotive,
+const PARSERS: Record<string, SourceParser> = {}
+
+for (const parser of [arbeitnow, remotive, ...ATS_PARSERS, ...FEED_PARSERS]) {
+  PARSERS[parser.id] = parser
 }
 
-export function getAdapter(id: string): SourceAdapter | undefined {
-  return ADAPTERS[id]
+export function getParser(id: string): SourceParser | undefined {
+  return PARSERS[id]
 }
 
-export function listAdapters(): SourceAdapter[] {
-  return Object.values(ADAPTERS)
+export function listParsers(): SourceParser[] {
+  return Object.values(PARSERS)
 }
 
-export const DEFAULT_SOURCE_IDS = Object.keys(ADAPTERS)
+export const DEFAULT_SOURCE_IDS = Object.keys(PARSERS)

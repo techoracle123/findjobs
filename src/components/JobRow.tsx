@@ -1,8 +1,9 @@
-import { Clock, ExternalLink, MapPin } from 'lucide-react'
-import type { ScoredJob } from '../shared/types'
+import { BadgeCheck, Clock, ExternalLink, MapPin, ShieldQuestion, XCircle } from 'lucide-react'
+import type { ScoredJob, VerificationLevel } from '../shared/types'
 import { ELIGIBILITY_LABELS } from '../shared/scoring'
 import { formatRange, formatRelativeTime, freshnessOf, FRESHNESS_LABELS } from '../shared/format'
 import { roleFamilyLabel, seniorityLabel, workModeLabel } from '../shared/taxonomy'
+import { VERIFICATION_LABELS } from '../shared/verification'
 import type { SalaryView } from '../lib/ranking'
 
 interface JobRowProps {
@@ -18,10 +19,25 @@ const TIER_CLASS: Record<string, string> = {
   restricted: 'chip--danger',
 }
 
+const VERIFICATION_CLASS: Record<VerificationLevel, string> = {
+  verified: 'chip--ok',
+  unverified: 'chip--plain',
+  stale: 'chip--warn',
+}
+
+const VERIFICATION_LABEL = VERIFICATION_LABELS
+
 export function JobRow({ scored, selected, salary, onSelect }: JobRowProps) {
   const { job, score, tier } = scored
   const freshness = freshnessOf(job.postedAt)
   const hasProfile = scored.components.some((component) => component.applicable)
+
+  const verification: VerificationLevel = job.verification ?? 'unverified'
+  const closed = job.jobStatus === 'closed'
+
+  const verificationTitle = job.verificationReason
+    ? `${VERIFICATION_LABEL[verification]} — ${job.verificationReason}`
+    : VERIFICATION_LABEL[verification]
 
   return (
     <button type="button" className="jobrow" aria-current={selected} onClick={onSelect}>
@@ -45,6 +61,23 @@ export function JobRow({ scored, selected, salary, onSelect }: JobRowProps) {
           <span className="chip chip--plain">{seniorityLabel(job.seniority)}</span>
           <span className="chip chip--plain">{workModeLabel(job.workMode)}</span>
           <span className={`chip ${TIER_CLASS[tier]}`}>{ELIGIBILITY_LABELS[tier]}</span>
+          <span className={`chip ${VERIFICATION_CLASS[verification]}`} title={verificationTitle}>
+            {verification === 'verified' ? (
+              <BadgeCheck size={11} />
+            ) : verification === 'stale' ? (
+              <ShieldQuestion size={11} />
+            ) : null}
+            {VERIFICATION_LABEL[verification]}
+          </span>
+          {closed && (
+            <span
+              className="chip chip--danger"
+              title={job.closedReason ?? 'This role is no longer advertised.'}
+            >
+              <XCircle size={11} />
+              Closed
+            </span>
+          )}
         </span>
       </span>
 

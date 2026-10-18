@@ -8,6 +8,10 @@ export type Sponsorship = 'available' | 'unavailable' | 'unknown'
 
 export type SalaryPeriod = 'hour' | 'month' | 'year'
 
+export type VerificationLevel = 'verified' | 'unverified' | 'stale'
+
+export type JobStatus = 'open' | 'closed' | 'unknown'
+
 export interface Job {
   id: string
   title: string
@@ -30,6 +34,23 @@ export interface Job {
   sourceUrl: string
   postedAt: string
   isDemo: boolean
+  /** Whether the posting could be confirmed with the employer. */
+  verification?: VerificationLevel
+  /** Why it carries that level, in words the interface can show. */
+  verificationReason?: string
+  verifiedAt?: string
+  /** Whether the role is still open. */
+  jobStatus?: JobStatus
+  closedAt?: string
+  closedReason?: string
+  /** When the posting was first seen, and when it was last confirmed alive. */
+  firstSeenAt?: string
+  lastSeenAt?: string
+  /** Where to apply, which is not always the posting's own page. */
+  applyUrl?: string
+  companyUrl?: string
+  sourceKind?: string
+  sourcePlatform?: string
 }
 
 export interface Profile {

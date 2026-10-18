@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Industries — Engineering</title>
+    <link>https://example.com/careers/feed</link>
+    <description>Open engineering roles</description>
+    <item>
+      <title>Backend Engineer (Python)</title>
+      <link>https://example.com/careers/backend-engineer-python</link>
+      <description><![CDATA[<p>Build our Python services. PostgreSQL and Docker.</p>]]></description>
+      <pubDate>Tue, 13 Oct 2026 08:00:00 +0000</pubDate>
+      <category>Engineering</category>
+      <category>Remote</category>
+    </item>
+    <item>
+      <title>Engineering Manager</title>
+      <link>https://example.com/careers/engineering-manager</link>
+      <description>Lead a team of eight engineers.</description>
+      <pubDate>Mon, 12 Oct 2026 08:00:00 +0000</pubDate>
+      <category>Leadership</category>
+    </item>
+  </channel>
+</rss>

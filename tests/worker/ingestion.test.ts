@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import './setup'
 import arbeitnowFixture from '../fixtures/arbeitnow.json'
 import remotiveFixture from '../fixtures/remotive.json'
+import greenhouseFixture from '../fixtures/greenhouse.json'
 import { jobIdFor, runIngestion } from '../../src/server/ingest'
 import { inferCountry, inferRoleFamily, inferSeniority } from '../../src/server/sources/normalize'
 import { listJobs } from '../../src/server/jobs'
@@ -21,10 +22,13 @@ function fixtureFetch(payload: unknown, status = 200): typeof fetch {
 }
 
 beforeEach(async () => {
-  await env.DB.prepare('DELETE FROM jobs').run()
+  // Only the postings this suite created are removed. The seeded demo rows
+  // are part of the fixture and other suites depend on them.
+  await env.DB.prepare('DELETE FROM jobs WHERE source_id IS NOT NULL').run()
   await env.DB.prepare('DELETE FROM source_postings').run()
   await env.DB.prepare('DELETE FROM ingestion_runs').run()
   await env.DB.prepare('DELETE FROM jobs_fts').run()
+  await env.DB.prepare('DELETE FROM job_events').run()
 })
 
 describe('ingestion', () => {
@@ -39,9 +43,10 @@ describe('ingestion', () => {
     expect(result.error).toBeNull()
 
     const { jobs } = await listJobs(env.DB)
-    expect(jobs).toHaveLength(3)
+    const ingested = jobs.filter((job) => !job.isDemo)
+    expect(ingested).toHaveLength(3)
 
-    const backend = jobs.find((job) => job.title.includes('Senior Backend Engineer'))!
+    const backend = ingested.find((job) => job.title.includes('Senior Backend Engineer'))!
     expect(backend.company).toBe('Nordlicht Systems')
     expect(backend.roleFamily).toBe('backend')
     expect(backend.seniority).toBe('senior')
@@ -60,7 +65,7 @@ describe('ingestion', () => {
     await runIngestion(env.DB, 'arbeitnow', { fetchImpl: fixtureFetch(arbeitnowFixture) })
     const { jobs } = await listJobs(env.DB)
 
-    const rust = jobs.find((job) => job.title === 'Rust Engineer')!
+    const rust = jobs.filter((job) => !job.isDemo).find((job) => job.title === 'Rust Engineer')!
     expect(rust.workMode).toBe('remote')
     expect(rust.locationCountry).toBe('')
     expect(rust.requiredSkills).toContain('Rust')
@@ -79,7 +84,7 @@ describe('ingestion', () => {
     expect(second.updated).toBe(0)
 
     const { jobs } = await listJobs(env.DB)
-    expect(jobs).toHaveLength(3)
+    expect(jobs.filter((job) => !job.isDemo)).toHaveLength(3)
   })
 
   it('updates a posting when the source changes it', async () => {
@@ -94,11 +99,12 @@ describe('ingestion', () => {
     expect(result.updated).toBe(1)
 
     const { jobs } = await listJobs(env.DB)
-    expect(jobs.some((job) => job.title === 'Staff Backend Engineer (Go)')).toBe(true)
-    expect(jobs).toHaveLength(3)
+    const ingested = jobs.filter((job) => !job.isDemo)
+    expect(ingested.some((job) => job.title === 'Staff Backend Engineer (Go)')).toBe(true)
+    expect(ingested).toHaveLength(3)
   })
 
-  it('retires a posting that the source has dropped', async () => {
+  it('closes a posting that the source has dropped, and keeps the record', async () => {
     await runIngestion(env.DB, 'arbeitnow', { fetchImpl: fixtureFetch(arbeitnowFixture) })
 
     const reduced = JSON.parse(JSON.stringify(arbeitnowFixture)) as { data: unknown[] }
@@ -106,10 +112,61 @@ describe('ingestion', () => {
 
     const result = await runIngestion(env.DB, 'arbeitnow', { fetchImpl: fixtureFetch(reduced) })
     expect(result.expired).toBe(1)
+    expect(result.closed).toBe(1)
 
+    // The role stays in the feed, marked closed, so people can see that it
+    // existed rather than finding it silently missing.
     const { jobs } = await listJobs(env.DB)
-    expect(jobs).toHaveLength(2)
-    expect(jobs.some((job) => job.title === 'Product Designer')).toBe(false)
+    const ingested = jobs.filter((job) => !job.isDemo)
+    expect(ingested).toHaveLength(3)
+    const dropped = ingested.find((job) => job.title === 'Product Designer')
+    expect(dropped?.jobStatus).toBe('closed')
+    expect(dropped?.closedAt).toBeTruthy()
+    expect(dropped?.closedReason).toContain('no longer advertised')
+  })
+
+  it('records the life of a posting', async () => {
+    await runIngestion(env.DB, 'arbeitnow', { fetchImpl: fixtureFetch(arbeitnowFixture) })
+
+    const row = await env.DB.prepare('SELECT id FROM jobs WHERE title = ?1')
+      .bind('Product Designer')
+      .first<{ id: string }>()
+
+    const events = await env.DB.prepare(
+      'SELECT type FROM job_events WHERE job_id = ?1 ORDER BY created_at',
+    )
+      .bind(row?.id ?? '')
+      .all<{ type: string }>()
+
+    expect((events.results ?? []).map((event) => event.type)).toContain('opened')
+  })
+
+  it('marks postings from an employer board as verified', async () => {
+    await env.DB.prepare(
+      `INSERT INTO sources (id, name, adapter, kind, platform, listing_url, enabled, verification,
+        refresh_tier, rate_limit_per_hour, config)
+       VALUES ('gh-test', 'Example Corp - Greenhouse', 'greenhouse', 'ats', 'greenhouse',
+        'https://boards.greenhouse.io/examplecorp', 1, 'verified', 'daily', 30,
+        '{"company":"examplecorp"}')`,
+    ).run()
+
+    const result = await runIngestion(env.DB, 'gh-test', {
+      fetchImpl: fixtureFetch(greenhouseFixture),
+      now: Date.parse('2026-10-17T00:00:00Z'),
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.inserted).toBe(2)
+
+    const row = await env.DB.prepare(
+      'SELECT verification, verification_reason, source_platform FROM jobs WHERE source_id = ?1 LIMIT 1',
+    )
+      .bind('gh-test')
+      .first<{ verification: string; verification_reason: string; source_platform: string }>()
+
+    expect(row?.verification).toBe('verified')
+    expect(row?.verification_reason).toContain('own board')
+    expect(row?.source_platform).toBe('greenhouse')
   })
 
   it('records a failure against the source instead of throwing', async () => {

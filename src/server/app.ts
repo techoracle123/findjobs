@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from './env'
 import { DEFAULT_APP_MODE } from './env'
 import { accessConfigured, readConfig, stripeConfigured, telegramConfigured } from './config'
-import { listJobs, findJob } from './jobs'
+import { listJobs, findJob, searchJobs } from './jobs'
 import { getRates } from './rates'
 import { suggest } from './cv'
 import { scoreJob } from '../shared/scoring'
@@ -17,6 +17,18 @@ import { telegramRoutes } from './routes/telegram'
 export const app = new Hono<AppEnv>()
 
 app.use('*', requestContext)
+
+/**
+ * Reads a numeric query parameter. An empty or unparseable value is absent,
+ * not zero: `Number('')` is 0, which would otherwise turn a request with no
+ * paging into a request for the first row.
+ */
+function numberParam(url: URL, name: string): number | undefined {
+  const raw = url.searchParams.get(name)
+  if (raw === null || raw.trim() === '') return undefined
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : undefined
+}
 
 function normaliseProfile(input: unknown): Profile {
   const raw = (input ?? {}) as Partial<Profile>
@@ -33,7 +45,7 @@ app.get('/api/health', async (c) => {
   const env = c.env ?? {}
   const config = readConfig(env)
   const { jobs, source } = await listJobs(env.DB)
-  const rates = await getRates()
+  const rates = await getRates(config.appMode !== 'test')
   const accessLoginUrl = config.access.aud
     ? `https://${config.access.teamDomain}/cdn-cgi/access/login?app_id=${encodeURIComponent(config.access.aud)}&aud=${encodeURIComponent(config.access.aud)}`
     : null
@@ -55,11 +67,37 @@ app.get('/api/health', async (c) => {
 
 app.get('/api/jobs', async (c) => {
   const env = c.env ?? {}
-  const { jobs, source, warning } = await listJobs(env.DB)
+  const url = new URL(c.req.url)
+  const query = url.searchParams.get('q')?.trim() || undefined
+  const status = url.searchParams.get('status')
+  const limit = numberParam(url, 'limit')
+  const offset = numberParam(url, 'offset')
+
+  // Without any paging or filtering the whole feed is returned, which is
+  // what the interface wants while the corpus is small. Once it is not
+  // small, the caller asks for a page.
+  if (!query && !status && limit === undefined && offset === undefined) {
+    const { jobs, source, warning } = await listJobs(env.DB)
+    return c.json({
+      jobs,
+      dataSource: source,
+      ...(warning ? { warning } : {}),
+    })
+  }
+
+  const result = await searchJobs(env.DB, {
+    query,
+    status: status === 'open' || status === 'closed' ? status : 'all',
+    limit,
+    offset,
+  })
+
   return c.json({
-    jobs,
-    dataSource: source,
-    ...(warning ? { warning } : {}),
+    jobs: result.jobs,
+    total: result.total,
+    limit: result.limit,
+    offset: result.offset,
+    dataSource: 'd1',
   })
 })
 
@@ -99,7 +137,7 @@ app.post('/api/cv/suggest', async (c) => {
 })
 
 app.get('/api/rates', async (c) => {
-  return c.json(await getRates())
+  return c.json(await getRates(readConfig(c.env ?? {}).appMode !== 'test'))
 })
 
 app.route('/api', accountRoutes)

@@ -1,0 +1,393 @@
+import type { SourceKind } from './types'
+
+export interface SeedSource {
+  id: string
+  /** The parser that reads this source. */
+  parser: string
+  name: string
+  /** Where the listing lives. */
+  listingUrl: string
+  /** The employer slug, for the parsers that need one. */
+  company?: string
+  /** The employer's display name, when the source does not carry one. */
+  companyLabel?: string
+  country: string
+  tags: string[]
+  /** How often the source should be refreshed. */
+  tier: 'hourly' | 'six_hourly' | 'daily' | 'weekly'
+  /** Requests per hour allowed against this source. */
+  rateLimitPerHour: number
+  kind: SourceKind
+  /** Whether it starts switched on. */
+  enabled: boolean
+}
+
+/**
+ * The starting registry.
+ *
+ * The point of this table is not the individual entries — it is that one
+ * parser covers many employers. A single Greenhouse board is one row; so are
+ * a thousand of them. Adding sources is a data change, not a code change.
+ *
+ * These boards are public and unauthenticated. A board that does not answer
+ * is not a silent problem: the failure is recorded against the source, the
+ * source is disabled after repeated failures, and the operator view lists
+ * what is working. Prune this list to what actually answers.
+ */
+export const SEED_SOURCES: SeedSource[] = [
+  // --- Public job board APIs, no key required -------------------------
+  {
+    id: 'arbeitnow',
+    parser: 'arbeitnow',
+    name: 'Arbeitnow Job Board API',
+    listingUrl: 'https://www.arbeitnow.com/api/job-board-api',
+    country: 'DE',
+    tags: ['aggregator', 'germany', 'europe'],
+    tier: 'hourly',
+    rateLimitPerHour: 60,
+    kind: 'api',
+    enabled: true,
+  },
+  {
+    id: 'remotive',
+    parser: 'remotive',
+    name: 'Remotive API',
+    listingUrl: 'https://remotive.com/api/remote-jobs',
+    country: 'WW',
+    tags: ['aggregator', 'remote'],
+    tier: 'hourly',
+    rateLimitPerHour: 60,
+    kind: 'api',
+    enabled: true,
+  },
+
+  // --- Greenhouse boards: boards.greenhouse.io/<slug> -------------------
+  ...(
+    [
+      ['stripe', 'Stripe', 'US'],
+      ['airbnb', 'Airbnb', 'US'],
+      ['dropbox', 'Dropbox', 'US'],
+      ['datadog', 'Datadog', 'US'],
+      ['discord', 'Discord', 'US'],
+      ['doordash', 'DoorDash', 'US'],
+      ['instacart', 'Instacart', 'US'],
+      ['plaid', 'Plaid', 'US'],
+      ['robinhood', 'Robinhood', 'US'],
+      ['benchling', 'Benchling', 'US'],
+      ['samsara', 'Samsara', 'US'],
+      ['affirm', 'Affirm', 'US'],
+      ['cockroachlabs', 'Cockroach Labs', 'US'],
+      ['flexport', 'Flexport', 'US'],
+      ['scaleai', 'Scale AI', 'US'],
+      ['mixpanel', 'Mixpanel', 'US'],
+      ['drizly', 'Drizly', 'US'],
+      ['gitlab', 'GitLab', 'US'],
+      ['hashicorp', 'HashiCorp', 'US'],
+      ['mongodb', 'MongoDB', 'US'],
+      ['elastic', 'Elastic', 'NL'],
+      ['mollie', 'Mollie', 'NL'],
+      ['messagebird', 'MessageBird', 'NL'],
+      ['booking', 'Booking.com', 'NL'],
+      ['adyen', 'Adyen', 'NL'],
+      ['zalando', 'Zalando', 'DE'],
+      ['shopware', 'Shopware', 'DE'],
+      ['personio', 'Personio', 'DE'],
+      ['trivago', 'trivago', 'DE'],
+      ['deliveryhero', 'Delivery Hero', 'DE'],
+      ['suse', 'SUSE', 'DE'],
+      ['zalando-ads', 'Zalando Ads', 'DE'],
+      ['monzo', 'Monzo', 'GB'],
+      ['revolut', 'Revolut', 'GB'],
+      ['wise', 'Wise', 'GB'],
+      ['kraken', 'Kraken', 'GB'],
+      ['starling', 'Starling Bank', 'GB'],
+      ['checkout', 'Checkout.com', 'GB'],
+      ['n26', 'N26', 'DE'],
+      ['contentful', 'Contentful', 'DE'],
+      ['siemens', 'Siemens', 'DE'],
+      ['bosch', 'Bosch', 'DE'],
+      ['spotify', 'Spotify', 'SE'],
+      ['klarna', 'Klarna', 'SE'],
+      ['king', 'King', 'SE'],
+      ['trivago-nl', 'Trivago NL', 'NL'],
+      ['bolt', 'Bolt', 'EE'],
+      ['wise-pl', 'Wise PL', 'PL'],
+      ['allegro', 'Allegro', 'PL'],
+      ['g2a', 'G2A', 'PL'],
+      ['cdprojekt', 'CD Projekt', 'PL'],
+      ['glovo', 'Glovo', 'ES'],
+      ['mango', 'Mango', 'ES'],
+      ['typeform', 'Typeform', 'ES'],
+      ['scaleway', 'Scaleway', 'FR'],
+      ['doctolib', 'Doctolib', 'FR'],
+      ['algolia', 'Algolia', 'FR'],
+      ['chargebee', 'Chargebee', 'FR'],
+      ['contentsquare', 'Contentsquare', 'FR'],
+      ['shopify', 'Shopify', 'CA'],
+      ['circle', 'Circle', 'US'],
+      ['1password', '1Password', 'CA'],
+      ['segment', 'Segment', 'US'],
+      ['atlassian', 'Atlassian', 'AU'],
+      ['canva', 'Canva', 'AU'],
+      ['aircovid', 'AirCoders', 'AU'],
+      ['tpg', 'TPG', 'AU'],
+      ['seek', 'SEEK', 'AU'],
+      ['razorpay', 'Razorpay', 'IN'],
+      ['zomato', 'Zomato', 'IN'],
+      ['swiggy', 'Swiggy', 'IN'],
+      ['freshworks', 'Freshworks', 'IN'],
+      ['postman', 'Postman', 'IN'],
+      ['hasura', 'Hasura', 'IN'],
+      ['cred', 'CRED', 'IN'],
+      ['paystack', 'Paystack', 'NG'],
+      ['flutterwave', 'Flutterwave', 'NG'],
+      ['moniepoint', 'Moniepoint', 'NG'],
+      ['kuda', 'Kuda', 'NG'],
+      ['wave', 'Wave', 'CA'],
+      ['m-kopa', 'M-KOPA', 'KE'],
+      ['iHub', 'iHub Nairobi', 'KE'],
+      ['sendy', 'Sendy', 'KE'],
+      ['lululemon', 'lululemon', 'CA'],
+      ['gcp', 'Google Careers', 'US'],
+      ['spotify-ee', 'Spotify EE', 'EE'],
+    ] as const
+  ).map(([slug, label, country]) => ({
+    id: `greenhouse-${slug}`,
+    parser: 'greenhouse',
+    name: `${label} — Greenhouse`,
+    listingUrl: `https://boards.greenhouse.io/${slug}`,
+    company: slug,
+    companyLabel: label,
+    country,
+    tags: ['ats', 'greenhouse'],
+    tier: 'six_hourly' as const,
+    rateLimitPerHour: 30,
+    kind: 'ats' as const,
+    enabled: true,
+  })),
+
+  // --- Lever boards: jobs.lever.co/<slug> ------------------------------
+  ...(
+    [
+      ['lever', 'Lever', 'US'],
+      ['nylas', 'Nylas', 'US'],
+      ['attentive', 'Attentive', 'US'],
+      ['branch', 'Branch', 'US'],
+      ['mixpanel-lever', 'Mixpanel (Lever)', 'US'],
+      ['circle-lever', 'Circle (Lever)', 'US'],
+      ['turo', 'Turo', 'US'],
+      ['verkada', 'Verkada', 'US'],
+      ['webflow', 'Webflow', 'US'],
+      ['coda', 'Coda', 'US'],
+      ['cashapp', 'Cash App', 'US'],
+      ['sourcegraph', 'Sourcegraph', 'US'],
+      ['vanta', 'Vanta', 'US'],
+      ['mercury', 'Mercury', 'US'],
+      ['deel', 'Deel', 'NL'],
+      ['mollie-lever', 'Mollie (Lever)', 'NL'],
+      ['teleport', 'Teleport', 'US'],
+      ['ably', 'Ably', 'GB'],
+      ['typeform-lever', 'Typeform (Lever)', 'ES'],
+      ['idealo', 'idealo', 'DE'],
+      ['babbel', 'Babbel', 'DE'],
+      ['finanzen', 'finanzen', 'DE'],
+      ['targobank', 'Targo Bank', 'DE'],
+      ['clever', 'Clever', 'SE'],
+      ['kry', 'Kry / LiveKind', 'SE'],
+      ['kite', 'Kite', 'GB'],
+      ['tide', 'Tide', 'GB'],
+      ['gopuff', 'goPuff', 'US'],
+      ['lalamove', 'Lalamove', 'HK'],
+      ['foodpanda', 'foodpanda', 'SG'],
+      ['carousell', 'Carousell', 'SG'],
+      ['shopback', 'ShopBack', 'SG'],
+      ['grain', 'Grain', 'US'],
+      ['gocardless', 'GoCardless', 'GB'],
+      ['oxford', 'Oxford', 'GB'],
+    ] as const
+  ).map(([slug, label, country]) => ({
+    id: `lever-${slug}`,
+    parser: 'lever',
+    name: `${label} — Lever`,
+    listingUrl: `https://jobs.lever.co/${slug}`,
+    company: slug,
+    companyLabel: label,
+    country,
+    tags: ['ats', 'lever'],
+    tier: 'six_hourly' as const,
+    rateLimitPerHour: 30,
+    kind: 'ats' as const,
+    enabled: true,
+  })),
+
+  // --- Ashby boards: jobs.ashbyhq.com/<slug> --------------------------
+  ...(
+    [
+      ['ashbyhq', 'Ashby', 'US'],
+      ['ramp', 'Ramp', 'US'],
+      ['notion', 'Notion', 'US'],
+      ['linear', 'Linear', 'US'],
+      ['figma', 'Figma', 'US'],
+      ['vercel', 'Vercel', 'US'],
+      ['openai', 'OpenAI', 'US'],
+      ['anthropic', 'Anthropic', 'US'],
+      ['resend', 'Resend', 'US'],
+      ['supabase', 'Supabase', 'US'],
+      ['railway', 'Railway', 'US'],
+      ['postman-ashby', 'Postman (Ashby)', 'IN'],
+      ['excalidraw', 'Excalidraw', 'US'],
+      ['cal', 'Cal.com', 'US'],
+      ['dub', 'Dub', 'US'],
+      ['tldraw', 'tldraw', 'US'],
+      ['sentry', 'Sentry', 'US'],
+      ['raycast', 'Raycast', 'DE'],
+      ['n26-ashby', 'N26 (Ashby)', 'DE'],
+      ['weavy', 'Weavy', 'SE'],
+      ['team', 'Team', 'SE'],
+    ] as const
+  ).map(([slug, label, country]) => ({
+    id: `ashby-${slug}`,
+    parser: 'ashby',
+    name: `${label} — Ashby`,
+    listingUrl: `https://jobs.ashbyhq.com/${slug}`,
+    company: slug,
+    companyLabel: label,
+    country,
+    tags: ['ats', 'ashby'],
+    tier: 'six_hourly' as const,
+    rateLimitPerHour: 30,
+    kind: 'ats' as const,
+    enabled: true,
+  })),
+
+  // --- Recruitee boards: <slug>.recruitee.com --------------------------
+  ...(
+    [
+      ['adecco', 'Adecco', 'FR'],
+      ['sportradar', 'Sportradar', 'MT'],
+      ['tietoevry', 'Tietoevry', 'FI'],
+      ['siemens-recruitee', 'Siemens (Recruitee)', 'DE'],
+      ['n26-recruitee', 'N26 (Recruitee)', 'DE'],
+      ['bolton', 'Bolton', 'GB'],
+      ['sportradar-uk', 'Sportradar UK', 'GB'],
+      ['randstad', 'Randstad', 'NL'],
+      ['jyske', 'Jyske Bank', 'DK'],
+    ] as const
+  ).map(([slug, label, country]) => ({
+    id: `recruitee-${slug}`,
+    parser: 'recruitee',
+    name: `${label} — Recruitee`,
+    listingUrl: `https://${slug}.recruitee.com`,
+    company: slug,
+    companyLabel: label,
+    country,
+    tags: ['ats', 'recruitee'],
+    tier: 'daily' as const,
+    rateLimitPerHour: 20,
+    kind: 'ats' as const,
+    enabled: true,
+  })),
+
+  // --- SmartRecruiters boards ------------------------------------------
+  ...(
+    [
+      ['swisscom', 'Swisscom', 'CH'],
+      ['bosch-sr', 'Bosch (SmartRecruiters)', 'DE'],
+      ['santander', 'Santander', 'ES'],
+      ['glovo-sr', 'Glovo (SmartRecruiters)', 'ES'],
+      ['n26-sr', 'N26 (SmartRecruiters)', 'DE'],
+      ['deutsche', 'Deutsche Telekom', 'DE'],
+      ['cgi', 'CGI', 'CA'],
+      ['jpmorgan', 'J.P. Morgan', 'US'],
+      ['michelin', 'Michelin', 'FR'],
+      ['bosch-ch', 'Bosch Switzerland', 'CH'],
+    ] as const
+  ).map(([slug, label, country]) => ({
+    id: `smartrecruiters-${slug}`,
+    parser: 'smartrecruiters',
+    name: `${label} — SmartRecruiters`,
+    listingUrl: `https://www.smartrecruiters.com/${slug}`,
+    company: slug,
+    companyLabel: label,
+    country,
+    tags: ['ats', 'smartrecruiters'],
+    tier: 'daily' as const,
+    rateLimitPerHour: 20,
+    kind: 'ats' as const,
+    enabled: true,
+  })),
+
+  // --- Employer pages that publish schema.org JobPosting ----------------
+  ...(
+    [
+      ['stripe-careers', 'Stripe Careers', 'https://stripe.com/jobs', 'US'],
+      ['netflix-careers', 'Netflix Careers', 'https://jobs.netflix.com/search', 'US'],
+      ['figma-careers', 'Figma Careers', 'https://www.figma.com/careers/', 'US'],
+      ['github-careers', 'GitHub Careers', 'https://github.com/about/careers', 'US'],
+      ['cloudflare-careers', 'Cloudflare Careers', 'https://www.cloudflare.com/careers/', 'US'],
+      ['mozilla-careers', 'Mozilla Careers', 'https://www.mozilla.org/en-US/careers/', 'US'],
+      [
+        'wikimedia-careers',
+        'Wikimedia Careers',
+        'https://wikimediafoundation.org/about/careers/',
+        'US',
+      ],
+      ['ikea', 'IKEA Careers', 'https://www.ikeajobs.com/global/en/search', 'SE'],
+      ['bosch-careers', 'Bosch Careers', 'https://www.bosch.com/careers/', 'DE'],
+      ['siemens-careers', 'Siemens Careers', 'https://jobs.siemens.com/', 'DE'],
+      ['sap-careers', 'SAP Careers', 'https://jobs.sap.com/', 'DE'],
+      ['spotify-careers', 'Spotify Jobs', 'https://jobs.spotify.com/', 'SE'],
+      ['nokia-careers', 'Nokia Careers', 'https://www.nokia.com/careers/', 'FI'],
+      ['ericsson-careers', 'Ericsson Careers', 'https://www.ericsson.com/en/careers', 'SE'],
+      ['kpn-careers', 'KPN Careers', 'https://www.kpn.com/en/careers', 'NL'],
+      ['ing-careers', 'ING Careers', 'https://www.ing.jobs/', 'NL'],
+      ['orange-careers', 'Orange Careers', 'https://careers.orange.com/', 'FR'],
+      ['bnp-careers', 'BNP Paribas Careers', 'https://careers.bnpparibas', 'FR'],
+      ['telefonica-careers', 'Telefónica Careers', 'https://www.telefonica.com/en/careers/', 'ES'],
+      ['santander-careers', 'Santander Careers', 'https://www.santander.com/en/careers', 'ES'],
+      ['nhs-jobs', 'NHS Jobs', 'https://www.jobs.nhs.uk/', 'GB'],
+      ['bbc-careers', 'BBC Careers', 'https://www.bbc.co.uk/careers', 'GB'],
+      ['natwest-careers', 'NatWest Careers', 'https://www.natwestgroup.com/careers.html', 'GB'],
+      ['shopify-careers', 'Shopify Careers', 'https://www.shopify.com/careers', 'CA'],
+      ['sberbank-careers', 'Sberbank Careers', 'https://www.sberbank.com/careers', 'RU'],
+      ['lalamove-careers', 'Lalamove Careers', 'https://careers.lalamove.com/', 'HK'],
+      ['grab-careers', 'Grab Careers', 'https://careers.grab.com/', 'SG'],
+      ['sea-careers', 'Sea Limited Careers', 'https://www.seagroup.com/careers/', 'SG'],
+      ['toyota-careers', 'Toyota Careers', 'https://global.toyota/en/careers/', 'JP'],
+      ['rakuten-careers', 'Rakuten Careers', 'https://careers.rakuten.com/', 'JP'],
+      ['flipkart-careers', 'Flipkart Careers', 'https://www.flipkart.com/careers', 'IN'],
+      ['paytm-careers', 'Paytm Careers', 'https://careers.paytm.com/', 'IN'],
+      ['sasol-careers', 'Sasol Careers', 'https://www.sasol.com/careers', 'ZA'],
+      ['nedbank-careers', 'Nedbank Careers', 'https://www.nedbank.co.za/careers/', 'ZA'],
+      ['flutterwave-careers', 'Flutterwave Careers', 'https://flutterwave.com/careers', 'NG'],
+      ['paystack-careers', 'Paystack Careers', 'https://paystack.com/careers', 'NG'],
+      ['kuda-careers', 'Kuda Careers', 'https://kuda.com/careers', 'NG'],
+      ['wave-careers', 'Wave Careers', 'https://www.wave.com/en/careers/', 'KE'],
+      ['m-kopa-careers', 'M-KOPA Careers', 'https://www.m-kopa.com/careers', 'KE'],
+      ['jumia-careers', 'Jumia Careers', 'https://www.jumia.com/careers/', 'NG'],
+      ['nubank-careers', 'Nubank Careers', 'https://nubank.com.br/careers/', 'BR'],
+      ['stone-co-careers', 'StoneCo Careers', 'https://stone.co/careers/', 'BR'],
+      ['globant-careers', 'Globant Careers', 'https://www.globant.com/careers/', 'AR'],
+      [
+        'mercadolibre-careers',
+        'Mercado Libre Careers',
+        'https://www.mercadolibre.com.ar/careers',
+        'AR',
+      ],
+      ['transfermarkt-careers', 'Sportradar Careers', 'https://www.sportradar.com/careers/', 'MT'],
+      ['stakex-careers', 'Stakex Careers', 'https://www.stakex.com/careers', 'NG'],
+    ] as const
+  ).map(([slug, label, listingUrl, country]) => ({
+    id: `jsonld-${slug}`,
+    parser: 'jsonld',
+    name: `${label} — careers page`,
+    listingUrl,
+    companyLabel: label,
+    country,
+    tags: ['jsonld', 'employer-page'],
+    tier: 'daily' as const,
+    rateLimitPerHour: 10,
+    kind: 'jsonld' as const,
+    enabled: true,
+  })),
+]

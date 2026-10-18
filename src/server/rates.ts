@@ -50,20 +50,41 @@ const FALLBACK_DATE = '2026-10-15'
 let cached: { payload: RatesPayload; fetchedAt: number } | null = null
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000
 
-export async function getRates(): Promise<RatesPayload> {
+/**
+ * The reference rates.
+ *
+ * `allowNetwork` is false in the test environment, where a live request is
+ * neither possible nor useful: the offline table is used, which also makes
+ * the tests deterministic.
+ */
+export async function getRates(allowNetwork = true): Promise<RatesPayload> {
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
     return cached.payload
   }
 
-  const payload = await fetchLiveRates()
+  const payload = allowNetwork
+    ? await fetchLiveRates()
+    : {
+        base: 'USD',
+        date: FALLBACK_DATE,
+        source: 'fallback' as const,
+        rates: { ...FALLBACK_RATES },
+      }
+
   cached = { payload, fetchedAt: Date.now() }
   return payload
 }
 
 async function fetchLiveRates(): Promise<RatesPayload> {
+  // An explicit controller with a cleared timer, rather than
+  // AbortSignal.timeout: a timeout that is still pending when the request
+  // has already settled can surface as an unhandled rejection.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
   try {
     const response = await fetch(FRANKFURTER_ENDPOINT, {
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: controller.signal,
       headers: { accept: 'application/json' },
     })
     if (!response.ok) throw new Error(`status ${response.status}`)
@@ -82,6 +103,8 @@ async function fetchLiveRates(): Promise<RatesPayload> {
       source: 'fallback',
       rates: { ...FALLBACK_RATES },
     }
+  } finally {
+    clearTimeout(timer)
   }
 }
 

@@ -10,6 +10,8 @@ export interface AiBinding {
 export interface Env {
   DB?: D1Database
   AI?: AiBinding
+  /** The queue that ingestion work is spread across. */
+  INGEST_QUEUE?: Queue
   APP_MODE?: string
   TELEGRAM_BOT_USERNAME?: string
 

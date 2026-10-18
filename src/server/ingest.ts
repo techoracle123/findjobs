@@ -1,7 +1,9 @@
-import type { Job } from '../shared/types'
-import { getAdapter, listAdapters } from './sources/registry'
-import type { RawPosting, SourceAdapter } from './sources/types'
+import type { Job, VerificationLevel } from '../shared/types'
+import { getParser } from './sources/registry'
+import type { RawPosting, SourceRef } from './sources/types'
 import { normalizePosting } from './sources/normalize'
+import { createPoliteFetch } from './sources/polite'
+import { SEED_SOURCES } from './sources/seed'
 import { logger } from './logging'
 
 export interface IngestionResult {
@@ -11,16 +13,27 @@ export interface IngestionResult {
   inserted: number
   updated: number
   expired: number
+  closed: number
   skipped: number
   error: string | null
 }
 
 export interface IngestionOptions {
   fetchImpl?: typeof fetch
-  /** Mark postings that were not seen in this run as expired. */
-  expireMissing?: boolean
+  /** Mark postings that were not seen in this run as closed. */
+  closeMissing?: boolean
   now?: number
+  userAgent?: string
+  /** How many sources may be fetched at once. */
+  concurrency?: number
+  /** Stop starting new sources after this many milliseconds. */
+  deadlineMs?: number
+  /** How long a single source may take before it is abandoned. */
+  sourceTimeoutMs?: number
 }
+
+export const USER_AGENT =
+  'RoleSignalBot/1.0 (+https://rolesignal.dev/bot; job feed aggregator; respects robots.txt)'
 
 const encoder = new TextEncoder()
 
@@ -42,42 +55,109 @@ export function contentHashOf(raw: RawPosting): string {
     raw.remote ? 'remote' : 'onsite',
     raw.tags.join(','),
     raw.salary ? `${raw.salary.min}-${raw.salary.max}-${raw.salary.currency}` : '',
-  ].join('\u0001')
+    raw.closed ? 'closed' : 'open',
+  ].join('')
+}
+
+export interface SourceRow {
+  id: string
+  name: string
+  adapter: string
+  listing_url: string | null
+  config: string
+  verification: string | null
+  kind: string | null
+  platform: string | null
+  enabled: number
+  consecutive_failures: number
 }
 
 /**
- * Makes sure every adapter the build knows about is present in the sources
- * table, so an operator can enable or disable them without a migration.
+ * Puts the starting registry into the sources table. Existing rows are left
+ * alone, so an operator's changes — a disabled source, a slower rate — are
+ * not undone by a deploy.
  */
 export async function ensureSources(db: D1Database): Promise<void> {
-  for (const adapter of listAdapters()) {
+  for (const source of SEED_SOURCES) {
+    const config = JSON.stringify({
+      company: source.company,
+      companyLabel: source.companyLabel,
+    })
+
     await db
       .prepare(
-        `INSERT INTO sources (id, name, adapter, enabled, homepage, config)
-         VALUES (?1, ?2, ?3, 1, ?4, '{}')
-         ON CONFLICT(id) DO UPDATE SET name = ?2, adapter = ?3, homepage = ?4`,
+        `INSERT INTO sources (id, name, adapter, kind, platform, listing_url, homepage, enabled,
+          verification, refresh_tier, rate_limit_per_hour, country, tags, config, last_status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'pending')
+         ON CONFLICT(id) DO UPDATE SET name = ?2, adapter = ?3, kind = ?4, platform = ?5,
+           listing_url = ?6, verification = ?8, refresh_tier = ?9, rate_limit_per_hour = ?10,
+           country = ?11, tags = ?12, config = ?13`,
       )
-      .bind(adapter.id, adapter.name, adapter.id, adapter.homepage)
+      .bind(
+        source.id,
+        source.name,
+        source.parser,
+        source.kind,
+        source.parser === 'jsonld' || source.parser === 'rss' ? null : source.parser,
+        source.listingUrl,
+        source.enabled ? 1 : 0,
+        // The parser knows whether what it reads can be trusted: a posting
+        // read from the employer's own board can, a posting read from an
+        // aggregator cannot.
+        getParser(source.parser)?.verification ?? 'unverified',
+        source.tier,
+        source.rateLimitPerHour,
+        source.country,
+        JSON.stringify(source.tags),
+        config,
+      )
       .run()
   }
 }
 
-/**
- * Makes sure a single source has a row. The run log points at the source, so
- * the row has to exist before a run can be recorded against it.
- */
-async function ensureSource(db: D1Database, adapter: SourceAdapter): Promise<void> {
+function sourceRefFrom(row: SourceRow, parserVerification: VerificationLevel): SourceRef {
+  let options: Record<string, unknown> = {}
+  try {
+    options = JSON.parse(row.config || '{}') as Record<string, unknown>
+  } catch {
+    options = {}
+  }
+
+  return {
+    id: row.id,
+    listingUrl: row.listing_url ?? '',
+    options,
+    verification: (row.verification as VerificationLevel | null) ?? parserVerification,
+    verificationReason:
+      (row.verification as VerificationLevel | null) === 'verified'
+        ? "the employer's own board"
+        : 'a public listing we could not confirm with the employer',
+  }
+}
+
+async function recordEvent(
+  db: D1Database,
+  jobId: string,
+  type: string,
+  detail: string | null,
+  sourceId: string | null,
+): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO sources (id, name, adapter, enabled, homepage, config)
-       VALUES (?1, ?2, ?3, 1, ?4, '{}')
-       ON CONFLICT(id) DO UPDATE SET name = ?2, adapter = ?3, homepage = ?4`,
+      'INSERT INTO job_events (id, job_id, type, detail, source_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
     )
-    .bind(adapter.id, adapter.name, adapter.id, adapter.homepage)
+    .bind(`evt_${crypto.randomUUID()}`, jobId, type, detail, sourceId, new Date().toISOString())
     .run()
 }
 
-type UpsertOutcome = 'inserted' | 'updated' | 'unchanged'
+interface ExistingJob {
+  content_hash: string | null
+  job_status: string | null
+  verification: string | null
+  first_seen_at: string | null
+}
+
+type UpsertOutcome = 'inserted' | 'updated' | 'unchanged' | 'closed' | 'reopened'
 
 async function upsertJob(
   db: D1Database,
@@ -85,29 +165,62 @@ async function upsertJob(
   sourceId: string,
   externalId: string,
   contentHash: string,
+  now: number,
 ): Promise<UpsertOutcome> {
   const existing = await db
-    .prepare('SELECT content_hash FROM jobs WHERE id = ?1')
+    .prepare('SELECT content_hash, job_status, verification, first_seen_at FROM jobs WHERE id = ?1')
     .bind(job.id)
-    .first<{ content_hash: string | null }>()
+    .first<ExistingJob>()
+
+  const nowIso = new Date(now).toISOString()
 
   if (!existing) {
-    await writeJob(db, job, sourceId, externalId, contentHash)
+    await writeJob(db, job, sourceId, externalId, contentHash, nowIso, nowIso)
+    await recordEvent(db, job.id, 'opened', 'first seen', sourceId)
     return 'inserted'
   }
 
+  const wasClosed = existing.job_status === 'closed'
+  const isClosed = job.jobStatus === 'closed'
+
   if (existing.content_hash === contentHash) {
-    // Unchanged: refresh the expiry and leave the canonical row alone.
+    // Unchanged: refresh the times and the expiry, and leave the row alone.
     await db
       .prepare(
-        'UPDATE jobs SET expired_at = NULL, posted_at = COALESCE(?2, posted_at) WHERE id = ?1',
+        `UPDATE jobs SET expired_at = NULL, last_seen_at = ?2,
+          job_status = CASE WHEN job_status = 'closed' AND ?3 = 0 THEN 'open' ELSE job_status END,
+          closed_at = CASE WHEN job_status = 'closed' AND ?3 = 0 THEN NULL ELSE closed_at END
+         WHERE id = ?1`,
       )
-      .bind(job.id, job.postedAt)
+      .bind(job.id, nowIso, isClosed ? 1 : 0)
       .run()
+
+    if (wasClosed && !isClosed) {
+      await recordEvent(db, job.id, 'reopened', 'it is being advertised again', sourceId)
+      return 'reopened'
+    }
     return 'unchanged'
   }
 
-  await writeJob(db, job, sourceId, externalId, contentHash)
+  await writeJob(
+    db,
+    job,
+    sourceId,
+    externalId,
+    contentHash,
+    existing.first_seen_at ?? nowIso,
+    nowIso,
+  )
+
+  if (!wasClosed && isClosed) {
+    await recordEvent(db, job.id, 'closed', job.closedReason ?? 'the source closed it', sourceId)
+    return 'closed'
+  }
+  if (wasClosed && !isClosed) {
+    await recordEvent(db, job.id, 'reopened', 'it is being advertised again', sourceId)
+    return 'reopened'
+  }
+
   return 'updated'
 }
 
@@ -117,6 +230,8 @@ async function writeJob(
   sourceId: string,
   externalId: string,
   contentHash: string,
+  firstSeenAt: string,
+  lastSeenAt: string,
 ): Promise<void> {
   const skills = JSON.stringify([...job.requiredSkills, ...job.usefulSkills])
 
@@ -125,15 +240,20 @@ async function writeJob(
       `INSERT INTO jobs (id, title, company, role_family, seniority, work_mode, location_country,
         location_label, salary_min, salary_max, salary_currency, salary_period, description,
         required_skills, useful_skills, eligible_countries, sponsorship, source_name, source_url,
-        posted_days_ago, posted_at, is_demo, source_id, external_id, content_hash, expired_at)
+        posted_days_ago, posted_at, is_demo, source_id, external_id, content_hash, expired_at,
+        verification, verification_reason, verified_at, job_status, closed_at, closed_reason,
+        first_seen_at, last_seen_at, apply_url, company_url, source_kind, source_platform)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, 0,
-        ?20, 0, ?21, ?22, ?23, NULL)
+        ?20, 0, ?21, ?22, ?23, NULL, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35)
        ON CONFLICT(id) DO UPDATE SET title = ?2, company = ?3, role_family = ?4, seniority = ?5,
          work_mode = ?6, location_country = ?7, location_label = ?8, salary_min = ?9,
          salary_max = ?10, salary_currency = ?11, salary_period = ?12, description = ?13,
          required_skills = ?14, useful_skills = ?15, eligible_countries = ?16, sponsorship = ?17,
          source_name = ?18, source_url = ?19, posted_at = ?20, source_id = ?21, external_id = ?22,
-         content_hash = ?23, expired_at = NULL`,
+         content_hash = ?23, expired_at = NULL, verification = ?24, verification_reason = ?25,
+         verified_at = ?26, job_status = ?27, closed_at = ?28, closed_reason = ?29,
+         first_seen_at = ?30, last_seen_at = ?31, apply_url = ?32, company_url = ?33,
+         source_kind = ?34, source_platform = ?35`,
     )
     .bind(
       job.id,
@@ -159,6 +279,18 @@ async function writeJob(
       sourceId,
       externalId,
       contentHash,
+      job.verification ?? 'unverified',
+      job.verificationReason ?? null,
+      job.verifiedAt ?? null,
+      job.jobStatus ?? 'open',
+      job.closedAt ?? null,
+      job.closedReason ?? null,
+      firstSeenAt,
+      lastSeenAt,
+      job.applyUrl ?? null,
+      job.companyUrl ?? null,
+      job.sourceKind ?? null,
+      job.sourcePlatform ?? null,
     )
     .run()
 
@@ -173,7 +305,7 @@ async function writeJob(
 }
 
 /**
- * Runs one source end to end: fetch, normalise, upsert, and retire the
+ * Runs one source end to end: fetch, normalise, upsert, and close the
  * postings that are no longer offered. A failing source never stops the
  * others — the error is recorded against the source so it is visible.
  */
@@ -182,8 +314,8 @@ export async function runIngestion(
   sourceId: string,
   options: IngestionOptions = {},
 ): Promise<IngestionResult> {
-  const adapter = getAdapter(sourceId)
   const now = options.now ?? Date.now()
+  const nowIso = new Date(now).toISOString()
 
   const result: IngestionResult = {
     sourceId,
@@ -192,30 +324,70 @@ export async function runIngestion(
     inserted: 0,
     updated: 0,
     expired: 0,
+    closed: 0,
     skipped: 0,
     error: null,
   }
 
-  const runId = `run_${crypto.randomUUID()}`
-  const startedAt = new Date(now).toISOString()
+  let row = await db
+    .prepare(
+      `SELECT id, name, adapter, listing_url, config, verification, kind, platform, enabled,
+        consecutive_failures FROM sources WHERE id = ?1`,
+    )
+    .bind(sourceId)
+    .first<SourceRow>()
 
-  if (!adapter) {
-    result.error = `Unknown source adapter: ${sourceId}`
+  if (!row) {
+    // A source that is in the registry but not yet in the database is
+    // created from the registry, so adding a source does not also mean
+    // writing a migration.
+    const seeded = SEED_SOURCES.find((source) => source.id === sourceId)
+    if (!seeded) {
+      result.error = `Unknown source: ${sourceId}`
+      return result
+    }
+
+    await ensureSources(db)
+    const created = await db
+      .prepare(
+        `SELECT id, name, adapter, listing_url, config, verification, kind, platform, enabled,
+          consecutive_failures FROM sources WHERE id = ?1`,
+      )
+      .bind(sourceId)
+      .first<SourceRow>()
+
+    if (!created) {
+      result.error = `Unknown source: ${sourceId}`
+      return result
+    }
+    row = created
+  }
+
+  const parser = getParser(row.adapter)
+  if (!parser) {
+    result.error = `Unknown parser: ${row.adapter}`
     return result
   }
 
-  // The run log points at the source, so the source row has to exist first.
-  await ensureSource(db, adapter)
+  await ensureSourceRow(db, row)
 
+  const runId = `run_${crypto.randomUUID()}`
   await db
     .prepare(
       `INSERT INTO ingestion_runs (id, source_id, started_at, status) VALUES (?1, ?2, ?3, 'running')`,
     )
-    .bind(runId, sourceId, startedAt)
+    .bind(runId, sourceId, nowIso)
     .run()
 
+  const politeFetch = createPoliteFetch(
+    sourceId,
+    options.userAgent ?? USER_AGENT,
+    options.fetchImpl ?? fetch,
+  )
+
   try {
-    const postings = await adapter.fetchPostings(options.fetchImpl)
+    const sourceRef = sourceRefFrom(row, parser.verification)
+    const postings = await parser.fetchPostings(sourceRef, politeFetch)
     result.fetched = postings.length
     const seen = new Set<string>()
 
@@ -228,14 +400,20 @@ export async function runIngestion(
 
       const jobId = await jobIdFor(sourceId, raw.externalId)
       const contentHash = await sha256(contentHashOf(raw))
-      const normalised = normalizePosting(raw)
+      const normalised = normalizePosting(raw, {
+        verification: sourceRef.verification,
+        verificationReason: sourceRef.verificationReason,
+        sourceKind: row.kind ?? parser.kind,
+        sourcePlatform: row.platform ?? parser.platform,
+        now,
+      })
 
       const job: Job = {
         ...normalised,
         id: jobId,
-        sourceName: adapter.name,
-        sourceUrl: raw.url || adapter.homepage,
-        postedAt: normalised.postedAt ?? new Date(now).toISOString(),
+        sourceName: row.name || parser.name,
+        sourceUrl: raw.url || sourceRef.listingUrl || parser.homepage,
+        postedAt: normalised.postedAt ?? nowIso,
       }
 
       await db
@@ -245,22 +423,16 @@ export async function runIngestion(
            ON CONFLICT(source_id, external_id) DO UPDATE SET job_id = ?3, payload = ?4,
              content_hash = ?5, last_seen_at = ?6, expired_at = NULL`,
         )
-        .bind(
-          sourceId,
-          raw.externalId,
-          jobId,
-          JSON.stringify(raw),
-          contentHash,
-          new Date(now).toISOString(),
-        )
+        .bind(sourceId, raw.externalId, jobId, JSON.stringify(raw), contentHash, nowIso)
         .run()
 
-      const outcome = await upsertJob(db, job, sourceId, raw.externalId, contentHash)
+      const outcome = await upsertJob(db, job, sourceId, raw.externalId, contentHash, now)
       if (outcome === 'inserted') result.inserted += 1
       else if (outcome === 'updated') result.updated += 1
+      else if (outcome === 'closed') result.closed += 1
     }
 
-    if (options.expireMissing !== false) {
+    if (options.closeMissing !== false) {
       const stale = await db
         .prepare(
           `SELECT external_id, job_id FROM source_postings
@@ -269,20 +441,24 @@ export async function runIngestion(
         .bind(sourceId)
         .all<{ external_id: string; job_id: string | null }>()
 
-      for (const row of stale.results ?? []) {
-        if (seen.has(row.external_id)) continue
-        const expiredAt = new Date(now).toISOString()
+      for (const posting of stale.results ?? []) {
+        if (seen.has(posting.external_id)) continue
+
+        // The source no longer lists it, so the role has closed.
         await db
           .prepare(
             'UPDATE source_postings SET expired_at = ?3 WHERE source_id = ?1 AND external_id = ?2',
           )
-          .bind(sourceId, row.external_id, expiredAt)
+          .bind(sourceId, posting.external_id, nowIso)
           .run()
-        if (row.job_id) {
-          await db
-            .prepare('UPDATE jobs SET expired_at = ?2 WHERE id = ?1')
-            .bind(row.job_id, expiredAt)
-            .run()
+
+        if (posting.job_id) {
+          // The role closed, but the row stays: knowing that a role existed
+          // and closed is more useful than pretending it never did. The
+          // interface offers it as closed rather than as something to apply
+          // for.
+          const closed = await closeJob(db, posting.job_id, sourceId, nowIso)
+          if (closed) result.closed += 1
         }
         result.expired += 1
       }
@@ -296,6 +472,57 @@ export async function runIngestion(
 
   await finishRun(db, runId, result)
   return result
+}
+
+/**
+ * Marks a posting closed, keeping the row so the fact that it existed is
+ * not lost. A role that reappears is reopened rather than duplicated.
+ */
+async function closeJob(
+  db: D1Database,
+  jobId: string,
+  sourceId: string,
+  nowIso: string,
+): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT job_status FROM jobs WHERE id = ?1')
+    .bind(jobId)
+    .first<{ job_status: string | null }>()
+
+  if (!row || row.job_status === 'closed') return false
+
+  await db
+    .prepare(
+      `UPDATE jobs SET job_status = 'closed', closed_at = ?2,
+        closed_reason = 'it is no longer advertised by the source' WHERE id = ?1`,
+    )
+    .bind(jobId, nowIso)
+    .run()
+
+  await recordEvent(db, jobId, 'closed', 'it is no longer advertised by the source', sourceId)
+  return true
+}
+
+async function ensureSourceRow(db: D1Database, row: SourceRow): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO sources (id, name, adapter, kind, platform, listing_url, enabled, verification,
+        refresh_tier, rate_limit_per_hour, config)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'daily', 30, ?9)
+       ON CONFLICT(id) DO UPDATE SET name = ?2, adapter = ?3`,
+    )
+    .bind(
+      row.id,
+      row.name,
+      row.adapter,
+      row.kind ?? 'api',
+      row.platform ?? null,
+      row.listing_url ?? '',
+      row.enabled,
+      row.verification ?? 'unverified',
+      row.config || '{}',
+    )
+    .run()
 }
 
 async function finishRun(db: D1Database, runId: string, result: IngestionResult): Promise<void> {
@@ -319,9 +546,49 @@ async function finishRun(db: D1Database, runId: string, result: IngestionResult)
     .run()
 
   await db
-    .prepare(`UPDATE sources SET last_run_at = ?2, last_status = ?3, last_error = ?4 WHERE id = ?1`)
+    .prepare(
+      `UPDATE sources SET last_run_at = ?2, last_status = ?3, last_error = ?4,
+        consecutive_failures = CASE WHEN ?3 = 'ok' THEN 0 ELSE consecutive_failures + 1 END,
+        disabled_reason = CASE WHEN ?3 = 'ok' THEN NULL
+          WHEN consecutive_failures + 1 >= 5 THEN 'disabled after 5 consecutive failures' END
+        WHERE id = ?1`,
+    )
     .bind(result.sourceId, finishedAt, result.status, result.error)
     .run()
+}
+
+/** How long a source should wait between runs, by its refresh tier. */
+const TIER_INTERVAL_MS: Record<string, number> = {
+  hourly: 60 * 60 * 1000,
+  six_hourly: 6 * 60 * 60 * 1000,
+  daily: 24 * 60 * 60 * 1000,
+  weekly: 7 * 24 * 60 * 60 * 1000,
+}
+
+/**
+ * The sources that are due to run, oldest first. This is what keeps a
+ * registry of thousands of sources inside a bounded amount of work: each
+ * source is refreshed on its own tier rather than all of them at once.
+ */
+export async function dueSources(db: D1Database, limit = 50): Promise<SourceRow[]> {
+  const rows = await db
+    .prepare(
+      `SELECT id, name, adapter, listing_url, config, verification, kind, platform, enabled,
+        consecutive_failures, refresh_tier, last_run_at FROM sources
+       WHERE enabled = 1 AND consecutive_failures < 5
+       ORDER BY COALESCE(last_run_at, '') ASC LIMIT ?1`,
+    )
+    .bind(limit)
+    .all<SourceRow & { refresh_tier: string | null; last_run_at: string | null }>()
+
+  const now = Date.now()
+  return (rows.results ?? []).filter((row) => {
+    const interval = TIER_INTERVAL_MS[row.refresh_tier ?? 'daily'] ?? TIER_INTERVAL_MS.daily
+    if (!row.last_run_at) return true
+    const last = Date.parse(row.last_run_at)
+    if (Number.isNaN(last)) return true
+    return now - last >= interval
+  })
 }
 
 /** Runs every enabled source. One failing source does not stop the rest. */
@@ -339,4 +606,88 @@ export async function runAllSources(
     results.push(await runIngestion(db, row.id, options))
   }
   return results
+}
+
+/** Runs the sources that are due, up to a limit. */
+export async function runDueSources(
+  db: D1Database,
+  limit = 50,
+  options: IngestionOptions = {},
+): Promise<IngestionResult[]> {
+  await ensureSources(db)
+  const due = await dueSources(db, limit)
+  return runSourcesConcurrently(db, due, options)
+}
+
+/**
+ * Runs several sources at once, with a ceiling on how many are in flight
+ * and a deadline after which no new source is started.
+ *
+ * Fetching sources one after another does not scale: a source that is slow
+ * to answer holds up every source behind it. A handful in parallel, with a
+ * deadline, means one bad host costs a few seconds rather than the whole
+ * run.
+ */
+export async function runSourcesConcurrently(
+  db: D1Database,
+  sources: SourceRow[],
+  options: IngestionOptions = {},
+): Promise<IngestionResult[]> {
+  const concurrency = Math.max(1, options.concurrency ?? 5)
+  const deadline = options.deadlineMs ? Date.now() + options.deadlineMs : null
+  const perSourceMs = options.sourceTimeoutMs ?? 15_000
+  const results: IngestionResult[] = []
+
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(concurrency, sources.length) }, async () => {
+    for (;;) {
+      if (deadline !== null && Date.now() > deadline) return
+      const index = cursor
+      cursor += 1
+      const source = sources[index]
+      if (!source) return
+
+      // A source that will not answer is abandoned rather than allowed to
+      // hold up the run. The request underneath is left to finish on its own.
+      results.push(await runWithTimeout(db, source.id, options, perSourceMs))
+    }
+  })
+
+  await Promise.all(workers)
+  return results
+}
+
+/**
+ * Runs one source, giving up after a budget. The failure is recorded against
+ * the source, so an unresponsive host is visible rather than invisible.
+ */
+export async function runWithTimeout(
+  db: D1Database,
+  sourceId: string,
+  options: IngestionOptions,
+  timeoutMs: number,
+): Promise<IngestionResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const timeout = new Promise<IngestionResult>((resolve) => {
+    timer = setTimeout(() => {
+      resolve({
+        sourceId,
+        status: 'failed',
+        fetched: 0,
+        inserted: 0,
+        updated: 0,
+        expired: 0,
+        closed: 0,
+        skipped: 0,
+        error: `the source did not answer within ${Math.round(timeoutMs / 1000)}s`,
+      })
+    }, timeoutMs)
+  })
+
+  try {
+    return await Promise.race([runIngestion(db, sourceId, options), timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }

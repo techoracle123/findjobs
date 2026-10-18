@@ -29,12 +29,17 @@ The default ranking is eligibility-first (eligible overlap, unknown, then restri
 - Accounts, profiles, saved roles, applications, alert preferences, subscriptions, entitlements, consents and an audit log live in D1.
 - The browser keeps a local copy of everything, so the interface is instant and works with no account. On sign-in the server becomes the source of truth and the browser's data can be imported rather than lost.
 
-**Ingestion**
+**Sources and ingestion**
 
-- A source-adapter interface with two real adapters (Arbeitnow and Remotive, both key-free public APIs) behind it.
-- One normalisation path for every source: role family, seniority, work mode, country, skills and salary are derived once, in one place.
-- Postings are upserted by content hash, so a re-run is idempotent, a changed posting is updated, and a posting the source has dropped is retired rather than left to rot.
-- Each run is logged with its counts, and a failing source records its error against itself instead of taking the others down.
+- A source registry: a table of sources, each with a parser, a kind, a refresh tier, a per-hour rate limit, a country and a verification policy. It is seeded with 209 real public feeds and grows by adding rows rather than code.
+- Ten parsers, which is what makes "thousands of sources" tractable: one parser covers many employers, so a registry of thousands of sources needs only a handful of readers. Greenhouse, Lever, Ashby, Recruitee, SmartRecruiters and Workday read the public JSON endpoints those platforms expose; a schema.org `JobPosting` reader picks up any careers page that publishes structured data; an RSS reader picks up any employer job feed; Arbeitnow and Remotive cover the public aggregators.
+- One normalisation path for every source: role family, seniority, work mode, country, skills, salary, whether it is open and whether it is verified are derived once, in one place.
+- Postings are upserted by content hash, so a re-run is idempotent, a changed posting is updated, and a posting the source has dropped is closed rather than left to rot.
+- A crawler that behaves: `robots.txt` is read before the first request to a host and is obeyed, the crawl delay it asks for is honoured, the bot identifies itself honestly, and every host is rate-limited. A source that fails five times running is disabled rather than retried forever.
+- Job lifecycle: a role that stops appearing, that its source marks closed, or that passes its validity date is closed — with the date and the reason — and every posting keeps a history of what happened to it. A role that reappears is reopened, not duplicated. Closed roles stay visible, marked closed, rather than disappearing.
+- Verification with a reason: `verified` means the posting was read from the employer's own board; `unverified` means it came from a public listing we could not confirm with the employer; `stale` means it has not been seen in a recent refresh. The reason is stored and shown.
+- Sources are refreshed on their own tier, several at a time, with a per-source budget so one unresponsive host costs seconds rather than the run. Work is spread across a Cloudflare Queue, so the number of sources is not limited by how long one Worker invocation may run.
+- The feed is searched and paged in the database rather than shipped whole to the browser.
 - Recorded API fixtures drive the tests, so the pipeline is exercised end to end without touching the network.
 
 **Billing**
@@ -105,30 +110,30 @@ curl -H 'x-dev-user-email: person@example.com' http://localhost:8787/api/account
 
 ## API reference
 
-| Route                                       | Purpose                                                |
-| ------------------------------------------- | ------------------------------------------------------ |
-| `GET /api/health`                           | Mode, bindings, data source, rate vintage, sign-in URL |
-| `GET /api/jobs`                             | All live postings                                      |
-| `GET /api/jobs/:id`                         | A single posting                                       |
-| `POST /api/score`                           | Scores postings against a supplied profile             |
-| `POST /api/cv/suggest`                      | Profile suggestions from extracted CV text             |
-| `GET /api/rates`                            | Reference rates, their date and their source           |
-| `GET /api/account`                          | The signed-in account, profile, saved roles and alerts |
-| `PUT /api/account/profile`                  | Saves the profile                                      |
-| `GET/POST/DELETE /api/account/saved`        | Saved roles and applications                           |
-| `GET/POST/PATCH/DELETE /api/account/alerts` | Alert preferences                                      |
-| `POST /api/account/import`                  | Imports data the browser was keeping locally           |
-| `DELETE /api/account`                       | Deletes the account and everything attached to it      |
-| `GET /api/sources`                          | Configured sources and their last run                  |
-| `POST /api/sources/ingest`                  | Runs every enabled source now                          |
-| `GET /api/billing/plans`                    | Available plans                                        |
-| `GET /api/billing/subscription`             | Current subscription and entitlements                  |
-| `POST /api/billing/checkout`                | Starts a checkout                                      |
-| `POST /api/billing/portal`                  | Opens the provider's customer portal                   |
-| `POST /api/billing/webhook`                 | The provider's webhook (signature verified)            |
-| `GET /api/telegram/status`                  | Whether this account has linked a chat                 |
-| `POST /api/telegram/link`                   | Returns a signed deep link to link Telegram            |
-| `POST /api/telegram/webhook`                | The bot's webhook (secret token verified)              |
+| Route                                       | Purpose                                                    |
+| ------------------------------------------- | ---------------------------------------------------------- |
+| `GET /api/health`                           | Mode, bindings, data source, rate vintage, sign-in URL     |
+| `GET /api/jobs`                             | The feed; `?q=`, `?status=`, `?limit=`, `?offset=` page it |
+| `GET /api/jobs/:id`                         | A single posting                                           |
+| `POST /api/score`                           | Scores postings against a supplied profile                 |
+| `POST /api/cv/suggest`                      | Profile suggestions from extracted CV text                 |
+| `GET /api/rates`                            | Reference rates, their date and their source               |
+| `GET /api/account`                          | The signed-in account, profile, saved roles and alerts     |
+| `PUT /api/account/profile`                  | Saves the profile                                          |
+| `GET/POST/DELETE /api/account/saved`        | Saved roles and applications                               |
+| `GET/POST/PATCH/DELETE /api/account/alerts` | Alert preferences                                          |
+| `POST /api/account/import`                  | Imports data the browser was keeping locally               |
+| `DELETE /api/account`                       | Deletes the account and everything attached to it          |
+| `GET /api/sources`                          | The source registry and the state of every source          |
+| `POST /api/sources/ingest`                  | Runs the sources that are due, within a budget             |
+| `GET /api/billing/plans`                    | Available plans                                            |
+| `GET /api/billing/subscription`             | Current subscription and entitlements                      |
+| `POST /api/billing/checkout`                | Starts a checkout                                          |
+| `POST /api/billing/portal`                  | Opens the provider's customer portal                       |
+| `POST /api/billing/webhook`                 | The provider's webhook (signature verified)                |
+| `GET /api/telegram/status`                  | Whether this account has linked a chat                     |
+| `POST /api/telegram/link`                   | Returns a signed deep link to link Telegram                |
+| `POST /api/telegram/webhook`                | The bot's webhook (secret token verified)                  |
 
 ## Configuration
 
@@ -190,7 +195,8 @@ The code for these exists; what is missing is the real account and real provider
 - **A Cloudflare Access application** in your own account, with the paths above protected and the AUD set.
 - **A Stripe account** with a live price, plus the real refund and cancellation rules, and a decision about what happens when a webhook is missed.
 - **A Telegram bot** with its token as a Cloudflare secret, and a decision about what the bot may send and how often.
-- **Live job sources.** The two adapters are real, but the terms of each source, its rate limit and its attribution requirements have to be checked before the feed is presented as live. The feed currently mixes fictional demo rows with whatever ingestion has fetched, and the interface says which is which.
+- **Live job sources, checked one by one.** The ten parsers and the 209-source registry are real, but the terms of each source, its rate limit and its attribution requirements have to be checked before the feed is presented as live. A board that does not answer is not a silent problem: it is disabled after five failures and listed in the operator view, so the registry can be pruned to what actually works. The feed currently mixes fictional demo rows with whatever ingestion has fetched, and the interface says which is which.
+- **A decision on closed roles.** They are kept, marked closed with the date and the reason, and hidden from the default feed. If they should be removed instead, or kept for a fixed window and then purged, that is a policy choice rather than a code change.
 - **A currency feed that covers the currencies people are paid in.** Frankfurter is ECB-based, so NGN, AED, KES, GHS and SAR cannot be converted with it. Roles paid in those currencies keep the employer's original figure, which is honest but less useful.
 - **OCR for scanned CVs.** Text-based PDFs and DOCX files are handled; a scanned image is not.
 - **Privacy, retention, deletion and accessibility review**, and a decision on how long profiles and audit rows are kept.

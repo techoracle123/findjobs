@@ -1,4 +1,11 @@
-import type { EligibilityTier, Job, RatesPayload, SalaryPeriod, ScoredJob } from '../shared/types'
+import type {
+  EligibilityTier,
+  Job,
+  RatesPayload,
+  SalaryPeriod,
+  ScoredJob,
+  VerificationLevel,
+} from '../shared/types'
 import { bucketByPeriod, convertAmount } from '../shared/format'
 import { compareScoredJobs } from '../shared/scoring'
 
@@ -9,6 +16,10 @@ export interface Filters {
   roleFamilies: string[]
   minScore: number
   eligibility: 'all' | EligibilityTier
+  /** Whether roles that have closed are shown. Off by default. */
+  includeClosed: boolean
+  /** Which verification levels to show. Empty means all of them. */
+  verification: VerificationLevel[]
 }
 
 export const DEFAULT_FILTERS: Filters = {
@@ -18,6 +29,8 @@ export const DEFAULT_FILTERS: Filters = {
   roleFamilies: [],
   minScore: 0,
   eligibility: 'all',
+  includeClosed: false,
+  verification: [],
 }
 
 export type SortKey = 'relevance' | 'newest' | 'salary-asc' | 'salary-desc'
@@ -108,6 +121,16 @@ export function filterJobs(scored: ScoredJob[], filters: Filters): ScoredJob[] {
       return false
     if (filters.eligibility !== 'all' && entry.tier !== filters.eligibility) return false
     if (entry.score < filters.minScore) return false
+
+    // A closed role is not something to apply for, so it stays out of the
+    // list unless it is asked for.
+    if (!filters.includeClosed && job.jobStatus === 'closed') return false
+
+    if (filters.verification.length > 0) {
+      const level = job.verification ?? 'unverified'
+      if (!filters.verification.includes(level)) return false
+    }
+
     return true
   })
 }

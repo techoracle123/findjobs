@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /private/
+Disallow: /admin
+Allow: /
+
+User-agent: RoleSignalBot
+Disallow: /
+
+Crawl-delay: 2

@@ -8,7 +8,8 @@ import {
   WORK_MODE_LABELS,
 } from '../shared/taxonomy'
 import { ELIGIBILITY_LABELS } from '../shared/scoring'
-import type { EligibilityTier } from '../shared/types'
+import type { EligibilityTier, VerificationLevel } from '../shared/types'
+import { VERIFICATION_LABELS } from '../shared/verification'
 
 interface FilterBarProps {
   filters: Filters
@@ -24,8 +25,10 @@ export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
     filters.workModes.length +
     filters.seniorities.length +
     filters.roleFamilies.length +
+    filters.verification.length +
     (filters.minScore > 0 ? 1 : 0) +
-    (filters.eligibility !== 'all' ? 1 : 0)
+    (filters.eligibility !== 'all' ? 1 : 0) +
+    (filters.includeClosed ? 1 : 0)
 
   return (
     <section className="panel">
@@ -61,6 +64,47 @@ export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
                 {ELIGIBILITY_LABELS[tier]}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <span className="field__label">Verification</span>
+          <div className="chiprow">
+            {(['verified', 'unverified', 'stale'] as VerificationLevel[]).map((level) => (
+              <button
+                key={level}
+                type="button"
+                className="chipbtn"
+                aria-pressed={filters.verification.includes(level)}
+                onClick={() =>
+                  onChange({ ...filters, verification: toggle(filters.verification, level) })
+                }
+              >
+                {VERIFICATION_LABELS[level]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <span className="field__label">Closed roles</span>
+          <div className="chiprow">
+            <button
+              type="button"
+              className="chipbtn"
+              aria-pressed={!filters.includeClosed}
+              onClick={() => onChange({ ...filters, includeClosed: false })}
+            >
+              Hide
+            </button>
+            <button
+              type="button"
+              className="chipbtn"
+              aria-pressed={filters.includeClosed}
+              onClick={() => onChange({ ...filters, includeClosed: true })}
+            >
+              Show
+            </button>
           </div>
         </div>
 
