@@ -95,16 +95,16 @@ if (health.aiBinding) {
     `::${advice.provider === 'openrouter' && (!translation || translation.translated) ? 'notice' : 'warning'} title=Live AI check::${JSON.stringify({ adviceProvider: advice.provider, tips: advice.tips?.length, translated: translation?.translated, originalLanguage: translation?.originalLanguage, message: translation?.message || advice.message })}`,
   )
 }
-await mkdir('test-results', { recursive: true })
+await mkdir('diagnostics', { recursive: true })
 await writeFile(
-  'test-results/live-jobs.json',
+  'diagnostics/live-jobs.json',
   JSON.stringify({
     capturedAt: new Date().toISOString(),
     origin: base,
     jobs: [...new Map([...jobs.jobs, ...nigeria.jobs].map((job) => [job.id, job])).values()],
   }),
 )
-await writeFile('test-results/live-sources.json', JSON.stringify(sources, null, 2))
+await writeFile('diagnostics/live-sources.json', JSON.stringify(sources, null, 2))
 
 // A small public-only sample can be read through GitHub's checks API when this
 // restricted workspace cannot download Azure-hosted artifacts. No credentials,

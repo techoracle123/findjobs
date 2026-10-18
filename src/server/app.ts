@@ -25,24 +25,6 @@ export const app = new Hono<AppEnv>()
 
 app.use('*', requestContext)
 app.use('*', publicDataCache())
-app.onError((error, c) => {
-  if (/daily row (?:read|write) limit|quota|7500/i.test(error.message))
-    return c.json(
-      {
-        error: 'temporarily_unavailable',
-        message: 'Job loading and account syncing are temporarily paused. Please try again later.',
-      },
-      503,
-    )
-  return c.json(
-    {
-      error: 'temporarily_unavailable',
-      message: 'We couldn’t complete this request. Please try again shortly.',
-    },
-    500,
-  )
-})
-
 // Cookie-authenticated writes are same-origin. Signed provider webhooks are
 // verified separately and must remain callable by Telegram/payment servers.
 app.use('/api/*', async (c, next) => {
@@ -238,8 +220,18 @@ app.route('/api', telegramRoutes)
 app.notFound((c) => c.json({ error: 'not_found' }, 404))
 
 app.onError((error, c) => {
-  console.error('api error', error)
-  return c.json({ error: 'internal_error' }, 500)
+  const quota = /daily row (?:read|write) limit|quota|7500/i.test(error.message)
+  console.error('api error', { type: quota ? 'storage_unavailable' : 'internal_error' })
+  return quota
+    ? c.json(
+        {
+          error: 'temporarily_unavailable',
+          message:
+            'Job loading and account syncing are temporarily paused. Please try again later.',
+        },
+        503,
+      )
+    : c.json({ error: 'internal_error' }, 500)
 })
 
 export default app

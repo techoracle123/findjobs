@@ -12,3 +12,5 @@ dist-smoke/
 
 test-results/
 playwright-report/
+
+diagnostics/

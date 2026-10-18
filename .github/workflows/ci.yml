@@ -52,9 +52,7 @@ jobs:
       - name: Install Chromium for isolated real-feed browser checks
         run: npx playwright install --with-deps chromium
 
-      - name: Test the new interface against a recent real-feed capture
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Test the new interface against freshly ingested public jobs
         run: node scripts/verify-real-preview.mjs
 
       - name: Save isolated preview browser reports
@@ -65,6 +63,7 @@ jobs:
           path: |
             test-results/
             playwright-report/
+            diagnostics/
           retention-days: 7
 
       - name: Dependency audit

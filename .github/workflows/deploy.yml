@@ -82,4 +82,5 @@ jobs:
           path: |
             test-results/
             playwright-report/
+            diagnostics/
           retention-days: 7

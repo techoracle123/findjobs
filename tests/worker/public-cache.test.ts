@@ -49,3 +49,36 @@ describe('public response caching', () => {
     expect(count()).toBe(2)
   })
 })
+
+it('reports an exhausted database honestly without exposing internals', async () => {
+  const { default: app } = await import('../../src/server/app')
+  const db = {
+    prepare: () => ({
+      all: async () => {
+        throw new Error('D1_ERROR: daily row read limit exceeded [7500] private-diagnostic')
+      },
+    }),
+  } as unknown as D1Database
+  const response = await app.request(
+    'https://fj-find-jobs.pages.dev/api/jobs',
+    {},
+    { APP_MODE: 'test', DB: db },
+  )
+  // The unpaged reader intentionally has its own honest empty warning fallback.
+  expect(response.status).toBe(200)
+  expect(JSON.stringify(await response.json())).not.toContain('private-diagnostic')
+  const paged = await app.request(
+    'https://fj-find-jobs.pages.dev/api/health',
+    {},
+    {
+      APP_MODE: 'test',
+      DB: {
+        prepare: () => {
+          throw new Error('D1_ERROR: daily row read limit [7500] private-diagnostic')
+        },
+      } as unknown as D1Database,
+    },
+  )
+  expect(paged.status).toBe(503)
+  expect(JSON.stringify(await paged.json())).not.toContain('private-diagnostic')
+})

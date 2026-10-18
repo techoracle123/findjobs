@@ -88,8 +88,9 @@ is not proof that credits, routing and inference work.
   14 passing checks, including sign-up/recovery dialog behavior.
 - The browser suite covers **320, 390, 414, 768, 1024, 1280, 1600 and 1920px**,
   navigation, saved state, content, account help and number-free mobile rings.
-- CI can run that browser suite in an isolated staging-mode preview using the
-  most recent genuine public-feed artifact. It refuses fictional or stale input.
+- CI can run that browser suite in an isolated staging-mode preview by freshly
+  ingesting public One Acre Fund/MyJobMag feeds into an isolated local database.
+  It refuses to substitute fictional listings if those sources fail.
   That is NOT a successful production/Access/email delivery test. See Actions for
   the current run outcome; the new production browser stage remains blocked.
 - Preview on port 5173 retains 10 genuine source listings and current open FX data,
