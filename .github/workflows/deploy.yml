@@ -8,6 +8,7 @@ on:
       - .github/workflows/deploy.yml
       - scripts/deploy-cloudflare.mjs
       - scripts/cloudflare-integrations.mjs
+      - scripts/check-live.mjs
       - src/**
       - functions/**
       - public/**

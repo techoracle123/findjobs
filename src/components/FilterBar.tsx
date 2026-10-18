@@ -64,6 +64,7 @@ export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
                   {ROLE_FAMILY_LABELS[family]}
                 </option>
               ))}
+            <option value="unknown">Other professions</option>
           </select>
         </div>
         <div className="field">
