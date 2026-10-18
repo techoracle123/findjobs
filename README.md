@@ -5,9 +5,11 @@ A simple, skill-first job discovery service for Nigeria and the world, across pr
 ## Current status
 
 The selected address is **https://fj-find-jobs.pages.dev**. Deployment now targets
-this exact project. **The latest full release is blocked by Cloudflare's exhausted
-free daily D1 read quota**; it must not be described as production-ready. See
-[launch status](docs/LAUNCH-STATUS.md) for the current outage and recovery details.
+this exact project. **Public browsing is restored**, including Nigerian filters,
+search and dedicated job pages. A database-independent, robots-aware public-feed
+path observed 372 real listings during the recovery deployment. Cloudflare's
+exhausted daily D1 allowance still degrades account syncing and ingestion; this
+is not full account/AI readiness. See [launch status](docs/LAUNCH-STATUS.md).
 
 Jobs come from live public sources. Runtime demo fallbacks are removed, historical
 fictional rows are purged by migration 0011, and synthetic fixtures exist only for
@@ -15,8 +17,9 @@ tests. Empty feeds stay empty. Unavailable exchange rates do not become made-up
 conversions. Payments and the plan screen are disabled.
 
 The encrypted OpenRouter key is now detected. Cloudflare Access's actual email-code
-page is configured for the chosen hostname. Production job/account/AI checks still
-need database access restored, and real email/chat delivery needs user confirmation.
+page is configured for the chosen hostname. All 16 live browser checks now pass.
+Full database-backed account/AI checks still need storage recovery, and real
+email/chat delivery needs user confirmation.
 
 The default ranking is eligibility-first (eligible overlap, unknown, then restricted), followed by internal skill/preference overlap and recency. Visitors see a green match ring, not a numeric grade. The score weights required skills (48%), useful skills (14%), role family (18%), seniority (10%) and work mode (10%); missing details are neutral, and eligibility is separate. The work-eligibility picker searches every ISO alpha-2 region except Antarctica. Salary conversion uses dated live rates when available; salary sorting never annualises different pay periods.
 

@@ -1,8 +1,14 @@
 # FJ - Find Jobs release status
 
-Updated 18 October 2026. **This release is not fully live yet.** Cloudflare D1
-rejected deployment migrations with code 7500: the account has exhausted its
-free daily database row-read allowance. No paid hosting plan has been enabled.
+Updated 18 October 2026, 20:00 UTC. **Public job browsing is restored.**
+Deployment [39161116586](https://github.com/techoracle123/findjobs/actions/runs/39161116586)
+published the recovery and passed **all 16 browser checks against the actual live site**.
+It observed **372 genuine public listings**. A subsequent independent live query
+returned **106 Nigerian listings**, and its individual-job endpoint worked.
+These are observations, not guaranteed or verified vacancies.
+
+Full account/AI/ingestion readiness remains degraded: Cloudflare D1 migrations
+still encounter the free account's daily read allowance. No paid plan was enabled.
 
 ## Chosen address
 
@@ -12,11 +18,30 @@ Cloudflare Access for this exact hostname is configured; its real email-code
 page was fetched successfully. Telegram registration will move to this hostname
 only after the full deployment passes its database checks.
 
-A first deployment to an otherwise empty reserved project may publish the new
-interface while the database is unavailable, rather than leaving an origin error.
-That path intentionally FAILS the release, does not invent a job feed, does not
-skip arbitrary migration errors, and never replaces an existing working app.
-It does not count as successful account, AI, ingestion or production verification.
+The recovery intentionally permits a browsing-only deployment on the specific
+D1 daily-quota failure, including an existing project. Other migration errors
+still fail the deployment. It checks actual job responses and deep links before
+reporting public browsing recovered, exports `STORAGE_DEGRADED=true`, and does
+not report database readiness or deploy ingestion workers in that state.
+
+## Database-independent browsing recovery
+
+- Database failures no longer turn the public feed into an empty list/error screen.
+  The API fetches real public MyJobMag, We Work Remotely, One Acre Fund,
+  GiveDirectly and Arbeitnow listings through existing publisher parsers.
+- Publisher robots exclusions, crawl delays and request timeouts apply. Each
+  feed contributes at most 100 parsed jobs. Observations are coalesced per isolate
+  and cached for 30 minutes in memory and the Cloudflare Cache API.
+- Stable IDs match normal ingestion. Posted dates, original application links
+  and actual observation timestamps are retained. Closed/expired listings are
+  excluded. No runtime fixture, invented job, auth bypass or paid-AI budget bypass.
+- Search, filters, totals, pagination and direct job links use the same snapshot
+  while the database is unavailable. Healthy database queries can still work.
+- Listing-based application pointers remain available; metered model calls are
+  not attempted when the database-backed limiter/budget is unavailable. An
+  unavailable translation keeps the original text with an honest explanation.
+- If every permitted publisher fails and the snapshot has expired, return an
+  honest service error, not fabricated/stale availability.
 
 The old hostname and shared database are retained. Signed-in account records use
 the same database. Browser-only data is origin-specific: saves on the old address
@@ -76,7 +101,7 @@ validated plain-text output, quotas and honest original/listing-based fallback.
 **A real OpenRouter call now passes:** the actual server adapter translated an
 excerpt from a current public French GiveDirectly job into validated English.
 The probe sends no user profile or CV and does not log its key or provider output.
-Verified in deployment 39158240890. Database-backed translation/advice endpoints
+Verified again in recovery deployment 39161116586. Database-backed translation/advice endpoints
 still await storage recovery; this narrow provider test is not a complete user
 session or proof of every AI feature.
 
@@ -87,7 +112,7 @@ session or proof of every AI feature.
 - New ordered/country/freshness/source-status indexes reduce scans and sorts.
 - Public source inspection no longer rewrites every registry row. Deployment
   registers sources explicitly and updates metadata only when it changes.
-- 114 unit tests and 139 Workers/D1 tests pass locally; production build,
+- 114 unit tests and 143 Workers/D1 tests pass locally; production build,
   TypeScript, ESLint and formatting pass. The local live-data smoke suite has
   14 passing checks, including sign-up/recovery dialog behavior.
 - **All 16 browser tests pass locally** against genuine public-feed data. The
@@ -96,10 +121,10 @@ session or proof of every AI feature.
 - CI can run that browser suite in an isolated staging-mode preview by freshly
   ingesting public One Acre Fund/MyJobMag feeds into an isolated local database.
   It refuses to substitute fictional listings if those sources fail.
-  That is NOT a successful production/Access/email delivery test. See Actions for
-  the current CI outcome; the new production browser stage remains blocked.
-  CI **39158244867** passed all 16 browser tests in 19.2 seconds against freshly
-  ingested publisher data, along with the unit/worker/build/audit checks.
+  That isolated CI is not an email delivery test. Latest code CI **39161121973**
+  passed unit/worker/build/audit and all 16 real-feed preview browser checks.
+  Separately, deployment **39161116586** passed all 16 browser checks against
+  **the actual live site** in 24.8 seconds, during the database quota outage.
 - Preview on port 5173 retains 10 genuine source listings and current open FX data,
   without using a synthetic runtime fixture. No local OpenRouter secret is stored.
 
@@ -112,9 +137,9 @@ separate from enabling payments in FJ; the agent has not authorized any upgrade.
 
 Docs: https://developers.cloudflare.com/d1/platform/pricing/
 
-Latest blocked full release: https://github.com/techoracle123/findjobs/actions/runs/39158240890
+Previous blocked full release (superseded for public browsing): https://github.com/techoracle123/findjobs/actions/runs/39158240890
 
-A best-effort workspace timer queues a free-tier retry at **00:05 UTC / 01:05 Nigeria
+A best-effort workspace timer requests a fresh deployment of the current branch at **00:05 UTC / 01:05 Nigeria
 time on 19 October 2026**. It requires the workspace process to remain alive; it
 is not a durable production scheduler or a guarantee of successful deployment.
 
