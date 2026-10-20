@@ -1,26 +1,53 @@
 # FJ - Find Jobs release status
 
-Updated 18 October 2026, 21:06 UTC. **Expanded public discovery is live: 8,546 distinct
-public listings, including 689 Nigerian listings**, observed after publication
-at 20:43 UTC. The API successfully returned a real listing at offset 5,000 and
-the complete description of a Nigerian employer-board role. Counts fluctuate;
-these are publisher-listed opportunities, not verified or guaranteed vacancies.
+Updated 20 October 2026, 15:45 UTC. **Deployment
+[39448791934](https://github.com/techoracle123/findjobs/actions/runs/39448791934)
+and CI [39448802223](https://github.com/techoracle123/findjobs/actions/runs/39448802223)
+both SUCCEEDED for the account/progress/discovery release.** All live-site
+browser tests passed in the deployment. Local suites: 131 unit and 156 Workers
+tests pass, with TypeScript, ESLint, formatting and production build clean.
 
-**Latest deployment [39166093001](https://github.com/techoracle123/findjobs/actions/runs/39166093001)
-SUCCEEDED: all 17 actual live-site browser tests passed in 22.4 seconds**, including
-broad-corpus metadata, pagination beyond 5,000 results and complete job descriptions.
+**Live public corpus: 9,965 distinct listings, 679 Nigerian, 58 successful
+publishers of 209 attempted candidates** (20 October 2026, 15:32 UTC). Counts
+fluctuate; these are publisher-listed opportunities, not verified vacancies.
 
-**Automatic discovery refresh is deployed every 12 hours.** The Cloudflare cron
-runs at **00:00 and 12:00 UTC (01:00 and 13:00 Nigeria time)**. Per-publisher
-queue jobs collect current listings; a delayed publication task allows up to
-20 minutes for collection/retries. Edge/isolate caches may add a short propagation
-delay. The first initial collection ran during deployment; the first natural cron
-execution is still upcoming. This is a durable Cloudflare schedule, not a claim
-that this workspace timer guarantees regular updates.
+## What shipped in this release
 
-Account persistence and database-backed AI remain degraded by D1's daily quota.
-The public discovery collector, storage, publication and schedule no longer need
-D1. No paid hosting/billing change was made.
+- **Dedicated authentication pages** at `/auth/signup`, `/auth/login` and
+  `/auth/recovery`, mobile-first, with Cloudflare Access one-time email codes.
+  Recovery is a genuine fresh-code request through Access; there is no fake
+  password-reset form and no way to bypass verified-email identity. Secure
+  return-to validation accepts only `/dashboard` and job pages.
+- **Personal Progress dashboard** (`/dashboard` and the Progress tab): each
+  signed-in user sees how many applications _they confirmed_ this month, total
+  recorded applications and shortlist size. History lives in a durable
+  `application_history` table that survives bookmark removal; unknown legacy
+  dates are never invented. Advice encourages consistent, well-prepared,
+  multi-role applications while stating plainly that no number guarantees an
+  interview or offer. Anonymous visitors get device-local counts with clear
+  privacy copy. Accounts are isolated across browser profile switches.
+- **Search a country**: country picker with keyboard support, exact-code search
+  (`NG`, `UK`, `USA`) and live per-country job counts in the suggestion list.
+- **Correct real-time statistics**: each job query returns exact whole-corpus
+  facet counts by country and profession (disjunctive counts for the selected
+  dimension), computed server-side before pagination. Filter changes reuse a
+  short client result cache; they do not refetch account, health or exchange
+  rates. Summary metrics always describe the full matching result set.
+- **Specialist discovery**: title-led classification and filters for
+  cybersecurity & information security (154 live), data analytics & analysis
+  (579 live), and video editing & production (4 live), plus 21 new
+  cybersecurity/data/video employer-board candidates. Physical security-guard
+  postings are not mislabelled as cybersecurity. Counts only include real
+  successfully retrieved listings.
+- **Publication integrity fix**: index shards are now written and read without
+  overlap; an oversized-boards bug that briefly inflated the public count to
+  48,745 was detected against production, fixed, repaired in place without
+  publisher recrawl, and is now verified at 9,965 unique jobs. A regression test
+  covers >500-record publications end to end.
+- Automatic 12-hour refresh remains the durable Cloudflare cron (00:00/12:00
+  UTC = 01:00/13:00 Nigeria), with delayed publication after collection.
+
+## Previously verified
 
 ## Chosen address
 

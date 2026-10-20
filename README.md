@@ -7,8 +7,10 @@ A simple, skill-first job discovery service for Nigeria and the world, across pr
 The selected address is **https://fj-find-jobs.pages.dev**. Deployment now targets
 this exact project. **Public browsing is restored**, including Nigerian filters,
 search and dedicated job pages. A database-independent, robots-aware public-feed
-snapshot now serves **8,546 distinct public listings**, including **689 Nigerian**
-listings at the latest check. The Cloudflare producer refreshes discovery every
+snapshot now serves **9,965 distinct public listings**, including **679 Nigerian**
+listings at the latest check (20 October 2026, 15:32 UTC), from 58 successful
+publishers. Real-time facets report exact counts by country and profession,
+including **cybersecurity (154)**, **data analytics (579)** and **video editing (4)**. The Cloudflare producer refreshes discovery every
 **12 hours**, independently of this workspace or D1. Cloudflare's
 exhausted daily D1 allowance still degrades account syncing and ingestion; this
 is not full account/AI readiness. See [launch status](docs/LAUNCH-STATUS.md).
@@ -21,8 +23,11 @@ conversions. Payments and the plan screen are disabled.
 The encrypted OpenRouter key is now detected. Cloudflare Access's actual email-code
 page is configured for the chosen hostname. Live discovery, pagination beyond 5,000 results and full job-detail responses
 are checked during deployment.
-Full database-backed account/AI checks still need storage recovery, and real
-email/chat delivery needs user confirmation.
+Dedicated sign-up, sign-in and passwordless recovery pages are live at
+`/auth/signup`, `/auth/login` and `/auth/recovery`, backed by Cloudflare Access
+email verification. A personal Progress dashboard counts each user's confirmed
+applications per month. Full database-backed account writes still need storage
+recovery, and real email/chat delivery needs user confirmation.
 
 The default ranking is eligibility-first (eligible overlap, unknown, then restricted), followed by internal skill/preference overlap and recency. Visitors see a green match ring, not a numeric grade. The score weights required skills (48%), useful skills (14%), role family (18%), seniority (10%) and work mode (10%); missing details are neutral, and eligibility is separate. The work-eligibility picker searches every ISO alpha-2 region except Antarctica. Salary conversion uses dated live rates when available; salary sorting never annualises different pay periods.
 
