@@ -618,13 +618,15 @@ export default function App() {
             {tab === 'progress' && (
               <ProgressPanel
                 signedIn={account.mode === 'signed-in'}
+                loading={account.mode === 'loading'}
                 activity={
                   account.mode === 'signed-in' && account.activity
                     ? account.activity
                     : deviceActivity(saved)
                 }
                 unavailable={
-                  account.mode === 'signed-in' && (!account.activity || account.activityError)
+                  account.mode === 'loading' ||
+                  (account.mode === 'signed-in' && (!account.activity || account.activityError))
                 }
               />
             )}

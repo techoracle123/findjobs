@@ -83,14 +83,14 @@ export function useAccount(): UseAccount {
   const profileTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const refreshVersion = useRef(0)
   const refreshActivity = useCallback(async () => {
+    const owner = ownerRef.current
     try {
-      const owner = ownerRef.current
       const next = await fetchApplicationActivity()
       if (owner !== ownerRef.current) return
       setActivity(next)
       setActivityError(false)
     } catch {
-      setActivityError(true)
+      if (owner === ownerRef.current) setActivityError(true)
     }
   }, [])
 
@@ -153,6 +153,8 @@ export function useAccount(): UseAccount {
       setSyncError(null)
       await refreshActivity()
     } catch (error) {
+      if (version !== refreshVersion.current) return
+      clearTimeout(profileTimer.current)
       setMode('anonymous')
       setUser(null)
       setActivity(null)
@@ -223,7 +225,7 @@ export function useAccount(): UseAccount {
       }
 
       // Profile edits arrive one keystroke at a time, so they are coalesced.
-      if (profileTimer.current !== null) window.clearTimeout(profileTimer.current)
+      if (profileTimer.current !== undefined) window.clearTimeout(profileTimer.current)
       profileTimer.current = window.setTimeout(() => {
         void putProfile(next).catch((error: unknown) => {
           setSyncError(error instanceof Error ? error.message : String(error))
@@ -322,7 +324,7 @@ export function useAccount(): UseAccount {
 
   useEffect(
     () => () => {
-      if (profileTimer.current !== null) window.clearTimeout(profileTimer.current)
+      if (profileTimer.current !== undefined) window.clearTimeout(profileTimer.current)
     },
     [],
   )

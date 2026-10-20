@@ -4,10 +4,12 @@ export function ProgressPanel({
   activity,
   signedIn,
   unavailable,
+  loading,
 }: {
   activity: ApplicationActivity
   signedIn: boolean
   unavailable?: boolean
+  loading?: boolean
 }) {
   return (
     <section className="progress-panel" aria-labelledby="progress-heading">
@@ -17,11 +19,20 @@ export function ProgressPanel({
           Your {new Date().toLocaleDateString(undefined, { month: 'long' })} application progress
         </h2>
         <p>
-          {signedIn
-            ? 'Private to your account.'
-            : 'Kept on this device. Sign in to keep progress across devices.'}
+          {loading
+            ? 'Checking your account…'
+            : signedIn
+              ? 'Private to your account.'
+              : 'Kept on this device. Sign in to keep progress across devices.'}
         </p>
       </div>
+      {!signedIn && !loading && (
+        <p>
+          <a href="/auth/login?returnTo=%2Fdashboard">Sign in</a> or{' '}
+          <a href="/auth/signup?returnTo=%2Fdashboard">create an account</a> to keep a private,
+          cross-device application history.
+        </p>
+      )}
       <div className="stat-grid">
         <div>
           <strong>{unavailable ? '—' : activity.thisMonth}</strong>
@@ -32,14 +43,15 @@ export function ProgressPanel({
           <span>Applications recorded</span>
         </div>
         <div>
-          <strong>{activity.saved}</strong>
+          <strong>{unavailable ? '—' : activity.saved}</strong>
           <span>In your shortlist</span>
         </div>
       </div>
       {unavailable && (
         <p role="status">
-          Your account’s application history could not load. Retry your account sync rather than
-          treating missing data as zero.
+          {loading
+            ? 'Loading application progress…'
+            : 'Your account’s application history could not load. Retry your account sync rather than treating missing data as zero.'}
         </p>
       )}
       {activity.undated > 0 && (

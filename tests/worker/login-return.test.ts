@@ -5,6 +5,7 @@ describe('returning from email sign-in', () => {
   it.each([
     ['/jobs/job_123', '/jobs/job_123'],
     ['/', '/'],
+    ['/dashboard', '/dashboard'],
     ['https://attacker.example', '/'],
     ['//attacker.example', '/'],
     ['/\\attacker.example', '/'],
