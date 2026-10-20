@@ -327,7 +327,21 @@ test('switching accounts never reuses another person’s browser profile', async
   await expect(page.locator('.stat-grid strong').first()).toHaveText('2')
   authenticated = false
   await page.reload()
-  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible()
+  await expect(
+    page.locator('.topbar').getByRole('link', { name: 'Sign in', exact: true }),
+  ).toBeVisible()
   await expect(page.locator('body')).not.toContainText('BobPrivateSkill')
   await expect(page.locator('body')).not.toContainText('AlicePrivateSkill')
+})
+
+test('country search supports code lookup and keyboard selection', async ({ page }) => {
+  await page.goto('/')
+  const country = page.getByRole('combobox', { name: 'Job location' })
+  await country.fill('NG')
+  await country.press('Enter')
+  await expect(country).toHaveValue('Nigeria')
+  await expect(page.getByText('Listings explicitly located in Nigeria.')).toBeVisible()
+  await country.fill('United King')
+  await country.press('Enter')
+  await expect(country).toHaveValue('United Kingdom')
 })

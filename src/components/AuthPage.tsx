@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Check, Mail, ShieldCheck } from 'lucide-react'
 import { fetchHealth } from '../lib/api'
 
 export function AuthPage() {
-  const path = window.location.pathname
+  const path = window.location.pathname.replace(/\/+$/, '')
   const recovery = path === '/auth/recovery',
     signup = path === '/auth/signup'
   const raw = new URLSearchParams(window.location.search).get('returnTo') || '/dashboard'

@@ -89,3 +89,27 @@ it('exports durable history, including removed bookmarks, and erases it with the
     .first<{ n: number }>()
   expect(count?.n).toBe(0)
 })
+
+it('never moves a previous-month confirmation into this month when marked again', async () => {
+  const ownHeaders = {
+    'x-dev-user-email': 'last-month@example.com',
+    'content-type': 'application/json',
+  }
+  const request = () =>
+    SELF.fetch(base + '/api/account/saved', {
+      method: 'POST',
+      headers: ownHeaders,
+      body: JSON.stringify({ jobId: 'last-month-job', status: 'applied' }),
+    })
+  await request()
+  const id = await userIdFor('last-month@example.com')
+  await env.DB.prepare('UPDATE application_history SET applied_at=?2 WHERE user_id=?1')
+    .bind(id, '2020-01-01T00:00:00.000Z')
+    .run()
+  await request()
+  expect(await activity(ownHeaders)).toMatchObject({ thisMonth: 0, totalApplied: 1 })
+  const row = await env.DB.prepare('SELECT applied_at FROM application_history WHERE user_id=?1')
+    .bind(id)
+    .first<{ applied_at: string }>()
+  expect(row?.applied_at).toBe('2020-01-01T00:00:00.000Z')
+})

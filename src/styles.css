@@ -1939,3 +1939,30 @@ summary:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: -2px;
 }
+
+.btn {
+  text-decoration: none;
+}
+.auth-card .banner {
+  display: block;
+}
+.auth-card .banner button {
+  margin: 0.3rem;
+}
+@media (max-width: 700px) {
+  .auth-story h1,
+  .auth-story > .eyebrow,
+  .auth-story ul,
+  .auth-story > p:not(.field__hint) {
+    display: none;
+  }
+  .auth-story .brand {
+    margin-bottom: 1rem;
+  }
+  .auth-story > .field__hint {
+    margin-bottom: 0;
+  }
+  .auth-layout {
+    gap: 1.25rem;
+  }
+}
