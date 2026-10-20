@@ -1,0 +1,7 @@
+dist
+dist-smoke
+node_modules
+.wrangler
+coverage
+package-lock.json
+migrations/0002_seed_demo_jobs.sql

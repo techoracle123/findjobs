@@ -1,0 +1,22 @@
+{
+  "postings": [
+    {
+      "id": "a1b2-c3",
+      "text": "Product Designer",
+      "hostedUrl": "https://jobs.lever.co/leverdemo/a1b2-c3",
+      "applyUrl": "https://jobs.lever.co/leverdemo/a1b2-c3/apply",
+      "descriptionPlain": "Design for a fintech. Figma and a portfolio required.",
+      "lists": [
+        { "text": "What you will do", "content": "<p>Own the design system.</p>" },
+        { "text": "What we look for", "content": "<p>Five years of product design.</p>" }
+      ],
+      "categories": {
+        "commitment": "Full-time",
+        "location": "Amsterdam, Netherlands",
+        "team": "Design",
+        "department": "Product"
+      },
+      "createdAt": 1759276800000
+    }
+  ]
+}

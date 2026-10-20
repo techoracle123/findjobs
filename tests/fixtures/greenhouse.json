@@ -1,0 +1,29 @@
+{
+  "jobs": [
+    {
+      "id": 99101,
+      "title": "Senior Site Reliability Engineer",
+      "updated_at": "2026-10-16T09:00:00Z",
+      "absolute_url": "https://boards.greenhouse.io/examplecorp/jobs/99101",
+      "location": { "name": "Berlin, Germany" },
+      "departments": [{ "name": "Engineering" }],
+      "offices": [{ "name": "Berlin" }],
+      "content": "<p>Keep our platform healthy.</p><ul><li>Kubernetes</li><li>Terraform</li><li>Go</li></ul><p>Salary: EUR 90,000 - 120,000 per year.</p>",
+      "metadata": [
+        { "name": "Employment Type", "value": "Full-time" },
+        { "name": "Salary", "value": "EUR 90,000 - 120,000" }
+      ]
+    },
+    {
+      "id": 99102,
+      "title": "Frontend Engineer",
+      "updated_at": "2026-10-15T09:00:00Z",
+      "absolute_url": "https://boards.greenhouse.io/examplecorp/jobs/99102",
+      "location": { "name": "Remote, Germany" },
+      "departments": [{ "name": "Product" }],
+      "offices": [{ "name": "Remote" }],
+      "content": "<p>Build our React app. TypeScript, Next.js and a testing habit required.</p>",
+      "metadata": [{ "name": "Employment Type", "value": "Full-time" }]
+    }
+  ]
+}

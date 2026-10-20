@@ -1,0 +1,93 @@
+name: Deploy Find Jobs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [arena/be298902-findjobs]
+    paths:
+      - .github/workflows/deploy.yml
+      - scripts/deploy-cloudflare.mjs
+      - scripts/cloudflare-integrations.mjs
+      - scripts/check-live.mjs
+      - scripts/check-openrouter.mjs
+      - scripts/bootstrap-public-feed.mjs
+      - src/**
+      - functions/**
+      - public/**
+      - migrations/**
+      - wrangler*.jsonc
+      - package*.json
+      - index.html
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # No pull_request trigger: untrusted PR code must never receive deploy secrets.
+    if: github.ref == 'refs/heads/arena/be298902-findjobs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_PAGES_PROJECT: fj-find-jobs
+      WRANGLER_SEND_METRICS: 'false'
+      CI: 'true'
+      FJ_CAPTURE_PUBLIC_SAMPLE: 'true'
+    steps:
+      - name: Check encrypted deployment credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo '::error::Save CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID at https://github.com/techoracle123/findjobs/settings/secrets/actions then rerun this job. No terminal needed.'
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-fA-F0-9]{32}$ ]]; then
+            echo '::error::CLOUDFLARE_ACCOUNT_ID must be the 32-character Account ID from the Cloudflare dashboard.'
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.3'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run test:unit
+      - run: npm run test:worker
+      - run: npm run build
+      - name: Verify OpenRouter independently with public job text
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: node scripts/check-openrouter.mjs
+      - name: Provision database and queue, migrate, and deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: node scripts/deploy-cloudflare.mjs
+      - name: Install Chromium for live browser checks
+        run: npx playwright install --with-deps chromium
+      - name: Check live integrations and save a real-feed diagnostic snapshot
+        run: node scripts/check-live.mjs
+      - name: Test the live site at phone, tablet, and desktop widths
+        run: npx playwright test
+      - name: Save browser screenshots and test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: find-jobs-browser-report
+          path: |
+            test-results/
+            playwright-report/
+            diagnostics/
+          retention-days: 7

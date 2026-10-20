@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "role-signal-ingest",
+  "main": "src/ingest.ts",
+  "compatibility_date": "2026-10-17",
+  "observability": { "enabled": true },
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rolesignal",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "INGEST_QUEUE",
+        "queue": "rolesignal-ingest",
+      },
+    ],
+  },
+  "triggers": {
+    // Public discovery refresh is independent of D1 and runs twice daily.
+    "crons": ["0 */12 * * *"],
+  },
+  "vars": {
+    "APP_MODE": "preview",
+    "PUBLIC_FEED_ONLY": "1",
+    "JOB_SOURCE_FETCH": "1",
+  },
+}
