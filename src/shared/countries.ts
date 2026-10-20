@@ -25,10 +25,13 @@ export function countryName(code: string): string {
 }
 
 export function searchCountries(query: string): Country[] {
-  const needle = query.trim().toLowerCase()
+  const raw = query.trim().toLowerCase()
+  const needle = ({ uk: 'gb', usa: 'us', uae: 'ae' } as Record<string, string>)[raw] || raw
   if (!needle) return COUNTRIES
   return COUNTRIES.filter(
     (country) =>
       country.name.toLowerCase().includes(needle) || country.code.toLowerCase() === needle,
+  ).sort(
+    (a, b) => Number(b.code.toLowerCase() === needle) - Number(a.code.toLowerCase() === needle),
   )
 }

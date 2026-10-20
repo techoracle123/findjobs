@@ -8,7 +8,7 @@ export function specialistRole(title: string): string | null {
   )
     return 'security'
   if (
-    /\b(?:video edit(?:or|ing)?|video produc(?:er|tion)|film edit|motion (?:design|graphics)|post[ -]?production|animator|videograph(?:er|y))\b/i.test(
+    /\b(?:video edit(?:or|ing)?|video produc(?:er|tion)|film edit|video (?:content|creative)|creative director[, -]+(?:AI )?video|cinematograph(?:er|y)|filmma(?:ker|king)|motion (?:design|graphics)|post[ -]?production|animator|videograph(?:er|y))\b/i.test(
       title,
     )
   )

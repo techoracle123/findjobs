@@ -694,6 +694,12 @@ export default function App() {
                     <span>
                       <strong>{facets.locations}</strong> stated countries
                     </span>
+                    {facets.unknownLocation > 0 && (
+                      <span>
+                        <strong>{facets.unknownLocation.toLocaleString()}</strong> country not
+                        stated
+                      </span>
+                    )}
                   </section>
                 )}
                 <details className="match-help">

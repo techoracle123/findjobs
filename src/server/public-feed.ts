@@ -143,7 +143,7 @@ export async function publishPublicSnapshot(
     now,
   )
   const parts: string[] = []
-  for (let i = 0; i < snapshot.jobs.length; i += 100) {
+  for (let i = 0; i < snapshot.jobs.length; i += 500) {
     const key = `publication:${now}:${i / 500}`
     await kv.put(key, JSON.stringify(snapshot.jobs.slice(i, i + 500)), { expirationTtl: EXPIRY })
     parts.push(key)
@@ -186,7 +186,8 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
           if (keys.some((key) => !parts.get(key))) return null
           for (const key of keys) jobs.push(...parts.get(key)!)
         }
-        snapshot.jobs = jobs
+        snapshot.jobs = [...new Map(jobs.map((job) => [job.id, job])).values()]
+        if (snapshot.ids && new Set(snapshot.ids).size !== snapshot.jobs.length) return null
       }
       // Individual failed sources must not stay 'open' indefinitely just because
       // other sources continued refreshing the shared publication.

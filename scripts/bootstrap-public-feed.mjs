@@ -60,6 +60,13 @@ export async function bootstrapPublicFeed(api, auth) {
     Date.now() - Date.parse(current.refreshedAt) < 12 * 3600000 &&
     process.env.FJ_FORCE_PUBLIC_REFRESH !== 'true'
   ) {
+    if (current.parts?.length !== Math.ceil(current.ids.length / 500)) {
+      const repaired = await publishPublicSnapshot(kv)
+      console.log(
+        `::notice title=Publication index repaired::${repaired.jobs.length} unique listings republished in non-overlapping shards; no publisher recrawl.`,
+      )
+      return { id: ns.id, count: repaired.jobs.length }
+    }
     console.log(
       `::notice title=Fresh public publication retained::${current.ids.length} listings already refreshed at ${current.refreshedAt}; avoiding duplicate publisher requests and KV writes. The independent 12-hour cron remains responsible for refreshes.`,
     )
@@ -74,6 +81,20 @@ export async function bootstrapPublicFeed(api, auth) {
       while (cursor < PUBLIC_SOURCES.length) {
         const source = PUBLIC_SOURCES[cursor++]
         try {
+          if (
+            current &&
+            Date.now() - Date.parse(current.refreshedAt) < 12 * 3600000 &&
+            process.env.FJ_FORCE_PUBLIC_REFRESH !== 'true'
+          ) {
+            const retained = await kv.get(`source:${source.id}`)
+            if (retained && Date.now() - retained.fetchedAt < 12 * 3600000) {
+              healthy++
+              console.log(
+                `Recent publisher retained: ${source.id}, ${retained.jobs.length} open listings`,
+              )
+              continue
+            }
+          }
           const count = await refreshPublicSource(kv, source.id, run)
           healthy++
           console.log(`Public publisher: ${source.id}, ${count} open listings`)

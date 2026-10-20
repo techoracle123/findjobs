@@ -187,3 +187,24 @@ it('serves the broad index without D1 and returns full descriptions on individua
   const denied = await app.request('https://public-feed-tests.example/api/account', {}, env)
   expect(denied.status).toBe(401)
 })
+
+it('publishes more than 500 records exactly once, with no overlapping index shards', async () => {
+  const { kv, data } = storage(),
+    now = Date.now(),
+    source = await index(now),
+    job = source.jobs[0]
+  source.jobs = Array.from({ length: 1105 }, (_, i) => ({
+    ...job,
+    id: `shard-check-${i}`,
+    applyUrl: `https://example.org/careers/${i}`,
+    title: `Test-only role ${i}`,
+  }))
+  data.set('source:' + source.sourceId, JSON.stringify(source))
+  const snapshot = await publishPublicSnapshot(kv, now)
+  const published = JSON.parse(data.get('published')!) as { parts: string[]; ids: string[] }
+  const rows = published.parts.flatMap((part) => JSON.parse(data.get(part)!) as IndexedJob[])
+  expect(snapshot.jobs).toHaveLength(1105)
+  expect(published.parts).toHaveLength(3)
+  expect(rows).toHaveLength(1105)
+  expect(new Set(rows.map((job) => job.id)).size).toBe(1105)
+})

@@ -58,3 +58,9 @@ describe('searchCountries', () => {
     expect(searchCountries('zzzzqqq')).toHaveLength(0)
   })
 })
+
+it('prefers an exact ISO code over incidental letters in another name', () => {
+  expect(searchCountries('NG')[0].code).toBe('NG')
+  expect(searchCountries('UK')[0].code).toBe('GB')
+  expect(searchCountries('USA')[0].code).toBe('US')
+})

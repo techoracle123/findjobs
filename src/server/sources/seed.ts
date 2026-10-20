@@ -279,6 +279,7 @@ export const SEED_SOURCES: SeedSource[] = [
       ['carousell', 'Carousell', 'SG'],
       ['shopback', 'ShopBack', 'SG'],
       ['grain', 'Grain', 'US'],
+      ['superside', 'Superside', 'WW'],
       ['gocardless', 'GoCardless', 'GB'],
       ['oxford', 'Oxford', 'GB'],
     ] as const
@@ -301,6 +302,9 @@ export const SEED_SOURCES: SeedSource[] = [
   ...(
     [
       ['ashbyhq', 'Ashby', 'US'],
+      ['descript', 'Descript', 'WW'],
+      ['heygen', 'HeyGen', 'WW'],
+      ['ElevenLabs', 'ElevenLabs', 'WW'],
       ['ramp', 'Ramp', 'US'],
       ['notion', 'Notion', 'US'],
       ['linear', 'Linear', 'US'],
