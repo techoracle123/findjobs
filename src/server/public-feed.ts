@@ -173,7 +173,7 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
       )
         return null
       if (snapshot.parts?.length) {
-        const jobs: IndexedJob[] = []
+        const jobs = new Map<string, IndexedJob>()
         // KV's bulk API resolves the publication in one RPC, rather than
         // serial cold-region round trips for each shard. Keep negative cache
         // short during eventual-consistency propagation of a new publication.
@@ -184,9 +184,10 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
             5000,
           )
           if (keys.some((key) => !parts.get(key))) return null
-          for (const key of keys) jobs.push(...parts.get(key)!)
+          for (const key of keys)
+            for (const job of parts.get(key)!) if (!jobs.has(job.id)) jobs.set(job.id, job)
         }
-        snapshot.jobs = [...new Map(jobs.map((job) => [job.id, job])).values()]
+        snapshot.jobs = [...jobs.values()]
         if (snapshot.ids && new Set(snapshot.ids).size !== snapshot.jobs.length) return null
       }
       // Individual failed sources must not stay 'open' indefinitely just because
