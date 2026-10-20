@@ -7,6 +7,7 @@ import type {
   VerificationLevel,
 } from '../shared/types'
 import { bucketByPeriod, convertAmount } from '../shared/format'
+import { roleFamilyLabel } from '../shared/taxonomy'
 import { compareScoredJobs } from '../shared/scoring'
 
 export interface Filters {
@@ -104,6 +105,7 @@ function matchesQuery(job: Job, query: string): boolean {
     job.description,
     job.locationLabel,
     job.roleFamily,
+    roleFamilyLabel(job.roleFamily),
     ...job.requiredSkills,
     ...job.usefulSkills,
   ]

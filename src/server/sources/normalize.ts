@@ -9,6 +9,7 @@ import type {
 import { ROLE_FAMILY_KEYWORDS, SENIORITY_KEYWORDS, SKILL_CATALOGUE } from '../../shared/skills'
 import { COUNTRIES } from '../../shared/countries'
 import type { RawPosting, RawSalary } from './types'
+import { specialistRole } from '../../shared/specialisms'
 import { cleanJobText } from './html'
 
 const SENIORITY_RANK: Record<string, number> = {
@@ -34,6 +35,8 @@ const COUNTRY_LOOKUP = COUNTRIES.map((country) => ({
  * mention in a description from outweighing the actual job title.
  */
 export function inferRoleFamily(title: string, tags: string[], description: string): string {
+  const specialist = specialistRole(title)
+  if (specialist) return specialist
   const titleHaystack = title.toLowerCase()
   const tagHaystack = tags.join(' ').toLowerCase()
   const bodyHaystack = description.slice(0, 600).toLowerCase()

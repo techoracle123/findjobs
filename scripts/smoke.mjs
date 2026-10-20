@@ -147,33 +147,14 @@ check(
   document.body.textContent.includes('aren’t connected yet') ||
     document.body.textContent.includes('Connect Telegram'),
 )
-const signup = [...document.querySelectorAll('.topbar button')].find(
-  (button) => button.textContent === 'Sign up',
-)
-signup.click()
-await waitFor(() => document.querySelector('.auth-dialog[open]'), 5000, 'sign-up dialog')
 check(
-  'sign-up explains passwordless accounts',
-  document
-    .querySelector('.auth-dialog')
-    .textContent.includes('Your first email sign-in creates your account'),
-)
-const recovery = [...document.querySelectorAll('.auth-dialog button')].find((button) =>
-  button.textContent.includes('Forgot password'),
-)
-recovery.click()
-await waitFor(
-  () => document.querySelector('.auth-dialog').textContent.includes('There isn’t one to reset'),
-  5000,
-  'account recovery',
+  'sign-up opens a dedicated page',
+  Boolean(document.querySelector('a[href="/auth/signup?returnTo=%2Fdashboard"]')),
 )
 check(
-  'forgot-password recovery explains requesting a fresh code',
-  document.querySelector('.auth-dialog').textContent.includes('check your inbox and spam folder'),
+  'sign-in opens a dedicated page',
+  Boolean(document.querySelector('a[href="/auth/login?returnTo=%2Fdashboard"]')),
 )
-document.querySelector('[aria-label="Close account window"]').click()
-await waitFor(() => !document.querySelector('.auth-dialog[open]'), 5000, 'closing account dialog')
-check('account dialog closes', !document.querySelector('.auth-dialog[open]'))
 check('no runtime errors', consoleErrors.length === 0, consoleErrors.join('; '))
 window.close()
 if (failures.length) process.exitCode = 1

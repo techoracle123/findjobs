@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ApplicationActivity } from '../shared/activity'
 import type { AlertPreference, Profile, SavedApplication } from '../shared/types'
 import { readLocal, writeLocal } from '../lib/storage'
 import {
@@ -6,6 +7,7 @@ import {
   deleteAlert,
   deleteSaved,
   fetchAccount,
+  fetchApplicationActivity,
   importAccount,
   patchAlert,
   postAlert,
@@ -45,6 +47,12 @@ export interface UseAccount {
   importLocalData: () => Promise<ImportResult>
   syncError: string | null
   hasLocalData: boolean
+  activity: ApplicationActivity | null
+  activityError: boolean
+}
+
+function readAnonymous<T>(key: string, fallback: T): T {
+  return readLocal<string | null>('account-owner', null) ? fallback : readLocal<T>(key, fallback)
 }
 
 /**
@@ -60,25 +68,40 @@ export function useAccount(): UseAccount {
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [entitlements, setEntitlements] = useState<string[]>([])
   const [profile, setProfileState] = useState<Profile>(() =>
-    readLocal<Profile>('profile', EMPTY_PROFILE),
+    readAnonymous<Profile>('profile', EMPTY_PROFILE),
   )
   const [saved, setSavedState] = useState<SavedApplication[]>(() =>
-    readLocal<SavedApplication[]>('saved', []),
+    readAnonymous<SavedApplication[]>('saved', []),
   )
   const [alerts, setAlertsState] = useState<AlertPreference[]>(() =>
-    readLocal<AlertPreference[]>('alerts', []),
+    readAnonymous<AlertPreference[]>('alerts', []),
   )
   const [syncError, setSyncError] = useState<string | null>(null)
+  const [activity, setActivity] = useState<ApplicationActivity | null>(null)
+  const [activityError, setActivityError] = useState(false)
+  const ownerRef = useRef<string | null>(null)
+  const profileTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const refreshVersion = useRef(0)
+  const refreshActivity = useCallback(async () => {
+    try {
+      const owner = ownerRef.current
+      const next = await fetchApplicationActivity()
+      if (owner !== ownerRef.current) return
+      setActivity(next)
+      setActivityError(false)
+    } catch {
+      setActivityError(true)
+    }
+  }, [])
 
   const [hasLocalData, setHasLocalData] = useState(false)
   const anonymousData = useRef({
-    profile: readLocal<Profile>('profile', EMPTY_PROFILE),
-    saved: readLocal<SavedApplication[]>('saved', []),
-    alerts: readLocal<AlertPreference[]>('alerts', []),
+    profile: readAnonymous<Profile>('profile', EMPTY_PROFILE),
+    saved: readAnonymous<SavedApplication[]>('saved', []),
+    alerts: readAnonymous<AlertPreference[]>('alerts', []),
   })
 
   const signedIn = mode === 'signed-in'
-  const profileTimer = useRef<number | null>(null)
 
   // The latest values, so a setter can diff against them when it is given
   // an updater function.
@@ -106,6 +129,7 @@ export function useAccount(): UseAccount {
       writeLocal('anonymous-import', local)
       setHasLocalData(true)
     }
+    ownerRef.current = snapshot.user.id
     writeLocal('account-owner', snapshot.user.id)
     setUser(snapshot.user)
     setSubscription(snapshot.subscription)
@@ -113,27 +137,77 @@ export function useAccount(): UseAccount {
     setProfileState(snapshot.profile)
     setSavedState(snapshot.saved)
     setAlertsState(snapshot.alerts)
-    writeLocal('profile', snapshot.profile)
-    writeLocal('saved', snapshot.saved)
-    writeLocal('alerts', snapshot.alerts)
+    writeLocal(`account:${snapshot.user.id}:profile`, snapshot.profile)
+    writeLocal(`account:${snapshot.user.id}:saved`, snapshot.saved)
+    writeLocal(`account:${snapshot.user.id}:alerts`, snapshot.alerts)
   }, [])
 
   const refresh = useCallback(async () => {
+    const version = ++refreshVersion.current
     try {
       const snapshot = await fetchAccount()
+      if (version !== refreshVersion.current) return
+      if (ownerRef.current !== snapshot.user.id) clearTimeout(profileTimer.current)
       applySnapshot(snapshot)
       setMode('signed-in')
       setSyncError(null)
+      await refreshActivity()
     } catch (error) {
       setMode('anonymous')
+      setUser(null)
+      setActivity(null)
+      ownerRef.current = null
+      const local =
+        readLocal<typeof anonymousData.current | null>('anonymous-import', null) ||
+        anonymousData.current
+      setProfileState(local.profile)
+      setSavedState(local.saved)
+      setAlertsState(local.alerts)
+      writeLocal('account-owner', null)
+      writeLocal('profile', local.profile)
+      writeLocal('saved', local.saved)
+      writeLocal('alerts', local.alerts)
       if (!(error instanceof ApiError && error.status === 401)) {
         setSyncError(error instanceof Error ? error.message : String(error))
       }
     }
-  }, [applySnapshot])
+  }, [applySnapshot, refreshActivity])
 
   useEffect(() => {
     void refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    let checkedAt = Date.now()
+    const check = () => {
+      if (document.visibilityState === 'visible' && Date.now() - checkedAt > 5 * 60000) {
+        checkedAt = Date.now()
+        void refresh()
+      }
+    }
+    window.addEventListener('focus', check)
+    return () => window.removeEventListener('focus', check)
+  }, [refresh])
+
+  useEffect(() => {
+    const changed = (event: StorageEvent) => {
+      if (
+        event.key !== 'rolesignal:account-owner' ||
+        event.newValue === JSON.stringify(ownerRef.current)
+      )
+        return
+      clearTimeout(profileTimer.current)
+      ownerRef.current = null
+      setUser(null)
+      setMode('loading')
+      setProfileState(EMPTY_PROFILE)
+      setSavedState([])
+      setAlertsState([])
+      setActivity(null)
+      void refresh()
+    }
+    window.addEventListener('storage', changed)
+    return () => window.removeEventListener('storage', changed)
   }, [refresh])
 
   const setProfile = useCallback<Setter<Profile>>(
@@ -141,7 +215,7 @@ export function useAccount(): UseAccount {
       const next = typeof value === 'function' ? value(profileRef.current) : value
       profileRef.current = next
       setProfileState(next)
-      writeLocal('profile', next)
+      writeLocal(signedIn ? `account:${ownerRef.current}:profile` : 'profile', next)
       if (!signedIn) {
         anonymousData.current.profile = next
         writeLocal('anonymous-import', anonymousData.current)
@@ -165,7 +239,7 @@ export function useAccount(): UseAccount {
       const next = typeof value === 'function' ? value(previous) : value
       savedRef.current = next
       setSavedState(next)
-      writeLocal('saved', next)
+      writeLocal(signedIn ? `account:${ownerRef.current}:saved` : 'saved', next)
       if (!signedIn) {
         anonymousData.current.saved = next
         writeLocal('anonymous-import', anonymousData.current)
@@ -175,9 +249,11 @@ export function useAccount(): UseAccount {
       for (const entry of next) {
         const before = previous.find((item) => item.jobId === entry.jobId)
         if (!before || before.status !== entry.status) {
-          void postSaved(entry.jobId, entry.status).catch((error: unknown) => {
-            setSyncError(error instanceof Error ? error.message : String(error))
-          })
+          void postSaved(entry.jobId, entry.status)
+            .then(refreshActivity)
+            .catch((error: unknown) => {
+              setSyncError(error instanceof Error ? error.message : String(error))
+            })
         }
       }
       for (const entry of previous) {
@@ -188,7 +264,7 @@ export function useAccount(): UseAccount {
         }
       }
     },
-    [signedIn],
+    [signedIn, refreshActivity],
   )
 
   const setAlerts = useCallback<Setter<AlertPreference[]>>(
@@ -197,7 +273,7 @@ export function useAccount(): UseAccount {
       const next = typeof value === 'function' ? value(previous) : value
       alertsRef.current = next
       setAlertsState(next)
-      writeLocal('alerts', next)
+      writeLocal(signedIn ? `account:${ownerRef.current}:alerts` : 'alerts', next)
       if (!signedIn) {
         anonymousData.current.alerts = next
         writeLocal('anonymous-import', anonymousData.current)
@@ -252,6 +328,8 @@ export function useAccount(): UseAccount {
   )
 
   return {
+    activity,
+    activityError,
     hasLocalData,
     mode,
     user,

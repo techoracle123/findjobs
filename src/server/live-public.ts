@@ -1,3 +1,4 @@
+import { roleFamilyLabel } from '../shared/taxonomy'
 import type { Job } from '../shared/types'
 import type { JobSearch, JobSearchResult } from './jobs'
 import { SEED_SOURCES } from './sources/seed'
@@ -167,25 +168,29 @@ export async function livePublicJobs(origin: string): Promise<Job[]> {
 }
 
 export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResult {
-  const terms = (search.query || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
-  const filtered = jobs
-    .filter(
-      (job) =>
-        search.status !== 'closed' &&
-        (!search.country || job.locationCountry === search.country) &&
-        (!search.roleFamilies?.length || search.roleFamilies.includes(job.roleFamily)) &&
-        (!search.workModes?.length || search.workModes.includes(job.workMode)) &&
-        (!search.seniorities?.length || search.seniorities.includes(job.seniority)) &&
-        (!search.verification?.length ||
-          search.verification.includes(job.verification || 'unverified')) &&
-        terms.every((term) =>
-          `${job.title} ${job.company} ${job.description} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')}`
-            .toLowerCase()
-            .includes(term),
-        ),
-    )
-    .sort((a, b) => b.postedAt.localeCompare(a.postedAt) || a.id.localeCompare(b.id))
+  const filtered = matchingPublicJobs(jobs, search).sort(
+    (a, b) => b.postedAt.localeCompare(a.postedAt) || a.id.localeCompare(b.id),
+  )
   const limit = Math.min(200, Math.max(1, search.limit ?? 50)),
     offset = Math.max(0, search.offset ?? 0)
   return { jobs: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset }
+}
+
+export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
+  const terms = (search.query || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
+  return jobs.filter(
+    (job) =>
+      search.status !== 'closed' &&
+      (!search.country || job.locationCountry === search.country) &&
+      (!search.roleFamilies?.length || search.roleFamilies.includes(job.roleFamily)) &&
+      (!search.workModes?.length || search.workModes.includes(job.workMode)) &&
+      (!search.seniorities?.length || search.seniorities.includes(job.seniority)) &&
+      (!search.verification?.length ||
+        search.verification.includes(job.verification || 'unverified')) &&
+      terms.every((term) =>
+        `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${job.description} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')}`
+          .toLowerCase()
+          .includes(term),
+      ),
+  )
 }

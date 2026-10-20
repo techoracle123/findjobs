@@ -1,5 +1,6 @@
 /** Durable public discovery, independent of account/D1 storage. No credentials or
  * user data live in this namespace. Publish the pointer only after its data. */
+import { specialistRole } from '../shared/specialisms'
 import { withTimeout } from './timeouts'
 import type { Job } from '../shared/types'
 import { SEED_SOURCES } from './sources/seed'
@@ -7,7 +8,9 @@ import { fetchPublicSource } from './live-public'
 
 export const REFRESH_HOURS = 12
 export const PUBLIC_SOURCES = SEED_SOURCES.filter(
-  (source) => source.enabled && ['greenhouse', 'lever', 'rss', 'arbeitnow'].includes(source.parser),
+  (source) =>
+    source.enabled &&
+    ['greenhouse', 'lever', 'ashby', 'recruitee', 'rss', 'arbeitnow'].includes(source.parser),
 )
 const MAX_AGE = 36 * 3600000
 const EXPIRY = 3 * 86400
@@ -44,16 +47,19 @@ export async function refreshPublicSource(
   const jobs = (await fetchPublicSource(source, fetcher, now)).filter(
     (job) => job.jobStatus === 'open',
   )
-  // Do not truncate huge boards to make storage appear successful.
-  const detail = JSON.stringify(jobs)
-  if (new TextEncoder().encode(detail).byteLength > 20 * 1024 * 1024)
-    throw new Error('Source exceeds public storage safety bound')
-  const detailKey = `details:${sourceId}:${run}`
-  await kv.put(detailKey, detail, { expirationTtl: EXPIRY })
-  const index: SourceIndex = {
-    sourceId,
-    fetchedAt: now,
-    jobs: jobs.map((job) => ({ ...job, description: job.description.slice(0, 600), detailKey })),
+  // Bounded detail shards avoid rejecting a real, large employer board or
+  // loading its entire descriptions collection for one job page.
+  const index: SourceIndex = { sourceId, fetchedAt: now, jobs: [] }
+  for (let i = 0; i < jobs.length; i += 500) {
+    const chunk = jobs.slice(i, i + 500),
+      detailKey = `details:${sourceId}:${run}:${i / 500}`
+    const text = JSON.stringify(chunk)
+    if (new TextEncoder().encode(text).byteLength > 20 * 1024 * 1024)
+      throw new Error('Detail shard exceeds public storage safety bound')
+    await kv.put(detailKey, text, { expirationTtl: EXPIRY })
+    index.jobs.push(
+      ...chunk.map((job) => ({ ...job, description: job.description.slice(0, 600), detailKey })),
+    )
   }
   await kv.put(`source:${sourceId}`, JSON.stringify(index), { expirationTtl: EXPIRY })
   return jobs.length
@@ -137,7 +143,7 @@ export async function publishPublicSnapshot(
     now,
   )
   const parts: string[] = []
-  for (let i = 0; i < snapshot.jobs.length; i += 500) {
+  for (let i = 0; i < snapshot.jobs.length; i += 100) {
     const key = `publication:${now}:${i / 500}`
     await kv.put(key, JSON.stringify(snapshot.jobs.slice(i, i + 500)), { expirationTtl: EXPIRY })
     parts.push(key)
@@ -171,8 +177,8 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
         // KV's bulk API resolves the publication in one RPC, rather than
         // serial cold-region round trips for each shard. Keep negative cache
         // short during eventual-consistency propagation of a new publication.
-        for (let i = 0; i < snapshot.parts.length; i += 50) {
-          const keys = snapshot.parts.slice(i, i + 50)
+        for (let i = 0; i < snapshot.parts.length; i += 10) {
+          const keys = snapshot.parts.slice(i, i + 10)
           const parts = await withTimeout(
             kv.get<IndexedJob[]>(keys, { type: 'json', cacheTtl: 60 }),
             5000,
@@ -184,6 +190,7 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
       }
       // Individual failed sources must not stay 'open' indefinitely just because
       // other sources continued refreshing the shared publication.
+      for (const job of snapshot.jobs) job.roleFamily = specialistRole(job.title) || job.roleFamily
       snapshot.jobs = snapshot.jobs.filter(
         (job) =>
           !job.isDemo &&
@@ -213,5 +220,6 @@ export async function findPublishedJob(
     kv.get<Job[]>(entry.detailKey, { type: 'json', cacheTtl: 60 }),
     5000,
   ).catch(() => null)
-  return details?.find((job) => job.id === id) || null
+  const job = details?.find((job) => job.id === id)
+  return job ? { ...job, roleFamily: specialistRole(job.title) || job.roleFamily } : null
 }

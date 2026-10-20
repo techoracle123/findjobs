@@ -28,6 +28,7 @@ export const ROLE_FAMILIES = [
   'agriculture',
   'construction',
   'creative',
+  'video',
   'social-impact',
 ] as const
 
@@ -66,11 +67,12 @@ export const ROLE_FAMILY_LABELS: Record<string, string> = {
   frontend: 'Frontend',
   backend: 'Backend',
   fullstack: 'Full-stack',
-  data: 'Data',
+  data: 'Data analytics & analysis',
   ml: 'Machine learning',
   platform: 'Platform',
   devops: 'DevOps',
-  security: 'Security',
+  security: 'Cybersecurity & information security',
+  video: 'Video editing & production',
   product: 'Product',
   design: 'Design',
   qa: 'Quality assurance',

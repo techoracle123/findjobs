@@ -36,6 +36,7 @@ jobs:
       CLOUDFLARE_PAGES_PROJECT: fj-find-jobs
       WRANGLER_SEND_METRICS: 'false'
       CI: 'true'
+      FJ_CAPTURE_PUBLIC_SAMPLE: 'true'
     steps:
       - name: Check encrypted deployment credentials
         env:

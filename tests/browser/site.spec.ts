@@ -124,12 +124,11 @@ test('Nigeria and general professions are selectable without repetitive badges',
     result.jobs.every((job: { locationCountry: string }) => job.locationCountry === 'NG'),
   ).toBe(true)
   await page.goto('/')
-  await page.getByLabel('Job location', { exact: true }).selectOption('NG')
+  await page.getByRole('combobox', { name: 'Job location' }).fill('Nigeria')
+  await page.getByRole('option', { name: /^Nigeria/ }).click()
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
   await expect(
-    page
-      .getByLabel('Profession', { exact: true })
-      .getByRole('option', { name: 'Healthcare', exact: true }),
+    page.getByLabel('Profession', { exact: true }).getByRole('option', { name: /^Healthcare/ }),
   ).toHaveCount(1)
   await expect(page.getByText('Unverified', { exact: true })).toHaveCount(0)
   await expect(page.getByText('Needs checking', { exact: true })).toHaveCount(0)
@@ -155,33 +154,34 @@ test('public browsing and sign-in availability are reported honestly', async ({ 
   expect((await request.get('/')).ok()).toBe(true)
 })
 
-test('sign-up, sign-in and passwordless recovery are clear on small phones', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 640 })
+test('dedicated sign-up, sign-in and recovery pages work on small phones', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 750 })
   await page.goto('/')
-  await page.getByRole('button', { name: 'Sign up', exact: true }).click()
-  const dialog = page.getByRole('dialog')
-  await expect(dialog.getByRole('heading', { name: 'Create your free account' })).toBeVisible()
-  await expect(dialog).toContainText('Your first email sign-in creates your account')
-  await dialog.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(dialog.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
-  await dialog.getByRole('button', { name: 'Forgot password or can’t sign in?' }).click()
-  await expect(dialog).toContainText('There isn’t one to reset')
-  await expect(dialog).toContainText('check your inbox and spam folder')
+  await page.getByRole('link', { name: 'Sign up', exact: true }).click()
+  await expect(page).toHaveURL(/\/auth\/signup/)
+  await expect(page.getByRole('heading', { name: 'Create your free account' })).toBeVisible()
+  await expect(page.locator('.auth-card')).toContainText(
+    'first verified email sign-in creates your account',
+  )
+  await page.getByRole('link', { name: 'Sign in', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
+  await page.getByRole('link', { name: 'Forgot password or can’t sign in?' }).click()
+  await expect(page).toHaveURL(/\/auth\/recovery/)
+  await expect(page.getByRole('heading', { name: 'Recover your account' })).toBeVisible()
+  await expect(page.locator('.auth-card')).toContainText('FJ is passwordless')
+  await expect(page.locator('.auth-card')).toContainText('inbox and spam folder')
   const health = await (await page.request.get('/api/health')).json()
-  if (health.accessLoginUrl) {
-    await expect(dialog.getByRole('link', { name: 'Get a new sign-in code' })).toHaveAttribute(
+  if (health.accessLoginUrl)
+    await expect(page.getByRole('link', { name: 'Request a new sign-in code' })).toHaveAttribute(
       'href',
-      '/api/auth/login?returnTo=%2F',
+      '/api/auth/login?returnTo=%2Fdashboard',
     )
-  } else {
-    await expect(dialog.getByRole('status')).toContainText('temporarily unavailable')
-  }
+  else await expect(page.getByRole('status')).toContainText('temporarily unavailable')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
-  await page.keyboard.press('Escape')
-  await expect(dialog).not.toBeVisible()
-  await expect(page.getByRole('button', { name: 'Sign up', exact: true })).toBeFocused()
+  await page.getByRole('link', { name: 'Back to opportunities' }).click()
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
 })
 
 test('match rings are visible on phones, explained, and never show a numeric grade', async ({
@@ -240,4 +240,94 @@ test('expanded live corpus is paginated, regularly refreshed and opens complete 
   expect(job.descriptionPreview).not.toBe(true)
   expect(job.description.length).toBeGreaterThanOrEqual(feed.jobs[0].description.length)
   expect(job.applyUrl || job.sourceUrl).toMatch(/^https?:\/\//)
+})
+
+test('personal monthly progress counts confirmations, not link clicks', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('.joblist .jobrow').first().click()
+  await page.getByRole('button', { name: 'Mark as applied', exact: true }).click()
+  await page.getByRole('button', { name: 'Back to results' }).click()
+  await page.locator('.tabs').getByRole('button', { name: 'Progress', exact: true }).click()
+  await expect(
+    page.locator('.progress-panel .stat-grid > div').first().locator('strong'),
+  ).toHaveText('1')
+  await expect(page.locator('.progress-panel')).toContainText('no number guarantees')
+  await page.reload()
+  await page.locator('.tabs').getByRole('button', { name: 'Progress', exact: true }).click()
+  await expect(
+    page.locator('.progress-panel .stat-grid > div').first().locator('strong'),
+  ).toHaveText('1')
+})
+
+test('changing filters does not refetch account, health or exchange rates', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+  const metadata: string[] = []
+  page.on('request', (request) => {
+    if (/\/api\/(health|rates|account)(?:[?]|$)/.test(request.url())) metadata.push(request.url())
+  })
+  await page.getByLabel('Profession', { exact: true }).selectOption('security')
+  await page.waitForTimeout(700)
+  await page.getByLabel('Profession', { exact: true }).selectOption('data')
+  await page.waitForTimeout(700)
+  expect(metadata).toEqual([])
+  await expect(
+    page.getByLabel('Profession', { exact: true }).getByRole('option', { name: /Cybersecurity/ }),
+  ).toHaveCount(1)
+  await expect(
+    page.getByLabel('Profession', { exact: true }).getByRole('option', { name: /Video editing/ }),
+  ).toHaveCount(1)
+})
+
+test('switching accounts never reuses another person’s browser profile', async ({ page }) => {
+  let identity = 'alice',
+    authenticated = true
+  await page.route('**/api/account', async (route) => {
+    if (!authenticated)
+      return route.fulfill({ status: 401, json: { error: { message: 'Sign in required' } } })
+    return route.fulfill({
+      json: {
+        user: { id: identity, email: identity + '@example.com' },
+        profile: {
+          skills: [identity === 'alice' ? 'AlicePrivateSkill' : 'BobPrivateSkill'],
+          targetRoleFamilies: [],
+          targetSeniority: [],
+          preferredWorkModes: [],
+          workCountry: '',
+        },
+        saved: [],
+        alerts: [],
+        entitlements: [],
+      },
+    })
+  })
+  await page.route('**/api/account/activity?*', (route) =>
+    route.fulfill({
+      json: {
+        thisMonth: identity === 'alice' ? 7 : 2,
+        totalApplied: identity === 'alice' ? 7 : 2,
+        undated: 0,
+        saved: 0,
+      },
+    }),
+  )
+  await page.goto('/dashboard')
+  await expect(page.locator('.rail > .panel').first()).toContainText('AlicePrivateSkill')
+  identity = 'bob'
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'rolesignal:account-owner',
+        newValue: JSON.stringify('bob'),
+      }),
+    ),
+  )
+  await expect(page.locator('.rail > .panel').first()).toContainText('BobPrivateSkill')
+  await expect(page.locator('body')).not.toContainText('AlicePrivateSkill')
+  await expect(page.locator('.stat-grid strong').first()).toHaveText('2')
+  authenticated = false
+  await page.reload()
+  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible()
+  await expect(page.locator('body')).not.toContainText('BobPrivateSkill')
+  await expect(page.locator('body')).not.toContainText('AlicePrivateSkill')
 })

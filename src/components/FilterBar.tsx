@@ -1,5 +1,5 @@
 import type { Filters } from '../lib/ranking'
-import { COUNTRIES } from '../shared/countries'
+import { CountryPicker } from './CountryPicker'
 import {
   ROLE_FAMILIES,
   ROLE_FAMILY_LABELS,
@@ -13,9 +13,10 @@ interface FilterBarProps {
   filters: Filters
   onChange: (filters: Filters) => void
   onReset: () => void
+  counts?: { countries: Record<string, number>; professions: Record<string, number> }
 }
 
-export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
+export function FilterBar({ filters, onChange, onReset, counts }: FilterBarProps) {
   return (
     <section className="panel">
       <div className="panel__head">
@@ -25,25 +26,11 @@ export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
         </button>
       </div>
       <div className="panel__body">
-        <div className="field">
-          <label className="field__label" htmlFor="job-country">
-            Job location
-          </label>
-          <select
-            id="job-country"
-            className="select"
-            value={filters.country}
-            onChange={(event) => onChange({ ...filters, country: event.target.value })}
-          >
-            <option value="">Worldwide · all locations</option>
-            <option value="NG">Nigeria</option>
-            {COUNTRIES.filter((country) => country.code !== 'NG').map((country) => (
-              <option key={country.code} value={country.code}>
-                {country.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <CountryPicker
+          value={filters.country || ''}
+          onChange={(country) => onChange({ ...filters, country })}
+          counts={counts?.countries}
+        />
         <div className="field">
           <label className="field__label" htmlFor="job-category">
             Profession
@@ -62,6 +49,7 @@ export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
               .map((family) => (
                 <option key={family} value={family}>
                   {ROLE_FAMILY_LABELS[family]}
+                  {counts ? ` (${counts.professions[family] || 0})` : ''}
                 </option>
               ))}
             <option value="unknown">Other professions</option>

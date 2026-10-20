@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
+  BarChart3,
   Bell,
   Bookmark,
   Radar,
@@ -30,11 +31,14 @@ import { JobDetail } from './components/JobDetail'
 import { SavedPanel } from './components/SavedPanel'
 import { AlertsPanel } from './components/AlertsPanel'
 import { useAccount } from './hooks/useAccount'
-import { AuthDialog, type AuthMode } from './components/AuthDialog'
+import { ProgressPanel } from './components/ProgressPanel'
+import { deviceActivity } from './shared/activity'
+import type { JobFacets } from './server/job-stats'
 
-type Tab = 'opportunities' | 'saved' | 'alerts'
+type Tab = 'opportunities' | 'saved' | 'alerts' | 'progress'
 
 const TABS: { id: Tab; label: string; icon: typeof Radar }[] = [
+  { id: 'progress', label: 'Progress', icon: BarChart3 },
   { id: 'opportunities', label: 'Opportunities', icon: Radar },
   { id: 'saved', label: 'Saved', icon: Bookmark },
   { id: 'alerts', label: 'Alerts', icon: Bell },
@@ -77,6 +81,7 @@ export default function App() {
   const [rates, setRates] = useState<RatesPayload | null>(null)
   const [health, setHealth] = useState<ApiHealth | null>(null)
   const [total, setTotal] = useState(0)
+  const [facets, setFacets] = useState<JobFacets | null>(null)
   const [feedUpdatedAt, setFeedUpdatedAt] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [dataNote, setDataNote] = useState<string | null>(null)
@@ -91,8 +96,9 @@ export default function App() {
   const { profile, saved, alerts, setProfile, setSaved, setAlerts } = account
 
   const [preferencesOpen, setPreferencesOpen] = useState(false)
-  const [authMode, setAuthMode] = useState<AuthMode | null>(null)
-  const [tab, setTab] = useState<Tab>('opportunities')
+  const [tab, setTab] = useState<Tab>(() =>
+    window.location.pathname === '/dashboard' ? 'progress' : 'opportunities',
+  )
   const [selectedId, setSelectedId] = useState<string | null>(routeJobId)
   const [jobPage, setJobPage] = useState(() => routeJobId() !== null)
   const [jobPageError, setJobPageError] = useState<string | null>(null)
@@ -105,34 +111,58 @@ export default function App() {
 
   useEffect(() => writeLocal('currency', displayCurrency), [displayCurrency])
 
-  const load = useCallback(async () => {
-    const version = ++requestVersion.current
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const [jobsResponse, ratesResponse, healthResponse] = await Promise.all([
-        fetchJobs(0, filters.query, filters),
-        fetchRates().catch(() => null),
-        fetchHealth().catch(() => null),
-      ])
-      if (version !== requestVersion.current) return
-      setJobs(jobsResponse.jobs)
-      setTotal(jobsResponse.total ?? jobsResponse.jobs.length)
-      setFeedUpdatedAt(jobsResponse.updatedAt || null)
-      setDataNote(jobsResponse.warning ?? null)
-      setRates(ratesResponse)
-      setHealth(healthResponse)
-    } catch (cause) {
-      if (version === requestVersion.current)
-        setLoadError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      if (version === requestVersion.current) setLoading(false)
-    }
-  }, [filters])
+  const load = useCallback(
+    async (force = false) => {
+      const version = ++requestVersion.current
+      setLoading(true)
+      setLoadError(null)
+      try {
+        const jobsResponse = await fetchJobs(0, filters.query, filters, force)
+        if (version !== requestVersion.current) return
+        setJobs(jobsResponse.jobs)
+        setTotal(jobsResponse.total ?? jobsResponse.jobs.length)
+        setFeedUpdatedAt(jobsResponse.updatedAt || null)
+        setDataNote(jobsResponse.warning ?? null)
+        setFacets(jobsResponse.facets || null)
+      } catch (cause) {
+        if (version === requestVersion.current)
+          setLoadError(cause instanceof Error ? cause.message : String(cause))
+      } finally {
+        if (version === requestVersion.current) setLoading(false)
+      }
+    },
+    [filters],
+  )
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 300)
     return () => window.clearTimeout(timer)
+  }, [load])
+
+  useEffect(() => {
+    let active = true
+    void Promise.all([fetchRates().catch(() => null), fetchHealth().catch(() => null)]).then(
+      ([rates, health]) => {
+        if (active) {
+          setRates(rates)
+          setHealth(health)
+        }
+      },
+    )
+    return () => {
+      active = false
+    }
+  }, [])
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
+    window.addEventListener('focus', refresh)
+    window.addEventListener('online', refresh)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('online', refresh)
+    }
   }, [load])
 
   const loadMore = async () => {
@@ -233,7 +263,12 @@ export default function App() {
     }
   }, [account.mode])
 
-  const requireSignIn = () => setAuthMode('signin')
+  const requireSignIn = () => {
+    window.location.assign(
+      '/auth/login?returnTo=' +
+        encodeURIComponent(jobPage ? window.location.pathname : '/dashboard'),
+    )
+  }
 
   const linkTelegram = async () => {
     try {
@@ -324,7 +359,13 @@ export default function App() {
       if (existing) {
         return current.map((entry) =>
           entry.jobId === jobId
-            ? { ...entry, status: 'applied', appliedAt: new Date().toISOString() }
+            ? entry.status === 'applied'
+              ? entry
+              : {
+                  ...entry,
+                  status: 'applied',
+                  appliedAt: entry.appliedAt || new Date().toISOString(),
+                }
             : entry,
         )
       }
@@ -401,36 +442,31 @@ export default function App() {
           </select>
 
           {account.mode === 'signed-in' && account.user && (
-            <button
-              type="button"
+            <a
+              href="/auth/login?returnTo=%2Fdashboard"
               className="btn btn--ghost btn--sm account-button"
-              onClick={requireSignIn}
               aria-label="Your account"
               title={account.user.email}
             >
               <UserRound size={17} />
               <span className="account-email">Your account</span>
-            </button>
+            </a>
           )}
           {account.mode === 'anonymous' && (
             <>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={requireSignIn}>
+              <a className="btn btn--ghost btn--sm" href="/auth/login?returnTo=%2Fdashboard">
                 Sign in
-              </button>
-              <button
-                type="button"
-                className="btn btn--primary btn--sm"
-                onClick={() => setAuthMode('signup')}
-              >
+              </a>
+              <a className="btn btn--primary btn--sm" href="/auth/signup?returnTo=%2Fdashboard">
                 Sign up
-              </button>
+              </a>
             </>
           )}
 
           <button
             type="button"
             className="btn btn--ghost btn--sm"
-            onClick={() => void load()}
+            onClick={() => void load(true)}
             disabled={loading}
             aria-label="Reload"
           >
@@ -495,6 +531,7 @@ export default function App() {
                 filters={filters}
                 onChange={setFilters}
                 onReset={() => setFilters(DEFAULT_FILTERS)}
+                counts={facets || undefined}
               />
             </aside>
           </section>
@@ -578,6 +615,19 @@ export default function App() {
               ))}
             </nav>
 
+            {tab === 'progress' && (
+              <ProgressPanel
+                signedIn={account.mode === 'signed-in'}
+                activity={
+                  account.mode === 'signed-in' && account.activity
+                    ? account.activity
+                    : deviceActivity(saved)
+                }
+                unavailable={
+                  account.mode === 'signed-in' && (!account.activity || account.activityError)
+                }
+              />
+            )}
             {tab === 'opportunities' && (
               <>
                 <div className="toolbar">
@@ -630,6 +680,19 @@ export default function App() {
                     })}{' '}
                     · Updates every 12 hours
                   </p>
+                )}
+                {facets && (
+                  <section className="market-stats" aria-label="Live listing statistics">
+                    <span>
+                      <strong>{facets.total.toLocaleString()}</strong> matching listings
+                    </span>
+                    <span>
+                      <strong>{facets.remote.toLocaleString()}</strong> listed remote
+                    </span>
+                    <span>
+                      <strong>{facets.locations}</strong> stated countries
+                    </span>
+                  </section>
                 )}
                 <details className="match-help">
                   <summary>
@@ -725,18 +788,6 @@ export default function App() {
           </main>
         </div>
       )}
-
-      <AuthDialog
-        mode={authMode}
-        onMode={setAuthMode}
-        onClose={() => setAuthMode(null)}
-        email={account.mode === 'signed-in' ? account.user?.email : undefined}
-        loginUrl={
-          health?.accessLoginUrl
-            ? `${health.accessLoginUrl}?returnTo=${encodeURIComponent(window.location.pathname)}`
-            : null
-        }
-      />
 
       {toast && (
         <div className="toast" role="status">

@@ -148,15 +148,23 @@ export async function saveProfile(db: D1Database, userId: string, profile: Profi
 export async function listSaved(db: D1Database, userId: string): Promise<SavedApplication[]> {
   const result = await db
     .prepare(
-      `SELECT job_id, status, note, created_at FROM saved_jobs
-       WHERE user_id = ?1 ORDER BY created_at DESC`,
+      `SELECT s.job_id, s.status, s.note, s.created_at, h.applied_at FROM saved_jobs s
+       LEFT JOIN application_history h ON h.user_id=s.user_id AND h.job_id=s.job_id
+       WHERE s.user_id = ?1 ORDER BY s.created_at DESC`,
     )
     .bind(userId)
-    .all<{ job_id: string; status: string; note: string | null; created_at: string }>()
+    .all<{
+      job_id: string
+      status: string
+      note: string | null
+      created_at: string
+      applied_at: string | null
+    }>()
 
   return (result.results ?? []).map((row) => ({
     jobId: row.job_id,
     savedAt: row.created_at,
+    appliedAt: row.applied_at ?? undefined,
     status: row.status === 'applied' ? 'applied' : 'saved',
     note: row.note ?? undefined,
   }))
@@ -168,9 +176,10 @@ export async function setSaved(
   jobId: string,
   status: 'saved' | 'applied',
   note?: string,
+  appliedAt?: string | null,
 ): Promise<void> {
   const now = new Date().toISOString()
-  await db
+  const save = db
     .prepare(
       `INSERT INTO saved_jobs (user_id, job_id, status, note, created_at, updated_at)
        VALUES (?1, ?2, ?3, ?4, ?5, ?5)
@@ -178,7 +187,17 @@ export async function setSaved(
          note = COALESCE(?4, saved_jobs.note), updated_at = ?5`,
     )
     .bind(userId, jobId, status, note ?? null, now)
-    .run()
+
+  const statements = [save]
+  if (status === 'applied')
+    statements.push(
+      db
+        .prepare(
+          'INSERT OR IGNORE INTO application_history(user_id,job_id,applied_at) VALUES (?1,?2,?3)',
+        )
+        .bind(userId, jobId, appliedAt === undefined ? now : appliedAt),
+    )
+  await db.batch(statements)
 }
 
 export async function removeSaved(db: D1Database, userId: string, jobId: string): Promise<void> {
@@ -465,6 +484,7 @@ export async function listTelegramSubscribers(
 
 export interface AccountExport {
   exportedAt: string
+  applicationHistory: { jobId: string; appliedAt: string | null }[]
   user: AccountUser
   profile: Profile
   saved: SavedApplication[]
@@ -508,6 +528,15 @@ export async function exportAccount(db: D1Database, userId: string): Promise<Acc
     .all<{ action: string; metadata: string; created_at: string }>()
 
   return {
+    applicationHistory:
+      (
+        await db
+          .prepare(
+            'SELECT job_id AS jobId, applied_at AS appliedAt FROM application_history WHERE user_id=?1 ORDER BY applied_at DESC',
+          )
+          .bind(userId)
+          .all<{ jobId: string; appliedAt: string | null }>()
+      ).results || [],
     exportedAt: new Date().toISOString(),
     user: {
       id: userRow?.id ?? userId,

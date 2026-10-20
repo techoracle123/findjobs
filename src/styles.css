@@ -1711,3 +1711,231 @@ summary:focus-visible {
     margin-left: auto;
   }
 }
+
+/* Account journeys and personal progress share the board's quiet visual language. */
+.auth-page {
+  max-width: 1120px;
+  margin: auto;
+  padding: 28px clamp(16px, 4vw, 52px) 64px;
+  min-height: 100vh;
+}
+.auth-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  margin-bottom: 38px;
+}
+.auth-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(24px, 6vw, 88px);
+}
+.auth-story .brand {
+  margin-bottom: 56px;
+}
+.auth-story h1 {
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.12;
+  letter-spacing: -1.7px;
+  margin: 16px 0 20px;
+}
+.auth-story p {
+  max-width: 440px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.auth-story ul {
+  list-style: none;
+  padding: 18px 0;
+  display: grid;
+  gap: 18px;
+}
+.auth-story li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.auth-story li svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: clamp(22px, 4vw, 40px);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+}
+.auth-card h2 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.7px;
+}
+.auth-card p {
+  margin: 0;
+  line-height: 1.7;
+}
+.auth-icon {
+  color: var(--accent);
+}
+.auth-card .auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.auth-tabs [aria-current='page'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.auth-continue {
+  width: 100%;
+  justify-content: center;
+  min-height: 48px;
+}
+.auth-recovery {
+  text-align: center;
+  color: var(--accent);
+  font-size: 13px;
+}
+.auth-free {
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.recovery-steps {
+  background: var(--surface-sunken);
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 13px;
+}
+.recovery-steps h3 {
+  margin-top: 0;
+}
+.recovery-steps ol {
+  padding-left: 20px;
+}
+.recovery-steps li {
+  margin-bottom: 10px;
+}
+.progress-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: clamp(18px, 3vw, 28px);
+  margin: 16px 0;
+}
+.progress-intro h2 {
+  font-size: 21px;
+  margin: 8px 0;
+  letter-spacing: -0.5px;
+}
+.progress-intro p {
+  color: var(--muted);
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.stat-grid > div {
+  border: 1px solid var(--line);
+  background: var(--surface-sunken);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 0;
+}
+.stat-grid strong {
+  display: block;
+  font-size: 28px;
+  font-weight: 650;
+  color: var(--accent-ink);
+  letter-spacing: -1px;
+}
+.stat-grid span {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.progress-advice h3 {
+  margin-bottom: 8px;
+}
+.progress-advice p,
+.progress-advice li {
+  color: var(--ink-soft);
+  line-height: 1.7;
+}
+.progress-advice ul {
+  padding-left: 20px;
+}
+.market-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+}
+.market-stats span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.market-stats strong {
+  font-size: 18px;
+  color: var(--ink);
+  margin-right: 5px;
+}
+@media (max-width: 700px) {
+  .auth-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .auth-story .brand {
+    margin-bottom: 24px;
+  }
+  .auth-story ul,
+  .auth-story > .field__hint {
+    display: none;
+  }
+  .auth-back {
+    margin-bottom: 24px;
+  }
+  .auth-story h1 {
+    font-size: 30px;
+  }
+  .auth-card h2 {
+    font-size: 25px;
+  }
+  .stat-grid {
+    gap: 6px;
+  }
+  .stat-grid > div {
+    padding: 12px 8px;
+  }
+  .stat-grid strong {
+    font-size: 25px;
+  }
+  .tabs {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .tab {
+    font-size: 12px;
+  }
+}
+
+.combolist__item[data-active='true'] {
+  background: var(--surface-sunken);
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+}

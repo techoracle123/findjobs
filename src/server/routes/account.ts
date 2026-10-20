@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../env'
+import { monthPeriod } from '../../shared/activity'
 import type { Profile } from '../../shared/types'
 import {
   createAlert,
@@ -16,7 +17,14 @@ import {
   setSaved,
   updateAlert,
 } from '../auth/accounts'
-import { badRequest, readJson, requireUser, stringList, unauthorized } from '../http'
+import {
+  type AppContext,
+  badRequest,
+  readJson,
+  requireUser,
+  stringList,
+  unauthorized,
+} from '../http'
 import { logger } from '../logging'
 
 export const accountRoutes = new Hono<AppEnv>()
@@ -32,6 +40,49 @@ function normaliseProfile(input: unknown): Profile {
       typeof raw.workCountry === 'string' ? raw.workCountry.trim().toUpperCase().slice(0, 2) : '',
   }
 }
+
+const privateResponse = async (c: AppContext, next: () => Promise<void>) => {
+  c.header('Cache-Control', 'private, no-store')
+  await next()
+}
+accountRoutes.use('/account', privateResponse)
+accountRoutes.use('/account/*', privateResponse)
+
+accountRoutes.get('/account/activity', async (c) => {
+  const user = await requireUser(c)
+  if (!user) return unauthorized(c)
+  if (!c.env.DB) return c.json({ error: 'storage_unavailable' }, 503)
+  const defaults = monthPeriod()
+  const from = c.req.query('from') || defaults.from,
+    to = c.req.query('to') || defaults.to
+  const start = Date.parse(from),
+    end = Date.parse(to)
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    end <= start ||
+    end - start > 32 * 86400000
+  )
+    return badRequest(c, 'A valid monthly date range is required')
+  const row = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS totalApplied, SUM(CASE WHEN applied_at>=?2 AND applied_at<?3 THEN 1 ELSE 0 END) AS thisMonth, SUM(CASE WHEN applied_at IS NULL THEN 1 ELSE 0 END) AS undated FROM application_history WHERE user_id=?1`,
+  )
+    .bind(user.id, new Date(start).toISOString(), new Date(end).toISOString())
+    .first<{ totalApplied: number; thisMonth: number | null; undated: number | null }>()
+  const saved = await c.env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM saved_jobs WHERE user_id=?1 AND status='saved'",
+  )
+    .bind(user.id)
+    .first<{ n: number }>()
+  return c.json({
+    thisMonth: row?.thisMonth || 0,
+    totalApplied: row?.totalApplied || 0,
+    undated: row?.undated || 0,
+    saved: saved?.n || 0,
+    from: new Date(start).toISOString(),
+    to: new Date(end).toISOString(),
+  })
+})
 
 /** Everything about the signed-in account. */
 accountRoutes.get('/account', async (c) => {
@@ -170,7 +221,12 @@ accountRoutes.post('/account/import', async (c) => {
   const saved = Array.isArray(body.saved) ? body.saved : []
   for (const entry of saved.slice(0, 500)) {
     if (!entry || typeof entry !== 'object') continue
-    const record = entry as { jobId?: unknown; status?: unknown; note?: unknown }
+    const record = entry as {
+      jobId?: unknown
+      status?: unknown
+      note?: unknown
+      appliedAt?: unknown
+    }
     if (typeof record.jobId !== 'string' || !record.jobId) continue
     await setSaved(
       c.env.DB,
@@ -178,6 +234,11 @@ accountRoutes.post('/account/import', async (c) => {
       record.jobId,
       record.status === 'applied' ? 'applied' : 'saved',
       typeof record.note === 'string' ? record.note.slice(0, 500) : undefined,
+      typeof record.appliedAt === 'string' &&
+        Number.isFinite(Date.parse(record.appliedAt)) &&
+        Date.parse(record.appliedAt) <= Date.now()
+        ? new Date(record.appliedAt).toISOString()
+        : null,
     )
     imported.saved += 1
   }

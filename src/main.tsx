@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { AuthPage } from './components/AuthPage'
 import './styles.css'
 
 const container = document.getElementById('root')
@@ -10,6 +11,10 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    {/^\/auth\/(?:signup|login|recovery)\/?$/.test(window.location.pathname) ? (
+      <AuthPage />
+    ) : (
+      <App />
+    )}
   </StrictMode>,
 )

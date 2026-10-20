@@ -403,31 +403,18 @@ export async function main() {
       signal: AbortSignal.timeout(60_000),
     })
     if (!sourcesResponse.ok) throw new Error('Source registry check failed.')
-    const sources = (await sourcesResponse.json()).sources ?? []
+    await sourcesResponse.json()
     const queue = await findResource(
       api,
       '/queues',
       (item) => item.queue_name === 'rolesignal-ingest',
     )
     if (!queue?.queue_id) throw new Error('Ingestion queue could not be found after deployment.')
-    const due = sources.filter(
-      (source) =>
-        source.enabled &&
-        source.consecutiveFailures < 5 &&
-        (!source.lastRunAt || Date.now() - Date.parse(source.lastRunAt) > 3600_000),
+    annotation(
+      'notice',
+      'Private storage protected',
+      'The durable public collector handles discovery; legacy full-corpus D1 ingestion is not queued on deployment.',
     )
-    for (let offset = 0; offset < due.length; offset += 100) {
-      await api(`/queues/${queue.queue_id}/messages/batch`, {
-        method: 'POST',
-        body: {
-          messages: due.slice(offset, offset + 100).map((source, index) => ({
-            body: { sourceId: source.id },
-            content_type: 'json',
-            delay_seconds: Math.floor((offset + index) / 5),
-          })),
-        },
-      })
-    }
     let feed
     for (let attempt = 0; attempt < 18; attempt++) {
       const response = await fetch(`${url}/api/jobs?status=open&limit=20`, {
@@ -459,7 +446,7 @@ export async function main() {
     annotation(
       'notice',
       'Live jobs verified',
-      `${feed.total} real open jobs available at ${url}. ${due.length} sources queued for refresh. No demo data is served.`,
+      `${feed.total} real open jobs available at ${url}. Discovery refresh is handled by the independent 12-hour public collector. No demo data is served.`,
     )
     if (!report.ready)
       annotation(

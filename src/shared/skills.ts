@@ -406,3 +406,28 @@ export const WORK_MODE_KEYWORDS: { mode: string; patterns: RegExp[] }[] = [
   { mode: 'hybrid', patterns: [word('hybrid'), word('[23] days? in (the )?office')] },
   { mode: 'onsite', patterns: [word('on[- ]?site'), word('in office'), word('on[- ]?premise')] },
 ]
+
+SKILL_CATALOGUE.push(
+  {
+    label: 'Cybersecurity',
+    patterns: [/\bcyber[ -]?security\b/i, /\binformation security\b/i],
+    weight: 5,
+  },
+  { label: 'SIEM', patterns: [/\bSIEM\b/, /\bSplunk\b/i, /\bSentinel\b/i], weight: 4 },
+  { label: 'Penetration testing', patterns: [/\bpenetration test/i, /\bpentest/i], weight: 5 },
+  { label: 'Power BI', patterns: [/\bpower\s?bi\b/i], weight: 5 },
+  { label: 'Tableau', patterns: [/\btableau\b/i], weight: 4 },
+  {
+    label: 'Data analysis',
+    patterns: [/\bdata analys(?:is|t)\b/i, /\bdata analytics\b/i],
+    weight: 5,
+  },
+  {
+    label: 'Video editing',
+    patterns: [/\bvideo edit(?:or|ing)\b/i, /\bpost[ -]?production\b/i],
+    weight: 5,
+  },
+  { label: 'Adobe Premiere Pro', patterns: [/\bpremiere(?: pro)?\b/i], weight: 4 },
+  { label: 'After Effects', patterns: [/\bafter effects\b/i], weight: 4 },
+  { label: 'DaVinci Resolve', patterns: [/\bdavinci resolve\b/i], weight: 4 },
+)

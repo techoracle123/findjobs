@@ -100,7 +100,7 @@ describe('durable broad public feed', () => {
         : Response.json(many)) as typeof fetch
     expect(await refreshPublicSource(kv, 'greenhouse-oneacrefund', 'test', feeds)).toBe(135)
     expect(JSON.parse(data.get('source:greenhouse-oneacrefund')!).jobs).toHaveLength(135)
-    expect(JSON.parse(data.get('details:greenhouse-oneacrefund:test')!)).toHaveLength(135)
+    expect(JSON.parse(data.get('details:greenhouse-oneacrefund:test:0')!)).toHaveLength(135)
   })
   it('writes immutable index shards before atomically publishing their pointer', async () => {
     const { kv, data } = storage(),

@@ -27,6 +27,7 @@ export async function fetchAccessCerts(teamDomain: string): Promise<JsonWebKey[]
 
   const response = await fetch(`https://${teamDomain}/cdn-cgi/access/certs`, {
     headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(5000),
   })
   if (!response.ok) {
     throw new Error(`Access certs request failed with status ${response.status}`)

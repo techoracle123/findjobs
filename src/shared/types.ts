@@ -108,7 +108,7 @@ export interface ApiHealth {
   authenticationRequired: boolean
   /** Where to send a person to sign in, when identity is available. */
   accessLoginUrl: string | null
-  dataSource: 'd1' | 'fixture'
+  dataSource: 'd1' | 'fixture' | 'public-snapshot'
   /** Public browsing can continue independently when this is false. */
   storageAvailable?: boolean
   jobCount: number

@@ -19,6 +19,7 @@ import { sourceRoutes } from './routes/sources'
 import { billingRoutes } from './routes/billing'
 import { telegramRoutes } from './routes/telegram'
 import { insightRoutes } from './routes/insights'
+import { jobFacets } from './job-stats'
 import { publicDataCache } from './public-cache'
 import { livePublicEnabled, livePublicJobs, searchLivePublic } from './live-public'
 import { publishedPublicJobs, findPublishedJob } from './public-feed'
@@ -62,6 +63,16 @@ function normaliseProfile(input: unknown): Profile {
   }
 }
 
+app.get('/api/auth/status', async (c) => {
+  c.header('Cache-Control', 'private, no-store')
+  const identity = await resolveIdentity(c.req.raw, readConfig(c.env || {}))
+  return c.json({
+    authenticated: !!identity,
+    email: identity?.email || null,
+    configured: accessConfigured(readConfig(c.env || {})),
+  })
+})
+
 app.get('/api/auth/login', async (c) => {
   const identity = await resolveIdentity(c.req.raw, readConfig(c.env ?? {}))
   if (!identity)
@@ -73,22 +84,25 @@ app.get('/api/auth/login', async (c) => {
       503,
     )
   const returnTo = c.req.query('returnTo') || '/'
-  return c.redirect(/^\/(?:jobs\/[A-Za-z0-9_-]+)?$/.test(returnTo) ? returnTo : '/')
+  return c.redirect(/^\/(?:dashboard|jobs\/[A-Za-z0-9_-]+)?$/.test(returnTo) ? returnTo : '/')
 })
 
 app.get('/api/health', async (c) => {
   const env = c.env ?? {}
   const config = readConfig(env)
+  const published = await publishedPublicJobs(env.PUBLIC_JOBS)
   const count = env.DB
     ? await env.DB.prepare(
-        "SELECT COUNT(*) AS n FROM jobs WHERE is_demo = 0 AND job_status = 'open' AND expired_at IS NULL AND datetime(last_seen_at) >= datetime('now', '-3 days')",
+        published
+          ? 'SELECT 1 AS n'
+          : "SELECT COUNT(*) AS n FROM jobs WHERE is_demo=0 AND job_status='open' AND expired_at IS NULL",
       )
         .first<{ n: number }>()
         .catch(() => null)
     : null
   const rates = await getRates(config.appMode !== 'test', env.DB)
   const storageAvailable = Boolean(count)
-  const accessLoginUrl = accessConfigured(config) && storageAvailable ? '/api/auth/login' : null
+  const accessLoginUrl = accessConfigured(config) ? '/api/auth/login' : null
   return c.json({
     ok: true,
     appMode: config.appMode || DEFAULT_APP_MODE,
@@ -98,8 +112,8 @@ app.get('/api/health', async (c) => {
     billingConfigured: hasRealProvider(config),
     authenticationRequired: config.isProduction,
     accessLoginUrl,
-    dataSource: 'd1',
-    jobCount: count?.n ?? 0,
+    dataSource: published ? 'public-snapshot' : 'd1',
+    jobCount: published?.jobs.length ?? count?.n ?? 0,
     storageAvailable,
     ratesDate: rates.date,
     ratesSource: rates.source,
@@ -147,6 +161,7 @@ app.get('/api/jobs', async (c) => {
       ...result,
       jobs: result.jobs.map((job) => ({ ...job, detailKey: undefined, descriptionPreview: true })),
       dataSource: 'public-snapshot',
+      facets: jobFacets(published.jobs, search),
       updatedAt: published.refreshedAt,
       refreshHours: published.refreshHours,
       sourceCount: published.sourceCount,

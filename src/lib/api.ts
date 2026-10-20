@@ -9,6 +9,8 @@ import type {
   RatesPayload,
   SavedApplication,
 } from '../shared/types'
+import { monthPeriod, type ApplicationActivity } from '../shared/activity'
+import type { JobFacets } from '../server/job-stats'
 import type { Filters } from './ranking'
 
 /**
@@ -44,6 +46,7 @@ export class ApiError extends Error {
 }
 
 export interface JobsResponse {
+  facets?: JobFacets
   updatedAt?: string
   refreshHours?: number
   sourceCount?: number
@@ -85,14 +88,37 @@ export function fetchHealth(): Promise<ApiHealth> {
   return request<ApiHealth>('/api/health')
 }
 
-export function fetchJobs(offset = 0, query = '', filters?: Filters): Promise<JobsResponse> {
+const jobsCache = new Map<string, { at: number; value: JobsResponse }>()
+const jobsPending = new Map<string, Promise<JobsResponse>>()
+export function fetchJobs(
+  offset = 0,
+  query = '',
+  filters?: Filters,
+  force = false,
+): Promise<JobsResponse> {
   const params = new URLSearchParams({ status: 'open', limit: '200', offset: String(offset) })
   if (query.trim()) params.set('q', query.trim())
   if (filters?.country) params.set('country', filters.country)
   if (filters?.roleFamilies.length) params.set('roles', filters.roleFamilies.join(','))
   if (filters?.workModes.length) params.set('modes', filters.workModes.join(','))
   if (filters?.seniorities.length) params.set('levels', filters.seniorities.join(','))
-  return request<JobsResponse>(`/api/jobs?${params}`)
+  const key = params.toString()
+  const hit = jobsCache.get(key)
+  if (!force && hit && Date.now() - hit.at < 5 * 60000) return Promise.resolve(hit.value)
+  const active = jobsPending.get(key)
+  if (active) return active
+  const work = request<JobsResponse>(
+    `/api/jobs?${params}`,
+    force ? { headers: { 'cache-control': 'no-cache' } } : undefined,
+  )
+    .then((value) => {
+      if (jobsCache.size >= 20) jobsCache.delete(jobsCache.keys().next().value!)
+      jobsCache.set(key, { value, at: Date.now() })
+      return value
+    })
+    .finally(() => jobsPending.delete(key))
+  jobsPending.set(key, work)
+  return work
 }
 
 export async function fetchJob(id: string): Promise<Job> {
@@ -256,4 +282,9 @@ export function jobAdvice(id: string, skills: string[]): Promise<JobAdvice> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ skills }),
   })
+}
+
+export function fetchApplicationActivity(): Promise<ApplicationActivity> {
+  const params = new URLSearchParams(monthPeriod())
+  return request<ApplicationActivity>(`/api/account/activity?${params}`, { cache: 'no-store' })
 }

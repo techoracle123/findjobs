@@ -1,10 +1,8 @@
 const PREFIX = 'rolesignal:'
 
-/**
- * Profile, saved jobs, applications and alert preferences live in this
- * browser only. There is no account system in the preview, so nothing here
- * reaches the server.
- */
+/** Device preferences and namespaced caches only; verified account data is
+ * authoritative on the server. Never reuse a signed-in cache for an anonymous
+ * visitor or another user. Storage may be unavailable in private browsers. */
 export function readLocal<T>(key: string, fallback: T): T {
   if (typeof localStorage === 'undefined') return fallback
   try {
@@ -21,7 +19,7 @@ export function writeLocal<T>(key: string, value: T): void {
   try {
     localStorage.setItem(PREFIX + key, JSON.stringify(value))
   } catch {
-    // Storage can be full or blocked; the preview still works in-memory.
+    // Storage can be full or blocked; the interface still works in-memory.
   }
 }
 
