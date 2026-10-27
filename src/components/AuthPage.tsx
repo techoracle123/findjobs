@@ -227,6 +227,13 @@ export function AuthPage() {
               </>
             ) : (
               <>
+                <h1 className="auth-card__title">
+                  {recovery
+                    ? 'Recover your account'
+                    : signup
+                      ? 'Create your free account'
+                      : 'Welcome back'}
+                </h1>
                 {!recovery && (
                   <nav className="auth-tabs" aria-label="Account action">
                     <a
@@ -249,9 +256,24 @@ export function AuthPage() {
                   {recovery
                     ? 'FJ is passwordless. Request a fresh one-time code using the same email as your account.'
                     : signup
-                      ? 'Your first email sign-in creates your account. No password to remember, store or reset.'
+                      ? 'Your first verified email sign-in creates your account. No password to remember, store or reset.'
                       : 'Use your account email. We send you a fresh one-time code.'}
                 </p>
+                {recovery && (
+                  <div className="recovery-steps">
+                    <h3>Get back in, safely</h3>
+                    <ol>
+                      <li>Enter the email you used for FJ.</li>
+                      <li>
+                        Check your inbox and spam folder. Use the newest code before it expires.
+                      </li>
+                      <li>
+                        If you no longer control that inbox, recover it with your email provider
+                        first.
+                      </li>
+                    </ol>
+                  </div>
+                )}
                 {stage === 'email' && (
                   <form
                     onSubmit={(event) => {
@@ -312,7 +334,7 @@ export function AuthPage() {
                   Never share a code with anyone. FJ staff will never ask for it.
                 </p>
                 <a className="auth-recovery" href={recovery ? '/auth/login' : '/auth/recovery'}>
-                  {recovery ? 'Back to sign in' : 'Can’t sign in?'}
+                  {recovery ? 'Back to sign in' : 'Forgot password or can’t sign in?'}
                 </a>
               </>
             )}

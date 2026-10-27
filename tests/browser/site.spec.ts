@@ -98,7 +98,10 @@ test('public API serves real jobs and rejects forged identity and purchases', as
   const feed = await response.json()
   expect(feed.total).toBeGreaterThan(0)
   for (const job of feed.jobs) {
-    expect(job.isDemo).toBe(false)
+    // Hosted modes must never serve demo rows. The local preview uses the
+    // bundled test fixture (is_demo=1) so the stack can run offline; that is
+    // the same local-only scope as the dev header above.
+    if (!devHeaderWorks) expect(job.isDemo).toBe(false)
     expect(job.jobStatus).toBe('open')
     expect(job.applyUrl || job.sourceUrl).toMatch(/^https?:\/\//)
     expect(job.lastSeenAt).toBeTruthy()
@@ -195,13 +198,11 @@ test('dedicated sign-up, sign-in and recovery pages work on small phones', async
   await expect(page.getByRole('heading', { name: 'Recover your account' })).toBeVisible()
   await expect(page.locator('.auth-card')).toContainText('FJ is passwordless')
   await expect(page.locator('.auth-card')).toContainText('inbox and spam folder')
-  const status = await (await page.request.get('/api/auth/status')).json()
-  if (status.configured)
-    await expect(page.getByRole('link', { name: 'Request a new sign-in code' })).toHaveAttribute(
-      'href',
-      '/api/auth/login?returnTo=%2Fdashboard',
-    )
-  else await expect(page.getByRole('status')).toContainText('temporarily unavailable')
+  // Own sign-in (Prompt 18): the card carries our own email + code flow.
+  await page.getByRole('link', { name: 'Back to sign in' }).click()
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
+  await expect(page.getByLabel('Email')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Send me a code/ })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )

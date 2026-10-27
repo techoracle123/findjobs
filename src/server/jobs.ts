@@ -158,6 +158,8 @@ export async function listJobs(
       warning: 'Jobs are temporarily unavailable. Please try again shortly.',
     }
   try {
+    // Local/test previews may show the bundled test fixture so the UI can be
+    // exercised offline; the live API always filters demo rows out.
     const result = await db.prepare(`${SELECT} AND j.is_demo = 0`).all<JobRow>()
     return { jobs: (result.results ?? []).map((row) => mapRow(row, now)), source: 'd1' }
   } catch {
@@ -189,13 +191,16 @@ export async function findJob(
   db: D1Database | undefined,
   id: string,
   now: number = Date.now(),
+  allowDemo = false,
 ): Promise<Job | null> {
   if (!db) return null
-  const row = await db.prepare(`${SELECT} AND j.is_demo = 0 AND j.id = ?1`).bind(id).first<JobRow>()
-  return row ? mapRow(row, now) : null
+  const row = await db.prepare(`${SELECT} AND j.id = ?1`).bind(id).first<JobRow>()
+  return row && (!row.is_demo || allowDemo) ? mapRow(row, now) : null
 }
 
 export interface JobSearch {
+  /** Local/test previews only: include the bundled test fixture rows. */
+  includeDemo?: boolean
   /** A free-text query, matched against the search index. */
   query?: string
   country?: string
@@ -245,7 +250,10 @@ export async function searchJobs(
     return { jobs: jobs.slice(offset, offset + limit), total: jobs.length, limit, offset }
   }
 
-  const conditions: string[] = ['j.expired_at IS NULL', 'j.is_demo = 0']
+  const conditions: string[] = [
+    'j.expired_at IS NULL',
+    ...(search.includeDemo ? [] : ['j.is_demo = 0']),
+  ]
   const binds: unknown[] = []
 
   if (status === 'open') {

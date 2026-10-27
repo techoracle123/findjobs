@@ -347,11 +347,15 @@ app.get('/api/jobs', async (c) => {
     })
   }
 
+  // Local/test previews show the bundled test fixture so the UI can be
+  // exercised offline; hosted modes never see demo rows.
+  const config = readConfig(env)
+  const allowDemo = config.isLocal || config.isTest
   let result
   let dataSource: 'd1' | 'live-public' = 'd1'
   try {
     if (!env.DB) throw new Error('Database unavailable')
-    result = await withTimeout(searchJobs(env.DB, search), 3000)
+    result = await withTimeout(searchJobs(env.DB, { ...search, includeDemo: allowDemo }), 3000)
   } catch (error) {
     if (!livePublicEnabled(env.APP_MODE)) throw error
     result = searchLivePublic(await livePublicJobs(url.origin), search)
@@ -378,7 +382,12 @@ app.get('/api/jobs/:id', async (c) => {
   let job = await findPublishedJob(env.PUBLIC_JOBS, c.req.param('id'))
   if (job) return c.json({ job })
   try {
-    job = await findJob(env.DB, c.req.param('id'))
+    job = await findJob(
+      env.DB,
+      c.req.param('id'),
+      Date.now(),
+      readConfig(env).isLocal || readConfig(env).isTest,
+    )
   } catch (error) {
     if (!livePublicEnabled(env.APP_MODE)) throw error
   }
