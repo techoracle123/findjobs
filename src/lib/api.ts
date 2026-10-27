@@ -151,6 +151,49 @@ export function putProfile(profile: Profile): Promise<{ profile: Profile }> {
   })
 }
 
+export interface ApplyQuota {
+  unlimited: boolean
+  limit: number
+  used: number
+  remaining: number
+  resetsAt: string
+  weekLimit: number
+  weekUsed: number
+}
+
+export function fetchApplyQuota(): Promise<ApplyQuota> {
+  return request<ApplyQuota>('/api/apply/quota', { cache: 'no-store' })
+}
+
+export interface FastApplyResult {
+  ok: true
+  remaining: number | null
+  resetsAt: string
+}
+
+export function fastApply(
+  jobId: string,
+  coverNote?: string,
+  useProfile = true,
+): Promise<FastApplyResult> {
+  return request<FastApplyResult>(`/api/jobs/${encodeURIComponent(jobId)}/fast-apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ coverNote, useProfile }),
+  })
+}
+
+/** Fire-and-forget: the outbound link must never wait on this. */
+export function recordApplyClick(jobId: string): void {
+  try {
+    const url = `/api/jobs/${encodeURIComponent(jobId)}/apply-click`
+    if (navigator.sendBeacon) navigator.sendBeacon(url)
+    else void fetch(url, { method: 'POST', keepalive: true }).catch(() => {})
+  } catch {
+    /* Analytics can never block an application. */
+  }
+}
+
 export function postSaved(jobId: string, status: 'saved' | 'applied'): Promise<{ ok: true }> {
   return request<{ ok: true }>('/api/account/saved', {
     method: 'POST',

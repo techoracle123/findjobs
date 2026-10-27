@@ -54,6 +54,8 @@ export interface Job {
   companyUrl?: string
   sourceKind?: string
   sourcePlatform?: string
+  /** 'external' opens the employer's own application; 'onsite' supports Fast Apply. */
+  applyMode?: 'external' | 'onsite'
 }
 
 export interface Profile {

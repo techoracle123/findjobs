@@ -19,6 +19,7 @@ import { sourceRoutes } from './routes/sources'
 import { billingRoutes } from './routes/billing'
 import { telegramRoutes } from './routes/telegram'
 import { insightRoutes } from './routes/insights'
+import { applyRoutes } from './routes/apply'
 import { jobFacets } from './job-stats'
 import { publicDataCache } from './public-cache'
 import { livePublicEnabled, livePublicJobs, searchLivePublic } from './live-public'
@@ -306,6 +307,7 @@ app.get('/api/rates', async (c) => {
 })
 
 app.route('/api', insightRoutes)
+app.route('/api', applyRoutes)
 app.route('/api', accountRoutes)
 app.route('/api', sourceRoutes)
 app.route('/api', billingRoutes)

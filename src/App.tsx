@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   Bookmark,
+  CreditCard,
   Radar,
   RotateCw,
   Search,
@@ -11,11 +12,16 @@ import {
   UserRound,
 } from 'lucide-react'
 import type { ApiHealth, CvSuggestion, Job, Profile, RatesPayload } from './shared/types'
+import type { ApplyQuota, PlanCatalogue, PlanDefinition } from './lib/api'
+import { PlanPanel } from './components/PlanPanel'
 import {
   fetchHealth,
   fetchJobs,
   fetchJob,
   fetchRates,
+  fetchApplyQuota,
+  fastApply,
+  fetchPlans,
   createTelegramLink,
   fetchTelegramStatus,
 } from './lib/api'
@@ -35,10 +41,11 @@ import { ProgressPanel } from './components/ProgressPanel'
 import { deviceActivity } from './shared/activity'
 import type { JobFacets } from './server/job-stats'
 
-type Tab = 'opportunities' | 'saved' | 'alerts' | 'progress'
+type Tab = 'opportunities' | 'saved' | 'alerts' | 'progress' | 'plan'
 
 const TABS: { id: Tab; label: string; icon: typeof Radar }[] = [
   { id: 'progress', label: 'Progress', icon: BarChart3 },
+  { id: 'plan', label: 'Plan', icon: CreditCard },
   { id: 'opportunities', label: 'Opportunities', icon: Radar },
   { id: 'saved', label: 'Saved', icon: Bookmark },
   { id: 'alerts', label: 'Alerts', icon: Bell },
@@ -108,6 +115,9 @@ export default function App() {
   const [sort, setSort] = useState<SortKey>('relevance')
   const [toast, setToast] = useState<string | null>(null)
   const [telegramLinked, setTelegramLinked] = useState(false)
+  const [applyQuota, setApplyQuota] = useState<ApplyQuota | null>(null)
+  const [billingPlans, setBillingPlans] = useState<PlanDefinition[]>([])
+  const [billingEnabled, setBillingEnabled] = useState(false)
 
   useEffect(() => writeLocal('currency', displayCurrency), [displayCurrency])
 
@@ -152,6 +162,29 @@ export default function App() {
     return () => {
       active = false
     }
+  }, [])
+  useEffect(() => {
+    if (account.mode !== 'signed-in') {
+      setApplyQuota(null)
+      return
+    }
+    let active = true
+    void fetchApplyQuota()
+      .then((quota) => {
+        if (active) setApplyQuota(quota)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [account.mode, account.user])
+  useEffect(() => {
+    void fetchPlans()
+      .then((catalogue: PlanCatalogue) => {
+        setBillingPlans(catalogue.plans)
+        setBillingEnabled(Boolean(catalogue.plans.length))
+      })
+      .catch(() => {})
   }, [])
   useEffect(() => {
     const refresh = () => {
@@ -382,6 +415,24 @@ export default function App() {
     setToast('Marked as applied')
   }
 
+  const runFastApply = async (jobId: string) => {
+    try {
+      const result = await fastApply(jobId)
+      setApplyQuota((current) =>
+        current && result.remaining !== null
+          ? { ...current, remaining: result.remaining, used: current.used + 1 }
+          : current,
+      )
+      markApplied(jobId)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      void fetchApplyQuota()
+        .then(setApplyQuota)
+        .catch(() => {})
+      throw new Error(message)
+    }
+  }
+
   const applySuggestion = (suggestion: CvSuggestion) => {
     setProfile((current) => ({
       ...current,
@@ -441,6 +492,11 @@ export default function App() {
             ))}
           </select>
 
+          {account.mode === 'signed-in' && applyQuota && !applyQuota.unlimited && (
+            <a className="chip chip--plain quota-meter" href="/dashboard?tab=plan">
+              {Math.max(0, applyQuota.remaining)} / {applyQuota.limit} applications left today
+            </a>
+          )}
           {account.mode === 'signed-in' && account.user && (
             <a
               href="/auth/login?returnTo=%2Fdashboard"
@@ -502,6 +558,8 @@ export default function App() {
               applied={appliedIds.has(selected.job.id)}
               onSave={() => toggleSave(selected.job.id)}
               onApply={() => markApplied(selected.job.id)}
+              onFastApply={() => runFastApply(selected.job.id)}
+              applyQuota={applyQuota}
             />
           )}
           <p className="site-disclaimer">{DISCLAIMER}</p>
@@ -766,6 +824,17 @@ export default function App() {
               </>
             )}
 
+            {tab === 'plan' && (
+              <PlanPanel
+                signedIn={account.mode === 'signed-in'}
+                billingEnabled={billingEnabled}
+                plans={billingPlans}
+                subscription={account.subscription}
+                entitlements={account.entitlements}
+                onRefresh={account.refresh}
+                onRequireSignIn={requireSignIn}
+              />
+            )}
             {tab === 'saved' && (
               <SavedPanel
                 saved={saved}
@@ -783,11 +852,7 @@ export default function App() {
                 telegramConfigured={Boolean(health?.telegramConfigured)}
                 telegramLinked={telegramLinked}
                 signedIn={account.mode === 'signed-in'}
-                canDeliver={
-                  account.entitlements.includes('alerts') &&
-                  telegramLinked &&
-                  Boolean(health?.telegramConfigured)
-                }
+                canDeliver={telegramLinked && Boolean(health?.telegramConfigured)}
                 onChange={setAlerts}
                 onLinkTelegram={linkTelegram}
                 onRequireSignIn={requireSignIn}

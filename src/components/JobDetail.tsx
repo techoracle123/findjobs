@@ -5,7 +5,7 @@ import { formatRange, formatRelativeTime, PERIOD_LABELS } from '../shared/format
 import { roleFamilyLabel, seniorityLabel, workModeLabel } from '../shared/taxonomy'
 import { applyLinkOf, isClosed } from '../shared/verification'
 import { ScoreBreakdown } from './ScoreBreakdown'
-import { jobAdvice, translateJob } from '../lib/api'
+import { jobAdvice, recordApplyClick, translateJob } from '../lib/api'
 import type { SalaryView } from '../lib/ranking'
 
 interface JobDetailProps {
@@ -18,6 +18,8 @@ interface JobDetailProps {
   applied: boolean
   onSave: () => void
   onApply: () => void
+  onFastApply?: () => Promise<void>
+  applyQuota?: { remaining: number; unlimited: boolean; resetsAt: string } | null
 }
 
 export function JobDetail({
@@ -30,7 +32,11 @@ export function JobDetail({
   applied,
   onSave,
   onApply,
+  onFastApply,
+  applyQuota,
 }: JobDetailProps) {
+  const [fastApplying, setFastApplying] = useState(false)
+  const [fastMessage, setFastMessage] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
   const [translation, setTranslation] = useState<JobTranslation | null>(null)
   const [original, setOriginal] = useState(false)
   const [translating, setTranslating] = useState(false)
@@ -122,15 +128,77 @@ export function JobDetail({
             This listing has closed. It is kept here for your saved-job records.
           </p>
         )}
+        {fastMessage && (
+          <p
+            className={`banner ${fastMessage.tone === 'ok' ? 'banner--info' : 'banner--demo'}`}
+            role="status"
+          >
+            {fastMessage.text}
+          </p>
+        )}
+        {!closed &&
+          job.applyMode === 'onsite' &&
+          applyQuota &&
+          !applyQuota.unlimited &&
+          applyQuota.remaining <= 0 && (
+            <div className="banner banner--info" role="status">
+              <p>
+                You’ve used all 5 free applications today.{' '}
+                <a href="/dashboard?tab=plan">Upgrade to Pro for unlimited — ₦10,000/month</a>. You
+                can still apply directly on the employer’s site — that’s always free.
+              </p>
+            </div>
+          )}
         <div className="btnrow job-actions">
-          {!closed && applyUrl && (
+          {!closed && applyUrl && job.applyMode !== 'onsite' && (
             <a
               className="btn btn--primary"
               href={applyUrl}
               target="_blank"
               rel="noopener noreferrer"
+              data-testid="external-apply"
+              onClick={() => recordApplyClick(job.id)}
             >
               Apply for this role <ExternalLink size={14} />
+            </a>
+          )}
+          {!closed && job.applyMode === 'onsite' && (
+            <button
+              className="btn btn--primary"
+              type="button"
+              data-testid="fast-apply"
+              disabled={
+                fastApplying ||
+                Boolean(applyQuota && !applyQuota.unlimited && applyQuota.remaining <= 0)
+              }
+              onClick={async () => {
+                setFastApplying(true)
+                setFastMessage(null)
+                try {
+                  await onFastApply?.()
+                  setFastMessage({
+                    tone: 'ok',
+                    text: 'Your application has been sent to the employer.',
+                  })
+                } catch (error) {
+                  setFastMessage({
+                    tone: 'warn',
+                    text:
+                      error instanceof Error
+                        ? error.message
+                        : 'Your application could not be sent.',
+                  })
+                } finally {
+                  setFastApplying(false)
+                }
+              }}
+            >
+              <Send size={14} /> {fastApplying ? 'Sending…' : 'Fast Apply'}
+            </button>
+          )}
+          {!closed && job.applyMode === 'onsite' && applyUrl && (
+            <a className="btn" href={applyUrl} target="_blank" rel="noopener noreferrer">
+              Open original listing <ExternalLink size={13} />
             </a>
           )}
           <button className="btn" type="button" onClick={onSave}>
