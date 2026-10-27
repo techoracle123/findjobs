@@ -10,6 +10,7 @@ import { ROLE_FAMILY_KEYWORDS, SENIORITY_KEYWORDS, SKILL_CATALOGUE } from '../..
 import { COUNTRIES } from '../../shared/countries'
 import type { RawPosting, RawSalary } from './types'
 import { specialistRole } from '../../shared/specialisms'
+import { qualityPass } from '../quality'
 import { cleanJobText } from './html'
 
 const SENIORITY_RANK: Record<string, number> = {
@@ -242,18 +243,28 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
 
   const closed = raw.closed || expired
 
-  return {
+  const { patch } = qualityPass({
     title: raw.title,
     company: raw.company,
-    roleFamily: inferRoleFamily(raw.title, raw.tags, raw.description),
-    seniority: inferSeniority(raw.title, raw.description),
-    workMode: inferWorkMode(raw.remote, `${raw.title} ${raw.location}`),
+    description: cleanJobText(raw.description).slice(0, 16000),
+    tags: raw.tags,
+    locationLabel: raw.location,
     locationCountry: inferCountry(raw.location),
-    locationLabel: raw.location || 'Location not stated',
+    workMode: inferWorkMode(raw.remote, `${raw.title} ${raw.location}`),
+    seniority: inferSeniority(raw.title, raw.description),
     salaryMin: salary?.min ?? 0,
     salaryMax: salary?.max ?? 0,
     salaryCurrency: salary?.currency ?? '',
     salaryPeriod: salary?.period ?? 'year',
+    requiredSkills: required,
+    usefulSkills: useful,
+  })
+
+  return {
+    ...patch,
+    roleFamily: specialistRole(raw.title) || inferRoleFamily(raw.title, raw.tags, raw.description),
+    locationCountry: patch.quality.location.country || inferCountry(raw.location),
+    locationLabel: raw.location.trim(),
     description: cleanJobText(raw.description).slice(0, 16000),
     requiredSkills: required,
     usefulSkills: useful,

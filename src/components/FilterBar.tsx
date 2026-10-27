@@ -1,5 +1,7 @@
 import type { Filters } from '../lib/ranking'
 import { CountryPicker } from './CountryPicker'
+import { controlEnabled } from '../shared/quality'
+import type { FieldCoverage } from '../shared/quality'
 import {
   ROLE_FAMILIES,
   ROLE_FAMILY_LABELS,
@@ -14,9 +16,20 @@ interface FilterBarProps {
   onChange: (filters: Filters) => void
   onReset: () => void
   counts?: { countries: Record<string, number>; professions: Record<string, number> }
+  coverage?: FieldCoverage
+  adminControls?: boolean
 }
 
-export function FilterBar({ filters, onChange, onReset, counts }: FilterBarProps) {
+export function FilterBar({
+  filters,
+  onChange,
+  onReset,
+  counts,
+  coverage,
+  adminControls = false,
+}: FilterBarProps) {
+  const showWorkMode = controlEnabled(coverage, 'workMode', adminControls)
+  const showSeniority = controlEnabled(coverage, 'seniority', adminControls)
   return (
     <section className="panel">
       <div className="panel__head">
@@ -55,53 +68,63 @@ export function FilterBar({ filters, onChange, onReset, counts }: FilterBarProps
             <option value="unknown">Other professions</option>
           </select>
         </div>
-        <div className="field">
-          <span className="field__label">Work arrangement</span>
-          <div className="chiprow">
-            {WORK_MODES.map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                className="chipbtn"
-                aria-pressed={filters.workModes.includes(mode)}
-                onClick={() =>
-                  onChange({
-                    ...filters,
-                    workModes: filters.workModes.includes(mode)
-                      ? filters.workModes.filter((item) => item !== mode)
-                      : [...filters.workModes, mode],
-                  })
-                }
-              >
-                {WORK_MODE_LABELS[mode]}
-              </button>
-            ))}
+        {showWorkMode && (
+          <div className="field">
+            <span className="field__label">Work arrangement</span>
+            <div className="chiprow">
+              {WORK_MODES.map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className="chipbtn"
+                  aria-pressed={filters.workModes.includes(mode)}
+                  onClick={() =>
+                    onChange({
+                      ...filters,
+                      workModes: filters.workModes.includes(mode)
+                        ? filters.workModes.filter((item) => item !== mode)
+                        : [...filters.workModes, mode],
+                    })
+                  }
+                >
+                  {WORK_MODE_LABELS[mode]}
+                </button>
+              ))}
+            </div>
+            <span className="field__hint">
+              Remote doesn’t always mean you can work from any country. Check the listing’s location
+              rules.
+            </span>
           </div>
-          <span className="field__hint">
-            Remote doesn’t always mean you can work from any country. Check the listing’s location
-            rules.
-          </span>
-        </div>
-        <div className="field">
-          <label className="field__label" htmlFor="job-level">
-            Experience
-          </label>
-          <select
-            id="job-level"
-            className="select"
-            value={filters.seniorities[0] ?? ''}
-            onChange={(event) =>
-              onChange({ ...filters, seniorities: event.target.value ? [event.target.value] : [] })
-            }
-          >
-            <option value="">Any experience level</option>
-            {SENIORITIES.map((level) => (
-              <option key={level} value={level}>
-                {SENIORITY_LABELS[level]}
-              </option>
-            ))}
-          </select>
-        </div>
+        )}
+        {showSeniority && (
+          <div className="field">
+            <label className="field__label" htmlFor="job-level">
+              Experience
+            </label>
+            <select
+              id="job-level"
+              className="select"
+              value={filters.seniorities[0] ?? ''}
+              onChange={(event) =>
+                onChange({
+                  ...filters,
+                  seniorities: event.target.value ? [event.target.value] : [],
+                })
+              }
+            >
+              <option value="">Any experience level</option>
+              {SENIORITIES.map((level) => (
+                <option key={level} value={level}>
+                  {SENIORITY_LABELS[level]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {!showWorkMode && !showSeniority && (
+          <p className="field__hint">More filters are coming soon — we’re improving this data.</p>
+        )}
       </div>
     </section>
   )

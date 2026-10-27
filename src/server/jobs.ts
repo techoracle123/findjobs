@@ -44,6 +44,10 @@ interface JobRow {
   company_url: string | null
   source_kind: string | null
   source_platform: string | null
+  language: string | null
+  language_required: string | null
+  normalizer_version: string | null
+  quality: string | null
 }
 
 const DAY_MS = 86_400_000
@@ -110,6 +114,19 @@ function mapRow(row: JobRow, now: number): Job {
     companyUrl: row.company_url ?? undefined,
     sourceKind: row.source_kind ?? undefined,
     sourcePlatform: row.source_platform ?? undefined,
+    language: row.language ?? undefined,
+    languageRequired: row.language_required ?? undefined,
+    normalizerVersion: row.normalizer_version ?? undefined,
+    quality: parseQuality(row.quality),
+  }
+}
+
+function parseQuality(raw: string | null): Job['quality'] {
+  if (!raw) return undefined
+  try {
+    return JSON.parse(raw) as Job['quality']
+  } catch {
+    return undefined
   }
 }
 

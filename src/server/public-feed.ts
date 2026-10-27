@@ -1,6 +1,8 @@
 /** Durable public discovery, independent of account/D1 storage. No credentials or
  * user data live in this namespace. Publish the pointer only after its data. */
 import { specialistRole } from '../shared/specialisms'
+import { buildQualitySnapshot, dedupeJobs, qualityPass } from './quality'
+import type { QualitySnapshot } from '../shared/quality'
 import { withTimeout } from './timeouts'
 import type { Job } from '../shared/types'
 import { SEED_SOURCES } from './sources/seed'
@@ -33,6 +35,7 @@ export interface PublicSnapshot {
   jobs: IndexedJob[]
   parts?: string[]
   ids?: string[]
+  duplicatesDropped?: number
 }
 
 export async function refreshPublicSource(
@@ -80,13 +83,13 @@ export function assemblePublicSnapshot(
   now = Date.now(),
 ): PublicSnapshot {
   const valid = indexes.filter((index) => now - index.fetchedAt < MAX_AGE)
-  const unique = new Map<string, IndexedJob>()
+  const collected: IndexedJob[] = []
   const syndicated = new Map<string, string>()
   for (const index of valid)
     for (const job of index.jobs) {
       if (job.isDemo || job.jobStatus !== 'open') continue
       try {
-        const key = canonicalJobUrl(job)
+        canonicalJobUrl(job) // invalid publisher URLs are not opportunities
         const fingerprint = [job.company, job.title, job.locationLabel]
           .map((value) =>
             value
@@ -98,15 +101,40 @@ export function assemblePublicSnapshot(
           .join('|')
         const priorSource = syndicated.get(fingerprint)
         if (priorSource && priorSource !== index.sourceId) continue
-        if (!unique.has(key)) {
-          unique.set(key, job)
-          syndicated.set(fingerprint, index.sourceId)
-        }
+        syndicated.set(fingerprint, index.sourceId)
+        collected.push(job)
       } catch {
         /* Invalid publisher URLs are not opportunities. */
       }
     }
-  const jobs = [...unique.values()].sort(
+  // Re-running the quality pass here is the backfill: stored rows are
+  // reprocessed on every publication until the normalizer version settles.
+  const normalised = collected.map((job) => {
+    const { patch } = qualityPass({
+      title: job.title,
+      company: job.company,
+      description: job.description,
+      tags: [...job.requiredSkills, ...job.usefulSkills],
+      locationLabel: job.locationLabel,
+      locationCountry: job.locationCountry,
+      workMode: job.workMode,
+      seniority: job.seniority,
+      salaryMin: job.salaryMin,
+      salaryMax: job.salaryMax,
+      salaryCurrency: job.salaryCurrency,
+      salaryPeriod: job.salaryPeriod,
+      requiredSkills: job.requiredSkills,
+      usefulSkills: job.usefulSkills,
+    })
+    return {
+      ...job,
+      ...patch,
+      roleFamily: specialistRole(job.title) || job.roleFamily,
+      locationCountry: patch.quality.location.country || job.locationCountry,
+    }
+  })
+  const { unique, dropped } = dedupeJobs(normalised)
+  const jobs = unique.sort(
     (a, b) => b.postedAt.localeCompare(a.postedAt) || a.id.localeCompare(b.id),
   )
   if (!valid.length) throw new Error('No genuine public listings; keeping previous publication')
@@ -118,6 +146,7 @@ export function assemblePublicSnapshot(
     attemptedSources: PUBLIC_SOURCES.length,
     olderSources: valid.filter((index) => now - index.fetchedAt > 13 * 3600000).length,
     added: previousIds.size ? jobs.filter((job) => !previousIds.has(job.id)).length : 0,
+    duplicatesDropped: dropped,
     jobs,
   }
 }
@@ -147,6 +176,20 @@ export async function publishPublicSnapshot(
     const key = `publication:${now}:${i / 500}`
     await kv.put(key, JSON.stringify(snapshot.jobs.slice(i, i + 500)), { expirationTtl: EXPIRY })
     parts.push(key)
+  }
+  // Quality snapshots are durable history: date-keyed, never overwritten.
+  try {
+    const previousQuality = await kv.get<QualitySnapshot>('quality:latest', 'json')
+    const quality = buildQualitySnapshot(
+      snapshot.jobs,
+      snapshot.duplicatesDropped ?? 0,
+      previousQuality,
+      now,
+    )
+    await kv.put(`quality:${quality.date}`, JSON.stringify(quality), { expirationTtl: 40 * EXPIRY })
+    await kv.put('quality:latest', JSON.stringify(quality), { expirationTtl: 40 * EXPIRY })
+  } catch {
+    /* A quality snapshot must never block publication. */
   }
   // The small pointer is written LAST; a failed shard write keeps the old feed.
   await kv.put(

@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { AuthPage } from './components/AuthPage'
+import { QualityWallboard } from './components/QualityWallboard'
 import './styles.css'
 
 const container = document.getElementById('root')
@@ -13,6 +14,8 @@ createRoot(container).render(
   <StrictMode>
     {/^\/auth\/(?:signup|login|recovery)\/?$/.test(window.location.pathname) ? (
       <AuthPage />
+    ) : window.location.pathname === '/admin/data-quality' ? (
+      <QualityWallboard />
     ) : (
       <App />
     )}

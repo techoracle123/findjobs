@@ -10,6 +10,8 @@ import {
   WORK_MODE_LABELS,
 } from '../shared/taxonomy'
 import { EligibilityPicker } from './EligibilityPicker'
+import { controlEnabled } from '../shared/quality'
+import type { FieldCoverage } from '../shared/quality'
 
 export const EMPTY_PROFILE: Profile = {
   skills: [],
@@ -23,9 +25,17 @@ interface ProfilePanelProps {
   profile: Profile
   onChange: (profile: Profile) => void
   onReset: () => void
+  coverage?: FieldCoverage
+  adminControls?: boolean
 }
 
-export function ProfilePanel({ profile, onChange, onReset }: ProfilePanelProps) {
+export function ProfilePanel({
+  profile,
+  onChange,
+  onReset,
+  coverage,
+  adminControls = false,
+}: ProfilePanelProps) {
   const [draft, setDraft] = useState('')
 
   const addSkill = (raw: string) => {
@@ -168,10 +178,12 @@ export function ProfilePanel({ profile, onChange, onReset }: ProfilePanelProps) 
           </div>
         </div>
 
-        <EligibilityPicker
-          value={profile.workCountry}
-          onChange={(workCountry) => onChange({ ...profile, workCountry })}
-        />
+        {controlEnabled(coverage, 'eligibleCountries', adminControls) && (
+          <EligibilityPicker
+            value={profile.workCountry}
+            onChange={(workCountry) => onChange({ ...profile, workCountry })}
+          />
+        )}
 
         <p className="panel__note">
           Saved on this device; sign in to sync. Your listed skills are shared with the AI provider

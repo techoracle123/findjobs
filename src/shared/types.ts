@@ -56,6 +56,26 @@ export interface Job {
   sourcePlatform?: string
   /** 'external' opens the employer's own application; 'onsite' supports Fast Apply. */
   applyMode?: 'external' | 'onsite'
+  /** ISO 639-1 code of the listing's own language; 'unknown' when undetectable. */
+  language?: string
+  /** Set when the listing itself demands another language; otherwise null. */
+  languageRequired?: string | null
+  normalizerVersion?: string
+  /** Per-field confidence, completeness and evidence produced by the quality pass. */
+  quality?: JobQuality
+}
+
+export interface JobQuality {
+  normalizerVersion: string
+  language: string
+  isEnglish: boolean
+  languageRequired: string | null
+  location: { city: string | null; state: string | null; country: string | null }
+  confidence: Record<string, number>
+  completeness: number
+  salaryRaw: string | null
+  salaryPlausible: boolean
+  skillEvidence: { name: string; required: boolean; confidence: number; sentence: string }[]
 }
 
 export interface Profile {

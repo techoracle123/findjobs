@@ -1,6 +1,8 @@
 import type { Job } from '../shared/types'
 import type { JobSearch } from './jobs'
 import { matchingPublicJobs } from './live-public'
+import { coverageOf } from './quality'
+import type { FieldCoverage } from '../shared/quality'
 
 export interface JobFacets {
   total: number
@@ -10,6 +12,8 @@ export interface JobFacets {
   unknownLocation: number
   countries: Record<string, number>
   professions: Record<string, number>
+  /** Field completeness across the full matching set; drives control visibility. */
+  coverage: FieldCoverage
 }
 function count(jobs: Job[], field: 'locationCountry' | 'roleFamily'): Record<string, number> {
   const result: Record<string, number> = Object.create(null)
@@ -34,5 +38,6 @@ export function jobFacets(jobs: Job[], search: JobSearch): JobFacets {
       'locationCountry',
     ),
     professions: count(matchingPublicJobs(jobs, { ...search, roleFamilies: [] }), 'roleFamily'),
+    coverage: coverageOf(matched),
   }
 }

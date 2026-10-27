@@ -39,6 +39,7 @@ import { AlertsPanel } from './components/AlertsPanel'
 import { useAccount } from './hooks/useAccount'
 import { ProgressPanel } from './components/ProgressPanel'
 import { deviceActivity } from './shared/activity'
+import { controlEnabled } from './shared/quality'
 import type { JobFacets } from './server/job-stats'
 
 type Tab = 'opportunities' | 'saved' | 'alerts' | 'progress' | 'plan'
@@ -118,6 +119,7 @@ export default function App() {
   const [applyQuota, setApplyQuota] = useState<ApplyQuota | null>(null)
   const [billingPlans, setBillingPlans] = useState<PlanDefinition[]>([])
   const [billingEnabled, setBillingEnabled] = useState(false)
+  const adminControls = new URLSearchParams(window.location.search).has('adminControls')
 
   useEffect(() => writeLocal('currency', displayCurrency), [displayCurrency])
 
@@ -580,6 +582,8 @@ export default function App() {
                 profile={profile}
                 onChange={setProfile}
                 onReset={() => setProfile(EMPTY_PROFILE)}
+                coverage={facets?.coverage}
+                adminControls={adminControls}
               />
               <details className="cv-disclosure">
                 <summary>Or use your CV</summary>
@@ -590,6 +594,8 @@ export default function App() {
                 onChange={setFilters}
                 onReset={() => setFilters(DEFAULT_FILTERS)}
                 counts={facets || undefined}
+                coverage={facets?.coverage}
+                adminControls={adminControls}
               />
             </aside>
           </section>
@@ -719,8 +725,12 @@ export default function App() {
                   >
                     <option value="relevance">Best match</option>
                     <option value="newest">Newest first</option>
-                    <option value="salary-desc">Salary, high to low</option>
-                    <option value="salary-asc">Salary, low to high</option>
+                    {controlEnabled(facets?.coverage, 'salary', adminControls) && (
+                      <>
+                        <option value="salary-desc">Salary, high to low</option>
+                        <option value="salary-asc">Salary, low to high</option>
+                      </>
+                    )}
                   </select>
 
                   <div className="toolbar__spacer" />

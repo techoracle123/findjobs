@@ -1966,3 +1966,25 @@ summary:focus-visible {
     gap: 1.25rem;
   }
 }
+
+/* Admin wallboard: dense, readable tables. */
+.admin-page {
+  max-width: 960px;
+  margin: auto;
+  padding: 28px clamp(16px, 4vw, 48px) 64px;
+}
+.quality-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.quality-table th,
+.quality-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.quality-table th {
+  color: var(--muted);
+  font-weight: 550;
+}

@@ -12,6 +12,7 @@
       "migrations_dir": "migrations",
     },
   ],
+  "kv_namespaces": [{ "binding": "PUBLIC_JOBS", "id": "00000000-0000-0000-0000-000000000003" }],
   "vars": {
     "APP_MODE": "test",
     "TELEGRAM_BOT_USERNAME": "",

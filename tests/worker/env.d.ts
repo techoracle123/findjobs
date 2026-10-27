@@ -11,6 +11,8 @@ declare global {
   namespace Cloudflare {
     interface Env {
       DB: D1Database
+      PUBLIC_JOBS?: KVNamespace
+      ADMIN_EMAILS?: string
       APP_MODE?: string
       TELEGRAM_BOT_USERNAME?: string
     }

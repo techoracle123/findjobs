@@ -19,6 +19,8 @@ export interface Env {
   INGEST_QUEUE?: Queue
   APP_MODE?: string
   TELEGRAM_BOT_USERNAME?: string
+  /** Comma-separated verified Access emails allowed on /api/admin/*. */
+  ADMIN_EMAILS?: string
 
   // Cloudflare Access (identity)
   ACCESS_TEAM_DOMAIN?: string
