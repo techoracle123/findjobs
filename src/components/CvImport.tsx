@@ -19,7 +19,13 @@ export function CvImport({ onApply }: CvImportProps) {
   const [suggestion, setSuggestion] = useState<CvSuggestion | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
 
+  const [acknowledged, setAcknowledged] = useState(false)
+
   const handleFile = async (file: File) => {
+    if (!acknowledged) {
+      setError('Please confirm the AI notice below before uploading.')
+      return
+    }
     setError(null)
     setSuggestion(null)
     setBusy(true)
@@ -59,12 +65,23 @@ export function CvImport({ onApply }: CvImportProps) {
             if (file) void handleFile(file)
           }}
         />
+        <label className="cv-notice">
+          <input
+            type="checkbox"
+            checked={acknowledged}
+            onChange={(event) => setAcknowledged(event.target.checked)}
+          />
+          <span>
+            I understand that the text I upload is sent to FJ’s AI provider, OpenRouter, to generate
+            suggestions. The file itself stays on my device. See <a href="/privacy">Privacy</a>.
+          </span>
+        </label>
         <div className="btnrow">
           <button
             type="button"
             className="btn"
             onClick={() => inputRef.current?.click()}
-            disabled={busy}
+            disabled={busy || !acknowledged}
           >
             {busy ? <LoaderCircle size={14} className="icon-spin" /> : <Upload size={14} />}
             {busy ? 'Reading…' : 'Choose file'}

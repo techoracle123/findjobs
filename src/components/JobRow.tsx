@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bookmark, BookmarkCheck } from 'lucide-react'
+import { ArrowUpRight, Bookmark, BookmarkCheck, Flag } from 'lucide-react'
 import type { ScoredJob } from '../shared/types'
 import { formatRange, formatRelativeTime } from '../shared/format'
 import { roleFamilyLabel, workModeLabel } from '../shared/taxonomy'
@@ -12,6 +12,7 @@ interface JobRowProps {
   saved?: boolean
   onSelect: () => void
   onSave?: () => void
+  onReport?: () => void
 }
 
 function monogram(company: string): string {
@@ -24,12 +25,23 @@ function monogram(company: string): string {
   return (letters || '?').toUpperCase()
 }
 
-export function JobRow({ scored, selected, salary, saved = false, onSelect, onSave }: JobRowProps) {
+export function JobRow({
+  scored,
+  selected,
+  salary,
+  saved = false,
+  onSelect,
+  onSave,
+  onReport,
+}: JobRowProps) {
   const { job, score } = scored
   const hasProfile = scored.components.some((component) => component.applicable)
   const hasPay = salary.max > 0 || salary.min > 0
   return (
     <div className="jobrow-wrap">
+      {job.moderationState === 'caution' && (
+        <p className="jobrow__caution">We can’t confirm this employer yet. Never pay to apply.</p>
+      )}
       <a
         href={`/jobs/${encodeURIComponent(job.id)}`}
         className="jobrow"
@@ -83,6 +95,20 @@ export function JobRow({ scored, selected, salary, saved = false, onSelect, onSa
           <ArrowUpRight size={16} aria-hidden="true" />
         </span>
       </a>
+      {onReport && (
+        <button
+          type="button"
+          className="jobrow__save jobrow__report"
+          style={{ top: 52 }}
+          aria-label={`Report ${job.title}`}
+          onClick={(event) => {
+            event.preventDefault()
+            onReport()
+          }}
+        >
+          <Flag size={15} />
+        </button>
+      )}
       {onSave && (
         <button
           type="button"

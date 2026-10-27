@@ -8,6 +8,7 @@ import {
   type QualitySnapshot,
 } from '../shared/quality'
 import { extractSkills, type SkillMatch } from '../shared/skills-dictionary'
+import { scamScore } from './trust'
 
 export interface JobQuality {
   normalizerVersion: string
@@ -320,6 +321,9 @@ export interface QualityInput {
 }
 
 export interface QualityPatch {
+  scamScore: number
+  scamSignals: { label: string; delta: number }[]
+  moderationState: 'publish' | 'caution' | 'hold' | 'reject'
   title: string
   company: string
   workMode: WorkMode
@@ -402,8 +406,21 @@ export function qualityPass(input: QualityInput): QualityResult {
   const completeness =
     Object.values(populated).filter(Boolean).length / Object.keys(populated).length
 
+  const trust = scamScore({
+    title,
+    company,
+    description: input.description,
+    salaryMin: input.salaryMin,
+    salaryMax: input.salaryMax,
+    salaryCurrency: input.salaryCurrency,
+    salaryPeriod: input.salaryPeriod,
+  })
+
   return {
     patch: {
+      scamScore: trust.score,
+      scamSignals: trust.signals,
+      moderationState: trust.moderationState,
       title,
       company,
       workMode: workMode.confidence >= 0.7 ? workMode.mode : 'unknown',

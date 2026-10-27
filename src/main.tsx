@@ -17,7 +17,9 @@ createRoot(container).render(
       <AuthPage />
     ) : window.location.pathname === '/admin/data-quality' ? (
       <QualityWallboard />
-    ) : /^\/(about|privacy|terms|scams|contact|employers)\/?$/.test(window.location.pathname) ? (
+    ) : /^\/(about|privacy|terms|faq|scams|contact|employers)\/?$/.test(
+        window.location.pathname,
+      ) ? (
       <InfoPage path={window.location.pathname.replace(/\/+$/, '')} />
     ) : (
       <App />

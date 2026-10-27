@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, Mail, ShieldCheck } from 'lucide-react'
-import { fetchHealth } from '../lib/api'
 import { Footer } from './Footer'
 
 export function AuthPage() {
@@ -15,9 +14,12 @@ export function AuthPage() {
   useEffect(() => {
     document.title = `${recovery ? 'Recover access' : signup ? 'Create your account' : 'Sign in'} — FJ - Find Jobs`
     let active = true
-    void fetchHealth()
-      .then((health) => {
-        if (active) setReady(!!health.accessLoginUrl)
+    void fetch('/api/auth/status', { cache: 'no-store' })
+      .then((response) =>
+        response.ok ? (response.json() as Promise<{ configured: boolean }>) : null,
+      )
+      .then((status) => {
+        if (active) setReady(Boolean(status?.configured))
       })
       .catch(() => {
         if (active) setReady(false)

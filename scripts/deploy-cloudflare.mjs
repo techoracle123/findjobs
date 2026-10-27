@@ -233,6 +233,17 @@ export async function main() {
     )
   if (process.env.GITHUB_ENV)
     await writeFile(process.env.GITHUB_ENV, `LIVE_SITE_URL=${url}\n`, { flag: 'a' })
+  // The full health report is operator-only: generate a per-deploy key, store
+  // it as a secret, and hand it to the checks running later in this job.
+  const healthKey = crypto.randomUUID().replaceAll('-', '')
+  await pageSecrets(api, process.env.CLOUDFLARE_PAGES_PROJECT, { HEALTH_CHECK_KEY: healthKey })
+  if (process.env.GITHUB_ENV)
+    await writeFile(process.env.GITHUB_ENV, `HEALTH_CHECK_KEY=${healthKey}\n`, { flag: 'a' })
+  annotation(
+    'notice',
+    'Health report protected',
+    'Anonymous /api/health returns only { ok: true }.',
+  )
   try {
     const names = await reservePageNames(api)
     for (const result of names)

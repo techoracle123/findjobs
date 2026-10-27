@@ -63,6 +63,10 @@ export interface Job {
   normalizerVersion?: string
   /** Per-field confidence, completeness and evidence produced by the quality pass. */
   quality?: JobQuality
+  /** Observable red-flag score (0-100); never a verdict about the employer. */
+  scamScore?: number
+  scamSignals?: { label: string; delta: number }[]
+  moderationState?: 'publish' | 'caution' | 'hold' | 'reject'
 }
 
 export interface JobQuality {

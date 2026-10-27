@@ -8,12 +8,11 @@ import { getRates } from './rates'
 import { suggest } from './cv'
 import { scoreJob } from '../shared/scoring'
 import type { Profile, ScoredJob } from '../shared/types'
-import { requestContext, stringList } from './http'
+import { requestContext, requireUser, stringList, unauthorized } from './http'
 import { enforceRateLimit } from './ratelimit'
 import { takeAiBudget } from './aiquota'
 import { buildReadiness } from './readiness'
 import { resolveIdentity } from './auth/identity'
-import { userIdFor } from './auth/accounts'
 import { accountRoutes } from './routes/account'
 import { sourceRoutes } from './routes/sources'
 import { billingRoutes } from './routes/billing'
@@ -21,7 +20,9 @@ import { telegramRoutes } from './routes/telegram'
 import { insightRoutes } from './routes/insights'
 import { applyRoutes } from './routes/apply'
 import { adminRoutes } from './routes/admin'
+import { trustRoutes } from './routes/trust'
 import { jobFacets } from './job-stats'
+import { log } from './logging'
 import { publicDataCache } from './public-cache'
 import { livePublicEnabled, livePublicJobs, searchLivePublic } from './live-public'
 import { publishedPublicJobs, findPublishedJob } from './public-feed'
@@ -29,6 +30,15 @@ import type { JobSearch } from './jobs'
 
 export const app = new Hono<AppEnv>()
 
+app.use('*', async (c, next) => {
+  await next()
+  c.header('X-Content-Type-Options', 'nosniff')
+  c.header('X-Frame-Options', 'DENY')
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+  c.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()')
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+  c.header('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'self'")
+})
 app.use('*', requestContext)
 app.use('*', publicDataCache())
 // Cookie-authenticated writes are same-origin. Signed provider webhooks are
@@ -47,6 +57,11 @@ app.use('/api/*', async (c, next) => {
  * not zero: `Number('')` is 0, which would otherwise turn a request with no
  * paging into a request for the first row.
  */
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 function numberParam(url: URL, name: string): number | undefined {
   const raw = url.searchParams.get(name)
   if (raw === null || raw.trim() === '') return undefined
@@ -91,6 +106,15 @@ app.get('/api/auth/login', async (c) => {
 
 app.get('/api/health', async (c) => {
   const env = c.env ?? {}
+  // Anonymous callers get the liveness bit and nothing else: this endpoint
+  // must not map the stack. Operators pass X-Health-Key; verified identities
+  // see the full readiness report.
+  const healthKey = env.HEALTH_CHECK_KEY
+  const keyHeader = c.req.header('x-health-key') || ''
+  const identity = await resolveIdentity(c.req.raw, readConfig(env))
+  const authorised = Boolean((healthKey && keyHeader === healthKey) || identity)
+  if (!authorised) return c.json({ ok: true })
+
   const config = readConfig(env)
   const published = await publishedPublicJobs(env.PUBLIC_JOBS)
   const count = env.DB
@@ -105,6 +129,7 @@ app.get('/api/health', async (c) => {
   const rates = await getRates(config.appMode !== 'test', env.DB)
   const storageAvailable = Boolean(count)
   const accessLoginUrl = accessConfigured(config) ? '/api/auth/login' : null
+  c.header('Cache-Control', 'private, no-store')
   return c.json({
     ok: true,
     appMode: config.appMode || DEFAULT_APP_MODE,
@@ -268,6 +293,24 @@ app.post('/api/score', async (c) => {
 })
 
 app.post('/api/cv/suggest', async (c) => {
+  const env = c.env ?? {}
+  const user = await requireUser(c)
+  if (!user) return unauthorized(c)
+  const limited = await enforceRateLimit(c, {
+    bucket: 'cv-user',
+    limit: 10,
+    windowSeconds: 3600,
+    subject: user.id,
+  })
+  if (limited) return limited
+  const ipLimited = await enforceRateLimit(c, {
+    bucket: 'cv-ip',
+    limit: 30,
+    windowSeconds: 3600,
+    subject: c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? 'unknown',
+  })
+  if (ipLimited) return ipLimited
+
   const body = await c.req.json().catch(() => ({}))
   const text =
     typeof (body as { text?: unknown }).text === 'string'
@@ -276,18 +319,23 @@ app.post('/api/cv/suggest', async (c) => {
   if (!text.trim()) {
     return c.json({ error: 'text_required' }, 400)
   }
-  const env = c.env ?? {}
   const config = readConfig(env)
+
+  // Identical input returns byte-identical output: the model runs once and the
+  // response is cached for seven days.
+  const cacheKey = `cv:${await sha256Hex(text.trim().toLowerCase().replace(/\s+/g, ' '))}`
+  if (env.PUBLIC_JOBS) {
+    const cached = await env.PUBLIC_JOBS.get(cacheKey, 'text')
+    if (cached) {
+      c.header('Cache-Control', 'private, no-store')
+      return c.body(cached, 200, { 'Content-Type': 'application/json', 'X-CV-Cache': 'hit' })
+    }
+  }
 
   // The keyword fallback costs nothing, so only a real model call is
   // counted against the budget.
   if ((env.AI || env.OPENROUTER_API_KEY) && env.DB) {
-    const identity = await resolveIdentity(c.req.raw, config)
-    const scope = identity
-      ? `user:${await userIdFor(identity.email)}`
-      : `ip:${c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? 'unknown'}`
-
-    const decision = await takeAiBudget(env.DB, scope, config)
+    const decision = await takeAiBudget(env.DB, `user:${user.id}`, config)
     if (!decision.allowed) {
       return c.json(
         { error: 'ai_quota_exceeded', message: decision.message, scope: decision.scope },
@@ -296,14 +344,20 @@ app.post('/api/cv/suggest', async (c) => {
     }
   }
 
+  const started = Date.now()
   const suggestion = await suggest(env.AI, text, env)
-  return c.json(suggestion)
+  log('info', 'cv_suggest', {
+    userId: user.id,
+    durationMs: Date.now() - started,
+    provider: suggestion.provider,
+  })
+  const serialised = JSON.stringify(suggestion)
+  if (env.PUBLIC_JOBS)
+    await env.PUBLIC_JOBS.put(cacheKey, serialised, { expirationTtl: 7 * 86_400 })
+  c.header('Cache-Control', 'private, no-store')
+  return c.body(serialised, 200, { 'Content-Type': 'application/json' })
 })
 
-/**
- * What is working and what is not, in one place. The `doctor` command prints
- * this, and it is the first thing to look at when a deployment misbehaves.
- */
 app.get('/api/readiness', async (c) => {
   return c.json(await buildReadiness(c.env ?? {}))
 })
@@ -315,6 +369,7 @@ app.get('/api/rates', async (c) => {
 app.route('/api', insightRoutes)
 app.route('/api', applyRoutes)
 app.route('/api', adminRoutes)
+app.route('/api', trustRoutes)
 app.route('/api', accountRoutes)
 app.route('/api', sourceRoutes)
 app.route('/api', billingRoutes)

@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Bookmark, BookmarkCheck, ExternalLink, LoaderCircle, Send, Sparkles } from 'lucide-react'
+import {
+  Bookmark,
+  BookmarkCheck,
+  ExternalLink,
+  Flag,
+  LoaderCircle,
+  Send,
+  Sparkles,
+} from 'lucide-react'
 import type { JobAdvice, JobTranslation, Profile, RatesPayload, ScoredJob } from '../shared/types'
 import { formatRange, formatRelativeTime, PERIOD_LABELS } from '../shared/format'
 import { roleFamilyLabel, seniorityLabel, workModeLabel } from '../shared/taxonomy'
 import { applyLinkOf, isClosed } from '../shared/verification'
 import { ScoreBreakdown } from './ScoreBreakdown'
 import { jobAdvice, recordApplyClick, translateJob } from '../lib/api'
+import { ReportDialog } from './ReportDialog'
+import { LeavingWarning } from './LeavingWarning'
 import type { SalaryView } from '../lib/ranking'
 
 interface JobDetailProps {
@@ -36,6 +46,8 @@ export function JobDetail({
   applyQuota,
 }: JobDetailProps) {
   const [fastApplying, setFastApplying] = useState(false)
+  const [reporting, setReporting] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const [fastMessage, setFastMessage] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
   const [translation, setTranslation] = useState<JobTranslation | null>(null)
   const [original, setOriginal] = useState(false)
@@ -149,6 +161,17 @@ export function JobDetail({
               </p>
             </div>
           )}
+        {job.moderationState === 'caution' && (
+          <p className="banner banner--demo" role="status">
+            We can’t confirm this employer yet. Never pay to apply. Report anything that asks you
+            for money.
+          </p>
+        )}
+        {job.applyMode !== 'onsite' && applyUrl && (
+          <p className="leaving-line">
+            You are leaving FJ. FJ never asks you to pay for a job or an application.
+          </p>
+        )}
         <div className="btnrow job-actions">
           {!closed && applyUrl && job.applyMode !== 'onsite' && (
             <a
@@ -157,7 +180,12 @@ export function JobDetail({
               target="_blank"
               rel="noopener noreferrer"
               data-testid="external-apply"
-              onClick={() => recordApplyClick(job.id)}
+              onClick={(event) => {
+                recordApplyClick(job.id)
+                if (leaving) return
+                event.preventDefault()
+                setLeaving(true)
+              }}
             >
               Apply for this role <ExternalLink size={14} />
             </a>
@@ -208,6 +236,9 @@ export function JobDetail({
           <button className="btn btn--ghost" type="button" disabled={applied} onClick={onApply}>
             <Send size={14} />
             {applied ? 'Applied' : 'Mark as applied'}
+          </button>
+          <button className="btn btn--ghost" type="button" onClick={() => setReporting(true)}>
+            <Flag size={14} /> Report this job
           </button>
         </div>
       </header>
@@ -353,6 +384,13 @@ export function JobDetail({
           </a>
         </footer>
       </div>
+      {reporting && <ReportDialog jobId={job.id} onClose={() => setReporting(false)} />}
+      <LeavingWarning
+        open={leaving}
+        href={applyUrl || '#'}
+        onContinue={() => setLeaving(false)}
+        onCancel={() => setLeaving(false)}
+      />
     </article>
   )
 }

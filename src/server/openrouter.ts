@@ -21,9 +21,12 @@ export async function openRouterJson(
         'X-Title': 'FJ - Find Jobs',
       },
       body: JSON.stringify({
+        // Pinned model and zero temperature: identical prompts must produce
+        // identical output; the KV cache enforces byte-identity on top.
         model: env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
+        seed: 42,
         provider: { data_collection: 'deny' },
-        temperature: 0.2,
+        temperature: 0,
         max_tokens: maxTokens,
         response_format: { type: 'json_object' },
         messages: [

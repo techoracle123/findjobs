@@ -28,14 +28,24 @@ beforeAll(async () => {
 })
 
 describe('health and jobs', () => {
-  it('reports its configuration', async () => {
+  it('gives anonymous callers only a liveness bit, never a stack map', async () => {
     const response = await get('/api/health')
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true })
+  })
+
+  it('reports full configuration only to operators or verified identities', async () => {
+    const response = await get('/api/health', { 'X-Health-Key': 'test-health-key' })
     expect(response.status).toBe(200)
     const body = (await response.json()) as Record<string, unknown>
     expect(body.ok).toBe(true)
     expect(body.dataSource).toBe('d1')
     expect(typeof body.jobCount).toBe('number')
     expect(body.authenticationRequired).toBe(false)
+    expect((await get('/api/health', { 'X-Health-Key': 'wrong' })).status).toBe(200)
+    expect(await (await get('/api/health', { 'X-Health-Key': 'wrong' })).json()).toEqual({
+      ok: true,
+    })
   })
 
   it('lists the seeded roles', async () => {

@@ -49,6 +49,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Refuse secrets in the browser bundle
+        run: node scripts/scan-bundle-secrets.mjs dist
+
       - name: Install Chromium for isolated real-feed browser checks
         run: npx playwright install --with-deps chromium
 

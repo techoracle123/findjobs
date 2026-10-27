@@ -21,6 +21,8 @@ export interface Env {
   TELEGRAM_BOT_USERNAME?: string
   /** Comma-separated verified Access emails allowed on /api/admin/*. */
   ADMIN_EMAILS?: string
+  /** Shared secret for the full /api/health readiness report. */
+  HEALTH_CHECK_KEY?: string
 
   // Cloudflare Access (identity)
   ACCESS_TEAM_DOMAIN?: string

@@ -13,6 +13,7 @@ declare global {
       DB: D1Database
       PUBLIC_JOBS?: KVNamespace
       ADMIN_EMAILS?: string
+      HEALTH_CHECK_KEY?: string
       APP_MODE?: string
       TELEGRAM_BOT_USERNAME?: string
     }

@@ -16,5 +16,6 @@
   "vars": {
     "APP_MODE": "test",
     "TELEGRAM_BOT_USERNAME": "",
+    "HEALTH_CHECK_KEY": "test-health-key",
   },
 }

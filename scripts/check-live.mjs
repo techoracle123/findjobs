@@ -6,7 +6,10 @@ const base = process.env.LIVE_SITE_URL
 if (!base?.startsWith('https://'))
   throw new Error('LIVE_SITE_URL must be the deployed HTTPS origin.')
 async function json(path) {
-  const response = await fetch(`${base}${path}`, { signal: AbortSignal.timeout(30000) })
+  const response = await fetch(`${base}${path}`, {
+    headers: process.env.HEALTH_CHECK_KEY ? { 'X-Health-Key': process.env.HEALTH_CHECK_KEY } : {},
+    signal: AbortSignal.timeout(30000),
+  })
   if (!response.ok) throw new Error(`Live check failed: ${path} returned ${response.status}`)
   return response.json()
 }

@@ -32,6 +32,7 @@ export interface PublicSnapshot {
   attemptedSources: number
   olderSources: number
   added: number
+  moderationWithheld?: number
   jobs: IndexedJob[]
   parts?: string[]
   ids?: string[]
@@ -83,6 +84,7 @@ export function assemblePublicSnapshot(
   now = Date.now(),
 ): PublicSnapshot {
   const valid = indexes.filter((index) => now - index.fetchedAt < MAX_AGE)
+  let moderationWithheld = 0
   const collected: IndexedJob[] = []
   const syndicated = new Map<string, string>()
   for (const index of valid)
@@ -134,7 +136,15 @@ export function assemblePublicSnapshot(
     }
   })
   const { unique, dropped } = dedupeJobs(normalised)
-  const jobs = unique.sort(
+  const withheld = unique.filter(
+    (job) => job.moderationState === 'hold' || job.moderationState === 'reject',
+  )
+  const published = unique.filter(
+    (job) => job.moderationState !== 'hold' && job.moderationState !== 'reject',
+  )
+  moderationWithheld = withheld.length
+  void published
+  const jobs = published.sort(
     (a, b) => b.postedAt.localeCompare(a.postedAt) || a.id.localeCompare(b.id),
   )
   if (!valid.length) throw new Error('No genuine public listings; keeping previous publication')
@@ -146,6 +156,7 @@ export function assemblePublicSnapshot(
     attemptedSources: PUBLIC_SOURCES.length,
     olderSources: valid.filter((index) => now - index.fetchedAt > 13 * 3600000).length,
     added: previousIds.size ? jobs.filter((job) => !previousIds.has(job.id)).length : 0,
+    moderationWithheld,
     duplicatesDropped: dropped,
     jobs,
   }
@@ -236,10 +247,17 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
       // Individual failed sources must not stay 'open' indefinitely just because
       // other sources continued refreshing the shared publication.
       for (const job of snapshot.jobs) job.roleFamily = specialistRole(job.title) || job.roleFamily
+      // Held/rejected listings and report-hidden listings never reach users.
+      const hidden = await kv
+        .get<Record<string, number>>('moderation:hidden', { type: 'json', cacheTtl: 60 })
+        .catch(() => null)
       snapshot.jobs = snapshot.jobs.filter(
         (job) =>
           !job.isDemo &&
           job.jobStatus === 'open' &&
+          (job.moderationState ?? 'publish') !== 'hold' &&
+          (job.moderationState ?? 'publish') !== 'reject' &&
+          !(hidden && Object.hasOwn(hidden, job.id)) &&
           Date.now() - Date.parse(job.lastSeenAt || '') < MAX_AGE,
       )
       if (!snapshot.jobs.length && snapshot.ids?.length !== 0) return null

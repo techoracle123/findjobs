@@ -31,6 +31,7 @@ import { SavedPanel } from './components/SavedPanel'
 import { AlertsPanel } from './components/AlertsPanel'
 import { useAccount } from './hooks/useAccount'
 import { ProgressPanel } from './components/ProgressPanel'
+import { ReportDialog } from './components/ReportDialog'
 import { deviceActivity } from './shared/activity'
 import { controlEnabled } from './shared/quality'
 import type { JobFacets } from './server/job-stats'
@@ -145,6 +146,7 @@ export default function App() {
   }))
   const [sort, setSort] = useState<SortKey>('relevance')
   const [toast, setToast] = useState<string | null>(null)
+  const [reportingId, setReportingId] = useState<string | null>(null)
   const [telegramLinked, setTelegramLinked] = useState(false)
   const [applyQuota, setApplyQuota] = useState<ApplyQuota | null>(null)
   const [billingPlans, setBillingPlans] = useState<PlanDefinition[]>([])
@@ -846,6 +848,7 @@ export default function App() {
                   salary={salaryView(entry.job, rates, displayCurrency)}
                   saved={savedIds.has(entry.job.id)}
                   onSave={() => toggleSave(entry.job.id)}
+                  onReport={() => setReportingId(entry.job.id)}
                   onSelect={() => openJob(entry.job.id)}
                 />
               ))
@@ -891,6 +894,7 @@ export default function App() {
           <Footer />
         </main>
       )}
+      {reportingId && <ReportDialog jobId={reportingId} onClose={() => setReportingId(null)} />}
       {toast && (
         <div className="toast" role="status">
           {toast}

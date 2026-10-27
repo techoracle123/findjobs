@@ -164,9 +164,11 @@ test('Nigeria and general professions are selectable without repetitive badges',
 
 test('public browsing and sign-in availability are reported honestly', async ({ request }) => {
   const health = await (await request.get('/api/health')).json()
+  expect(health).toEqual({ ok: true }) // never a stack map to anonymous callers
+  const status = await (await request.get('/api/auth/status')).json()
   expect((await request.get('/')).ok()).toBe(true)
   const login = await request.get('/api/auth/login', { maxRedirects: 0 })
-  if (!health.accessConfigured) {
+  if (!status.configured) {
     expect([503]).toContain(login.status())
     return
   }
@@ -189,8 +191,8 @@ test('dedicated sign-up, sign-in and recovery pages work on small phones', async
   await expect(page.getByRole('heading', { name: 'Recover your account' })).toBeVisible()
   await expect(page.locator('.auth-card')).toContainText('FJ is passwordless')
   await expect(page.locator('.auth-card')).toContainText('inbox and spam folder')
-  const health = await (await page.request.get('/api/health')).json()
-  if (health.accessLoginUrl)
+  const status = await (await page.request.get('/api/auth/status')).json()
+  if (status.configured)
     await expect(page.getByRole('link', { name: 'Request a new sign-in code' })).toHaveAttribute(
       'href',
       '/api/auth/login?returnTo=%2Fdashboard',

@@ -18,6 +18,7 @@ import m0014 from '../../migrations/0014_public_board_refresh.sql?raw'
 import m0016 from '../../migrations/0016_application_history.sql?raw'
 import m0017 from '../../migrations/0017_fast_apply.sql?raw'
 import m0018 from '../../migrations/0018_quality.sql?raw'
+import m0019 from '../../migrations/0019_moderation.sql?raw'
 import m0015 from '../../migrations/0015_public_read_indexes.sql?raw'
 
 /**
@@ -46,6 +47,7 @@ const MIGRATIONS = [
   m0016,
   m0017,
   m0018,
+  m0019,
 ]
 
 /**

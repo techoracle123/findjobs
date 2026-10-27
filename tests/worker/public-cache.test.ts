@@ -69,9 +69,10 @@ it('reports an exhausted database honestly without exposing internals', async ()
   expect(JSON.stringify(await response.json())).not.toContain('private-diagnostic')
   const paged = await app.request(
     'https://fj-find-jobs.pages.dev/api/health',
-    {},
+    { headers: { 'X-Health-Key': 'test-health-key' } },
     {
       APP_MODE: 'test',
+      HEALTH_CHECK_KEY: 'test-health-key',
       DB: {
         prepare: () => {
           throw new Error('D1_ERROR: daily row read limit [7500] private-diagnostic')
