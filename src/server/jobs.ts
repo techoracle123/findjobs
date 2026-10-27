@@ -218,10 +218,14 @@ export interface JobSearch {
   limit?: number
   offset?: number
   now?: number
+  /** Also return the full matching set (capped) so callers can compute facets over everything, not just the page. */
+  withFacets?: boolean
 }
 
 export interface JobSearchResult {
   jobs: Job[]
+  /** Full matching set for facet counts; only present when `withFacets` was requested. */
+  facetJobs?: Job[]
   total: number
   limit: number
   offset: number
@@ -305,8 +309,22 @@ export async function searchJobs(
     .bind(...binds, limit, offset)
     .all<JobRow>()
 
+  let facetJobs: Job[] | undefined
+  if (search.withFacets) {
+    const all = await db
+      .prepare(
+        `SELECT ${COLUMNS} FROM jobs j WHERE ${where}
+           ORDER BY j.posted_at DESC, j.id
+           LIMIT 5000 OFFSET 0`,
+      )
+      .bind(...binds)
+      .all<JobRow>()
+    facetJobs = (all.results ?? []).map((row) => mapRow(row, now))
+  }
+
   return {
     jobs: (rows.results ?? []).map((row) => mapRow(row, now)),
+    ...(facetJobs ? { facetJobs } : {}),
     total: countRow?.n ?? 0,
     limit,
     offset,

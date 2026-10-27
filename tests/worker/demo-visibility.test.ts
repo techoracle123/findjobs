@@ -2,6 +2,7 @@ import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import './setup'
 import { findJob, searchJobs } from '../../src/server/jobs'
+import { jobFacets } from '../../src/server/job-stats'
 
 /**
  * Hosted serving never exposes demo/test-fixture rows. Only local/test
@@ -34,5 +35,15 @@ describe('demo row visibility', () => {
 
     expect(await findJob(env.DB, 'guard-demo-1')).toBeNull()
     expect((await findJob(env.DB, 'guard-demo-1', Date.now(), true))?.id).toBe('guard-demo-1')
+  })
+
+  it('computes facets over the full matching set, not the returned page', async () => {
+    const page = await searchJobs(env.DB, { status: 'open', limit: 1, withFacets: true })
+    expect(page.jobs).toHaveLength(1)
+    expect(page.facetJobs?.length).toBe(page.total)
+    expect(page.total).toBeGreaterThan(1)
+    const facets = jobFacets(page.facetJobs ?? [], { status: 'open' })
+    const known = Object.entries(facets.professions).filter(([id, n]) => id !== 'unknown' && n > 0)
+    expect(known.length).toBeGreaterThan(0)
   })
 })

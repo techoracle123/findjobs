@@ -355,7 +355,10 @@ app.get('/api/jobs', async (c) => {
   let dataSource: 'd1' | 'live-public' = 'd1'
   try {
     if (!env.DB) throw new Error('Database unavailable')
-    result = await withTimeout(searchJobs(env.DB, { ...search, includeDemo: allowDemo }), 3000)
+    result = await withTimeout(
+      searchJobs(env.DB, { ...search, includeDemo: allowDemo, withFacets: true }),
+      3000,
+    )
   } catch (error) {
     if (!livePublicEnabled(env.APP_MODE)) throw error
     result = searchLivePublic(await livePublicJobs(url.origin), search)
@@ -368,7 +371,7 @@ app.get('/api/jobs', async (c) => {
     limit: result.limit,
     offset: result.offset,
     dataSource,
-    facets: { ...jobFacets(result.jobs, {}), total: result.total },
+    facets: { ...jobFacets(result.facetJobs ?? result.jobs, search), total: result.total },
     ...(dataSource === 'live-public'
       ? {
           warning: 'stale',
