@@ -4,6 +4,7 @@ import { formatRange, formatRelativeTime } from '../shared/format'
 import { roleFamilyLabel, workModeLabel } from '../shared/taxonomy'
 import type { SalaryView } from '../lib/ranking'
 import { MatchRing } from './MatchRing'
+import { copy } from '../shared/copy'
 
 interface JobRowProps {
   scored: ScoredJob
@@ -13,6 +14,7 @@ interface JobRowProps {
   onSelect: () => void
   onSave?: () => void
   onReport?: () => void
+  cautionBannerEnabled?: boolean
 }
 
 function monogram(company: string): string {
@@ -33,14 +35,15 @@ export function JobRow({
   onSelect,
   onSave,
   onReport,
+  cautionBannerEnabled = false,
 }: JobRowProps) {
   const { job, score } = scored
   const hasProfile = scored.components.some((component) => component.applicable)
   const hasPay = salary.max > 0 || salary.min > 0
   return (
     <div className="jobrow-wrap">
-      {job.moderationState === 'caution' && (
-        <p className="jobrow__caution">We can’t confirm this employer yet. Never pay to apply.</p>
+      {job.moderationState === 'caution' && cautionBannerEnabled && (
+        <p className="jobrow__caution">{copy('trust.caution')}</p>
       )}
       <a
         href={`/jobs/${encodeURIComponent(job.id)}`}

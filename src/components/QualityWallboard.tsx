@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { copy } from '../shared/copy'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import type { QualitySnapshot } from '../shared/quality'
 import { QUALITY_FIELDS, QUALITY_FLOORS, FIELD_THRESHOLD } from '../shared/quality'
@@ -40,7 +41,7 @@ export function QualityWallboard() {
       }
       setPayload((await response.json()) as Payload)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(copy('admin.unavailable'))
     } finally {
       setLoading(false)
     }

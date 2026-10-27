@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CreditCard, ExternalLink } from 'lucide-react'
 import type { PlanDefinition, Subscription } from '../lib/api'
 import { currencySymbol } from '../shared/format'
+import { copy } from '../shared/copy'
 
 const COPY: Record<string, { features: string[]; cadence: string }> = {
   free: {
@@ -71,8 +72,8 @@ export function PlanPanel({
         const { session } = await startCheckout('pro')
         window.location.href = session.url
       }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+    } catch {
+      setMessage(copy('plan.failed'))
     } finally {
       setBusy(false)
     }
@@ -86,8 +87,8 @@ export function PlanPanel({
       await cancelSubscription()
       await onRefresh()
       setMessage('Your plan will end at the close of the period you have already paid for.')
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+    } catch {
+      setMessage(copy('plan.failed'))
     } finally {
       setBusy(false)
     }

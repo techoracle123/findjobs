@@ -105,6 +105,25 @@ app.get('/api/auth/login', async (c) => {
   return c.redirect(/^\/(?:dashboard|jobs\/[A-Za-z0-9_-]+)?$/.test(returnTo) ? returnTo : '/')
 })
 
+/**
+ * Records that a copy id actually rendered in a browser so the audit page can
+ * show real usage. Anonymous, rate limited and counter writes are bounded.
+ */
+app.post('/api/copy-render', async (c) => {
+  const limited = await enforceRateLimit(c, { bucket: 'copy-render', limit: 30, windowSeconds: 60 })
+  if (limited) return limited
+  const body = await c.req.json().catch(() => null)
+  const id = typeof body?.id === 'string' && /^[a-z][a-z0-9.]{0,63}$/.test(body.id) ? body.id : null
+  if (!id) return c.json({ error: 'bad_request' }, 400)
+  const kv = c.env?.PUBLIC_JOBS
+  if (kv) {
+    const key = `copyrender:${id}`
+    const current = Number((await kv.get(key)) ?? '0')
+    await kv.put(key, String(current + 1))
+  }
+  return c.json({ ok: true })
+})
+
 app.get('/api/health', async (c) => {
   const env = c.env ?? {}
   // Anonymous callers get the liveness bit and nothing else: this endpoint
@@ -198,12 +217,7 @@ app.get('/api/jobs', async (c) => {
       updatedAt: published.refreshedAt,
       refreshHours: published.refreshHours,
       sourceCount: published.sourceCount,
-      ...(published.olderSources
-        ? {
-            warning:
-              'Some publishers could not be refreshed this cycle. Check the original listing before applying.',
-          }
-        : {}),
+      ...(published.olderSources ? { warning: 'stale' } : {}),
     })
   }
 
@@ -225,8 +239,7 @@ app.get('/api/jobs', async (c) => {
         total: current.length,
         dataSource: 'live-public',
         facets: { ...jobFacets(current, {}), total: current.length },
-        warning:
-          'Showing current public listings while account syncing is temporarily unavailable.',
+        warning: 'stale',
       })
     }
     return c.json({
@@ -257,8 +270,7 @@ app.get('/api/jobs', async (c) => {
     facets: { ...jobFacets(result.jobs, {}), total: result.total },
     ...(dataSource === 'live-public'
       ? {
-          warning:
-            'Showing current public listings while account syncing is temporarily unavailable. Always verify the original listing.',
+          warning: 'stale',
         }
       : {}),
   })

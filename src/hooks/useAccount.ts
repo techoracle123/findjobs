@@ -45,7 +45,10 @@ export interface UseAccount {
   setAlerts: Setter<AlertPreference[]>
   refresh: () => Promise<void>
   importLocalData: () => Promise<ImportResult>
-  syncError: string | null
+  /** Final failure after quiet retries — render copy('sync.failed') inline. */
+  syncError: boolean
+  /** A write is retrying in the background — render copy('sync.pending'). */
+  syncPending: boolean
   hasLocalData: boolean
   activity: ApplicationActivity | null
   activityError: boolean
@@ -60,7 +63,8 @@ function readAnonymous<T>(key: string, fallback: T): T {
  *
  * The browser keeps a copy of everything so the interface is instant and
  * works with no account at all. When an account is present the server is the
- * source of truth and every change is written through to it.
+ * source of truth. Failed writes retry quietly with backoff; users hear about
+ * a problem only when retrying cannot fix it.
  */
 export function useAccount(): UseAccount {
   const [mode, setMode] = useState<AccountMode>('loading')
@@ -76,12 +80,14 @@ export function useAccount(): UseAccount {
   const [alerts, setAlertsState] = useState<AlertPreference[]>(() =>
     readAnonymous<AlertPreference[]>('alerts', []),
   )
-  const [syncError, setSyncError] = useState<string | null>(null)
+  const [syncError, setSyncError] = useState(false)
+  const [syncPending, setSyncPending] = useState(false)
   const [activity, setActivity] = useState<ApplicationActivity | null>(null)
   const [activityError, setActivityError] = useState(false)
   const ownerRef = useRef<string | null>(null)
   const profileTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const refreshVersion = useRef(0)
+
   const refreshActivity = useCallback(async () => {
     const owner = ownerRef.current
     try {
@@ -94,6 +100,27 @@ export function useAccount(): UseAccount {
     }
   }, [])
 
+  /** Quiet retries with backoff; only the final failure is user-visible. */
+  const runSave = useCallback((operation: () => Promise<unknown>) => {
+    const attempt = (remaining: number) => {
+      void operation()
+        .then(() => {
+          setSyncPending(false)
+          setSyncError(false)
+        })
+        .catch(() => {
+          if (remaining > 0) {
+            setSyncPending(true)
+            window.setTimeout(() => attempt(remaining - 1), 2500)
+          } else {
+            setSyncPending(false)
+            setSyncError(true)
+          }
+        })
+    }
+    attempt(2)
+  }, [])
+
   const [hasLocalData, setHasLocalData] = useState(false)
   const anonymousData = useRef({
     profile: readAnonymous<Profile>('profile', EMPTY_PROFILE),
@@ -102,9 +129,6 @@ export function useAccount(): UseAccount {
   })
 
   const signedIn = mode === 'signed-in'
-
-  // The latest values, so a setter can diff against them when it is given
-  // an updater function.
   const profileRef = useRef(profile)
   const savedRef = useRef(saved)
   const alertsRef = useRef(alerts)
@@ -150,7 +174,7 @@ export function useAccount(): UseAccount {
       if (ownerRef.current !== snapshot.user.id) clearTimeout(profileTimer.current)
       applySnapshot(snapshot)
       setMode('signed-in')
-      setSyncError(null)
+      setSyncError(false)
       await refreshActivity()
     } catch (error) {
       if (version !== refreshVersion.current) return
@@ -169,9 +193,7 @@ export function useAccount(): UseAccount {
       writeLocal('profile', local.profile)
       writeLocal('saved', local.saved)
       writeLocal('alerts', local.alerts)
-      if (!(error instanceof ApiError && error.status === 401)) {
-        setSyncError(error instanceof Error ? error.message : String(error))
-      }
+      if (!(error instanceof ApiError && error.status === 401)) setSyncError(true)
     }
   }, [applySnapshot, refreshActivity])
 
@@ -223,16 +245,13 @@ export function useAccount(): UseAccount {
         writeLocal('anonymous-import', anonymousData.current)
         return
       }
-
       // Profile edits arrive one keystroke at a time, so they are coalesced.
       if (profileTimer.current !== undefined) window.clearTimeout(profileTimer.current)
       profileTimer.current = window.setTimeout(() => {
-        void putProfile(next).catch((error: unknown) => {
-          setSyncError(error instanceof Error ? error.message : String(error))
-        })
+        runSave(() => putProfile(next))
       }, 600)
     },
-    [signedIn],
+    [signedIn, runSave],
   )
 
   const setSaved = useCallback<Setter<SavedApplication[]>>(
@@ -247,26 +266,19 @@ export function useAccount(): UseAccount {
         writeLocal('anonymous-import', anonymousData.current)
         return
       }
-
       for (const entry of next) {
         const before = previous.find((item) => item.jobId === entry.jobId)
         if (!before || before.status !== entry.status) {
-          void postSaved(entry.jobId, entry.status)
-            .then(refreshActivity)
-            .catch((error: unknown) => {
-              setSyncError(error instanceof Error ? error.message : String(error))
-            })
+          runSave(() => postSaved(entry.jobId, entry.status).then(refreshActivity))
         }
       }
       for (const entry of previous) {
         if (!next.some((item) => item.jobId === entry.jobId)) {
-          void deleteSaved(entry.jobId).catch((error: unknown) => {
-            setSyncError(error instanceof Error ? error.message : String(error))
-          })
+          runSave(() => deleteSaved(entry.jobId).then(refreshActivity))
         }
       }
     },
-    [signedIn, refreshActivity],
+    [signedIn, runSave, refreshActivity],
   )
 
   const setAlerts = useCallback<Setter<AlertPreference[]>>(
@@ -281,33 +293,26 @@ export function useAccount(): UseAccount {
         writeLocal('anonymous-import', anonymousData.current)
         return
       }
-
       for (const entry of next) {
         const before = previous.find((item) => item.id === entry.id)
         if (!before) {
-          void postAlert(entry).catch((error: unknown) => {
-            setSyncError(error instanceof Error ? error.message : String(error))
-          })
+          runSave(() => postAlert(entry))
         } else if (
           before.label !== entry.label ||
           before.query !== entry.query ||
           JSON.stringify(before.channels) !== JSON.stringify(entry.channels) ||
           before.enabled !== entry.enabled
         ) {
-          void patchAlert(entry.id, entry).catch((error: unknown) => {
-            setSyncError(error instanceof Error ? error.message : String(error))
-          })
+          runSave(() => patchAlert(entry.id, entry))
         }
       }
       for (const entry of previous) {
         if (!next.some((item) => item.id === entry.id)) {
-          void deleteAlert(entry.id).catch((error: unknown) => {
-            setSyncError(error instanceof Error ? error.message : String(error))
-          })
+          runSave(() => deleteAlert(entry.id))
         }
       }
     },
-    [signedIn],
+    [signedIn, runSave],
   )
 
   const importLocalData = useCallback(async () => {
@@ -330,8 +335,6 @@ export function useAccount(): UseAccount {
   )
 
   return {
-    activity,
-    activityError,
     hasLocalData,
     mode,
     user,
@@ -346,5 +349,8 @@ export function useAccount(): UseAccount {
     refresh,
     importLocalData,
     syncError,
+    syncPending,
+    activity,
+    activityError,
   }
 }

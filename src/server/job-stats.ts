@@ -12,6 +12,8 @@ export interface JobFacets {
   unknownLocation: number
   countries: Record<string, number>
   professions: Record<string, number>
+  /** Share of matched listings carrying a caution flag; banners stay quiet above 20%. */
+  cautionShare: number
   /** Field completeness across the full matching set; drives control visibility. */
   coverage: FieldCoverage
 }
@@ -50,6 +52,9 @@ function computeFacets(jobs: Job[], search: JobSearch): JobFacets {
       'locationCountry',
     ),
     professions: count(matchingPublicJobs(jobs, { ...search, roleFamilies: [] }), 'roleFamily'),
+    cautionShare: matched.length
+      ? matched.filter((job) => job.moderationState === 'caution').length / matched.length
+      : 0,
     coverage: coverageOf(matched),
   }
 }

@@ -60,3 +60,32 @@ adminRoutes.get('/admin/quality/:field', async (c) => {
     total: published.jobs.length,
   })
 })
+
+/**
+ * Copy audit (Prompt 19): every registry entry with its class and how often it
+ * actually rendered in a browser. Raw message text never leaves this admin view.
+ */
+adminRoutes.get('/admin/copy', async (c) => {
+  const denied = await requireAdmin(c)
+  if (denied) return denied
+  const limited = await enforceRateLimit(c, { bucket: 'admin', limit: 60, windowSeconds: 60 })
+  if (limited) return limited
+  const { COPY } = await import('../../shared/copy')
+  const renders: Record<string, number> = {}
+  const kv = c.env?.PUBLIC_JOBS
+  if (kv) {
+    const keys = await kv.list({ prefix: 'copyrender:' })
+    for (const key of keys.keys) {
+      const value = await kv.get(key.name)
+      renders[key.name.replace('copyrender:', '')] = Number(value ?? '0')
+    }
+  }
+  return c.json({
+    entries: Object.entries(COPY).map(([id, entry]) => ({
+      id,
+      class: entry.className,
+      legal: entry.legal === true,
+      renders: renders[id] ?? 0,
+    })),
+  })
+})

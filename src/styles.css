@@ -433,6 +433,27 @@ a {
   flex-wrap: wrap;
 }
 
+/* ---------- inline status lines ---------- */
+.linkbtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.stale-line {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent, #0b6bcb);
+  background: rgba(11, 107, 203, 0.06);
+  font-size: 0.875rem;
+  border-radius: 8px;
+  color: var(--text-soft, #444);
+}
+
 /* ---------- banner ---------- */
 
 .banner {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, Mail, ShieldCheck } from 'lucide-react'
 import { Footer } from './Footer'
+import { copy } from '../shared/copy'
 
 export function AuthPage() {
   const path = window.location.pathname.replace(/\/+$/, '')
@@ -149,7 +150,7 @@ export function AuthPage() {
                   </a>
                 ) : (
                   <div className="banner banner--info" role="status">
-                    Secure sign-in is temporarily unavailable.{' '}
+                    {copy('auth.unavailable')}{' '}
                     <button className="btn btn--sm" onClick={() => window.location.reload()}>
                       Try again
                     </button>{' '}

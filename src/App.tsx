@@ -75,8 +75,7 @@ function routeJobId(): string | null {
   }
 }
 
-const DISCLAIMER =
-  'FJ is an information broker: we share opportunities, not job offers. We are not affiliated with employers and do not verify or endorse listings. Always verify the employer, requirements and original listing before applying. Never pay to apply.'
+import { copy } from './shared/copy'
 
 export default function App() {
   const [knownJobs, setKnownJobs] = useState<Record<string, Job>>({})
@@ -86,7 +85,7 @@ export default function App() {
   const [total, setTotal] = useState(0)
   const [facets, setFacets] = useState<JobFacets | null>(null)
   const [feedUpdatedAt, setFeedUpdatedAt] = useState<string | null>(null)
-  const [dataNote, setDataNote] = useState<string | null>(null)
+  const [staleDismissed, setStaleDismissed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -153,6 +152,12 @@ export default function App() {
   const [billingEnabled, setBillingEnabled] = useState(false)
   const adminControls = new URLSearchParams(window.location.search).has('adminControls')
 
+  const cautionBannerEnabled = (facets?.cautionShare ?? 1) < 0.2
+  const staleListings =
+    !staleDismissed && feedUpdatedAt
+      ? Date.now() - Date.parse(feedUpdatedAt) > 24 * 3600_000
+      : false
+
   useEffect(() => writeLocal('currency', displayCurrency), [displayCurrency])
 
   const load = useCallback(
@@ -172,7 +177,7 @@ export default function App() {
         setJobs(jobsResponse.jobs)
         setTotal(jobsResponse.total ?? jobsResponse.jobs.length)
         setFeedUpdatedAt(jobsResponse.updatedAt || null)
-        setDataNote(jobsResponse.warning ?? null)
+
         setFacets(jobsResponse.facets || null)
       } catch (cause) {
         if (version === requestVersion.current)
@@ -330,8 +335,8 @@ export default function App() {
       const { url } = await createTelegramLink()
       window.location.assign(url)
       setToast('Open Telegram to finish linking.')
-    } catch (error) {
-      setToast(error instanceof Error ? error.message : String(error))
+    } catch {
+      setToast(copy('telegram.failed'))
     }
   }
 
@@ -446,12 +451,11 @@ export default function App() {
           : current,
       )
       markApplied(jobId)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+    } catch (error: unknown) {
       void fetchApplyQuota()
         .then(setApplyQuota)
         .catch(() => {})
-      throw new Error(message)
+      throw error
     }
   }
 
@@ -581,9 +585,9 @@ export default function App() {
               onApply={() => markApplied(selected.job.id)}
               onFastApply={() => runFastApply(selected.job.id)}
               applyQuota={applyQuota}
+              cautionBannerEnabled={cautionBannerEnabled}
             />
           )}
-          <p className="site-disclaimer">{DISCLAIMER}</p>
           <Footer />
         </main>
       ) : view === 'dashboard' ? (
@@ -810,11 +814,11 @@ export default function App() {
             </div>
           )}
           {loadError && (
-            <div className="banner banner--demo">
-              <span>
-                Job sources are temporarily unavailable. Your saved preferences are safe. Please try
-                again shortly.
-              </span>
+            <div className="banner banner--demo" role="status">
+              <span>{copy('jobs.unavailable')}</span>
+              <button type="button" className="btn btn--sm" onClick={() => void load(true)}>
+                Try again
+              </button>
             </div>
           )}
           <div className="joblist">
@@ -844,6 +848,7 @@ export default function App() {
                   saved={savedIds.has(entry.job.id)}
                   onSave={() => toggleSave(entry.job.id)}
                   onReport={() => setReportingId(entry.job.id)}
+                  cautionBannerEnabled={cautionBannerEnabled}
                   onSelect={() => openJob(entry.job.id)}
                 />
               ))
@@ -878,10 +883,13 @@ export default function App() {
               match.
             </p>
           </details>
-          {dataNote && (
-            <div className="banner banner--info">
-              <span>{dataNote}</span>
-            </div>
+          {staleListings && (
+            <p className="hint stale-line" role="status">
+              {copy('stale.24h')}{' '}
+              <button type="button" className="linkbtn" onClick={() => setStaleDismissed(true)}>
+                Hide
+              </button>
+            </p>
           )}
           {facets && (
             <p className="hint market-line">
@@ -890,7 +898,6 @@ export default function App() {
               {feedUpdatedAt ? new Date(feedUpdatedAt).toLocaleString() : 'every 12 hours'}
             </p>
           )}
-          <p className="site-disclaimer intro-disclaimer">{DISCLAIMER}</p>
           <Footer />
         </main>
       )}

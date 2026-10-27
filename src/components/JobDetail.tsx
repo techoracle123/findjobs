@@ -14,6 +14,7 @@ import { roleFamilyLabel, seniorityLabel, workModeLabel } from '../shared/taxono
 import { applyLinkOf, isClosed } from '../shared/verification'
 import { ScoreBreakdown } from './ScoreBreakdown'
 import { jobAdvice, recordApplyClick, translateJob } from '../lib/api'
+import { copy } from '../shared/copy'
 import { ReportDialog } from './ReportDialog'
 import { LeavingWarning } from './LeavingWarning'
 import type { SalaryView } from '../lib/ranking'
@@ -29,6 +30,7 @@ interface JobDetailProps {
   onSave: () => void
   onApply: () => void
   onFastApply?: () => Promise<void>
+  cautionBannerEnabled?: boolean
   applyQuota?: { remaining: number; unlimited: boolean; resetsAt: string } | null
 }
 
@@ -44,6 +46,7 @@ export function JobDetail({
   onApply,
   onFastApply,
   applyQuota,
+  cautionBannerEnabled = false,
 }: JobDetailProps) {
   const [fastApplying, setFastApplying] = useState(false)
   const [reporting, setReporting] = useState(false)
@@ -102,7 +105,7 @@ export function JobDetail({
     try {
       setAdvice(await jobAdvice(job.id, profile.skills))
     } catch {
-      setAdviceError('We couldn’t prepare advice just now. Please try again.')
+      setAdviceError(copy('advice.failed'))
     } finally {
       setAdvising(false)
     }
@@ -113,9 +116,7 @@ export function JobDetail({
     try {
       setTranslation(await translateJob(job.id))
     } catch {
-      setTranslationError(
-        'Translation is unavailable right now. The original description is shown.',
-      )
+      setTranslationError(copy('translation.failed'))
     } finally {
       setTranslating(false)
     }
@@ -161,16 +162,13 @@ export function JobDetail({
               </p>
             </div>
           )}
-        {job.moderationState === 'caution' && (
+        {job.moderationState === 'caution' && cautionBannerEnabled && (
           <p className="banner banner--demo" role="status">
-            We can’t confirm this employer yet. Never pay to apply. Report anything that asks you
-            for money.
+            {copy('trust.caution')}
           </p>
         )}
         {job.applyMode !== 'onsite' && applyUrl && (
-          <p className="leaving-line">
-            You are leaving FJ. FJ never asks you to pay for a job or an application.
-          </p>
+          <p className="leaving-line">{copy('trust.thirdParty')}</p>
         )}
         <div className="btnrow job-actions">
           {!closed && applyUrl && job.applyMode !== 'onsite' && (

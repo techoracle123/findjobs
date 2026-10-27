@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { FileText, LoaderCircle, Sparkles, Upload } from 'lucide-react'
+import { copy } from '../shared/copy'
 import type { CvSuggestion } from '../shared/types'
 import { suggestFromCv } from '../lib/api'
 
@@ -23,7 +24,7 @@ export function CvImport({ onApply }: CvImportProps) {
 
   const handleFile = async (file: File) => {
     if (!acknowledged) {
-      setError('Please confirm the AI notice below before uploading.')
+      setError(copy('cv.needsNotice'))
       return
     }
     setError(null)
@@ -41,7 +42,7 @@ export function CvImport({ onApply }: CvImportProps) {
       const result = await suggestFromCv(extracted.text)
       setSuggestion(result)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(copy('cv.unreadable'))
     } finally {
       setBusy(false)
       setStage('idle')
