@@ -2548,3 +2548,13 @@ summary:focus-visible {
     height: 38px;
   }
 }
+
+@media (max-width: 700px) {
+  .results-head {
+    min-height: 28px;
+    margin: 0 0 6px;
+  }
+  .chipbar {
+    margin: 6px 0 4px;
+  }
+}

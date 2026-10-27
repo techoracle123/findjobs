@@ -443,8 +443,11 @@ test('no serious accessibility violations on the main routes', async ({ page }) 
 })
 
 test('UI controls with no backing data stay hidden unless admin override', async ({ page }) => {
-  const facets = (await (await page.request.get('/api/jobs?status=open&limit=1')).json()).facets
   await page.goto('/')
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible() // warms the response cache
+  const facets = (
+    await (await page.request.get('/api/jobs?status=open&limit=1', { timeout: 30_000 })).json()
+  ).facets
   if (facets.coverage.workMode < 0.6)
     await expect(page.getByRole('button', { name: /Work mode/ })).toHaveCount(0)
   if (facets.coverage.seniority < 0.6)
