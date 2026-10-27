@@ -57,6 +57,7 @@ export function CvImport({ onApply }: CvImportProps) {
         <input
           ref={inputRef}
           type="file"
+          aria-label="Upload your CV"
           accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
           className="visually-hidden"
           onChange={(event) => {

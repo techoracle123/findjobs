@@ -23,7 +23,7 @@ export function Pagination({ page, pageCount, onChange }: PaginationProps) {
         className="btn btn--ghost btn--sm"
         disabled={page <= 1}
         onClick={() => onChange(page - 1)}
-        aria-label="Previous page"
+        aria-label="Prev"
       >
         <ChevronLeft size={15} /> Prev
       </button>
@@ -45,7 +45,7 @@ export function Pagination({ page, pageCount, onChange }: PaginationProps) {
         className="btn btn--ghost btn--sm"
         disabled={page >= pageCount}
         onClick={() => onChange(page + 1)}
-        aria-label="Next page"
+        aria-label="Next"
       >
         Next <ChevronRight size={15} />
       </button>

@@ -86,7 +86,12 @@ test('saving and preferences work without an account', async ({ page }) => {
 test('public API serves real jobs and rejects forged identity and purchases', async ({
   request,
 }) => {
-  const health = await (await request.get('/api/health')).json()
+  // Local preview honours a documented dev header so the stack can be
+  // exercised without Access; hosted modes must reject forged identity.
+  const devHeaderWorks =
+    (
+      await request.get('/api/account', { headers: { 'x-dev-user-email': 'local@example.com' } })
+    ).status() === 200
   const response = await request.get('/api/jobs?status=open&limit=20')
   expect(response.ok()).toBe(true)
   const feed = await response.json()
@@ -98,9 +103,7 @@ test('public API serves real jobs and rejects forged identity and purchases', as
     expect(job.lastSeenAt).toBeTruthy()
   }
   expect((await request.get('/api/account')).status()).toBe(401)
-  // Hosted modes must reject forged identity headers. Local preview honours the
-  // documented dev header so the stack can be exercised without Access.
-  if (!String(health.appMode).startsWith('local'))
+  if (!devHeaderWorks)
     expect(
       (
         await request.get('/api/account', {

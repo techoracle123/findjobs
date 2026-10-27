@@ -46,11 +46,11 @@ export function AuthPage() {
               <img src="/favicon.svg" width="40" height="40" alt="" /> FJ — Find Jobs
             </a>
             <span className="eyebrow">Your next chapter starts here</span>
-            <h1>
+            <p className="auth-story__headline">
               Good opportunities.
               <br />
               Your own way forward.
-            </h1>
+            </p>
             <p>
               A calmer place to explore work, keep your shortlist and build a consistent application
               habit.

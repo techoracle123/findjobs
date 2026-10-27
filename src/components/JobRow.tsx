@@ -98,7 +98,7 @@ export function JobRow({
       {onReport && (
         <button
           type="button"
-          className="jobrow__save jobrow__report"
+          className="jobrow__flag"
           style={{ top: 52 }}
           aria-label={`Report ${job.title}`}
           onClick={(event) => {

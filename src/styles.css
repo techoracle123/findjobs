@@ -2212,7 +2212,8 @@ summary:focus-visible {
   font-size: 12px;
   padding: 1px 7px;
 }
-.jobrow__save {
+.jobrow__save,
+.jobrow__flag {
   position: absolute;
   right: 8px;
   top: 8px;
@@ -2227,7 +2228,8 @@ summary:focus-visible {
   align-items: center;
   justify-content: center;
 }
-.jobrow__save:hover {
+.jobrow__save:hover,
+.jobrow__flag:hover {
   background: var(--surface-sunken);
   color: var(--accent);
 }
@@ -2507,4 +2509,13 @@ summary:focus-visible {
 }
 .leaving-flags li {
   line-height: 1.55;
+}
+
+.auth-story__headline {
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.12;
+  letter-spacing: -1.7px;
+  margin: 16px 0 20px;
+  font-weight: 700;
+  color: var(--ink);
 }
