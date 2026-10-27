@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { roleFamilyLabel } from '../../src/shared/taxonomy'
 
 for (const width of [320, 390, 414, 768, 1024, 1280, 1600, 1920]) {
   test(`job board stays aligned at ${width}px`, async ({ page }, testInfo) => {
@@ -393,17 +394,24 @@ test('What and Where search suggestions are keyboard navigable', async ({ page }
 })
 
 test('filter combinations are shareable and survive reload', async ({ page }) => {
+  // Pick a profession that exists in whatever real corpus is loaded.
+  const facets = (await (await page.request.get('/api/jobs?status=open&limit=1')).json()).facets
+  const profession = Object.entries(facets.professions as Record<string, number>)
+    .filter(([id, count]) => id !== 'unknown' && count > 0)
+    .sort((a, b) => b[1] - a[1])[0]?.[0]
+  expect(profession).toBeTruthy()
   await page.goto('/')
   await page.getByRole('button', { name: /^Profession/ }).click()
   await page
     .locator('.chip-popover')
-    .getByRole('button', { name: /^Data analytics/ })
+    .getByRole('button', { name: roleFamilyLabel(profession!), exact: true })
     .click()
-  await expect(page).toHaveURL(/role=data/)
+  await expect(page).toHaveURL(/role=/)
   const url = page.url()
+  await expect(page.locator('.jobrow__title').first()).toBeVisible()
   const firstTitle = await page.locator('.jobrow__title').first().innerText()
   await page.reload()
-  await expect(page).toHaveURL(/role=data/)
+  await expect(page).toHaveURL(/role=/)
   await expect(page.locator('.jobrow__title').first()).toHaveText(firstTitle)
   await page.goto(url)
   await expect(page.locator('.jobrow__title').first()).toHaveText(firstTitle)
