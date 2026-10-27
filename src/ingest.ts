@@ -9,7 +9,8 @@
  * the queue. The queue is what lets a registry of thousands of sources be
  * refreshed without one invocation having to fetch all of them.
  */
-import { enqueuePublicRefresh } from './server/public-schedule'
+import { enqueuePublicRefresh, dueForRun } from './server/public-schedule'
+import { PUBLIC_SOURCES, isSourceDisabled } from './server/public-feed'
 import { ensureSources, runDueSources, runIngestion } from './server/ingest'
 import { logger } from './server/logging'
 import type { Env } from './server/env'
@@ -35,12 +36,23 @@ export default {
     return new Response('not found', { status: 404 })
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     if (env.PUBLIC_FEED_ONLY === '1') {
       ctx.waitUntil(
-        enqueuePublicRefresh(env).then((queued) => {
-          logger.info('12-hour public refresh queued', { queued })
-        }),
+        (async () => {
+          const hourUtc = new Date(event.scheduledTime ?? Date.now()).getUTCHours()
+          const disabled = new Set<string>()
+          if (env.PUBLIC_JOBS)
+            for (const source of PUBLIC_SOURCES)
+              if (await isSourceDisabled(env.PUBLIC_JOBS, source.id)) disabled.add(source.id)
+          const due = dueForRun(PUBLIC_SOURCES, hourUtc, disabled)
+          const queued = await enqueuePublicRefresh(
+            env,
+            String(event.scheduledTime ?? Date.now()),
+            due,
+          )
+          logger.info('tiered public refresh queued', { queued, hourUtc, disabled: disabled.size })
+        })(),
       )
       return
     }

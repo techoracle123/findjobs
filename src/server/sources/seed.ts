@@ -298,6 +298,48 @@ export const SEED_SOURCES: SeedSource[] = [
     enabled: true,
   })),
 
+  // --- Public JSON boards (config-only additions) ----------------------
+  ...(
+    [
+      ['remoteok', 'RemoteOK', 'https://remoteok.com/api', 'remoteok'],
+      ['himalayas', 'Himalayas', 'https://himalayas.app/jobs/api', 'himalayas'],
+      [
+        'workingnomads',
+        'Working Nomads',
+        'https://www.workingnomads.com/api/exposed_jobs/',
+        'workingnomads',
+      ],
+      ['jobicy', 'Jobicy', 'https://jobicy.com/api/v2/remote-jobs', 'jobicy'],
+    ] as const
+  ).map(([id, label, listingUrl, parser]) => ({
+    id,
+    parser,
+    name: `${label} — public API`,
+    listingUrl,
+    company: id,
+    companyLabel: label,
+    country: 'WW',
+    tags: ['api', 'public-board'],
+    tier: 'six_hourly' as const,
+    rateLimitPerHour: 12,
+    kind: 'api' as const,
+    enabled: true,
+  })),
+  {
+    id: 'hn-hiring',
+    parser: 'hn-hiring',
+    name: 'Hacker News — Who is hiring',
+    listingUrl: 'https://hn.algolia.com/api/v1/search?query=Ask%20HN',
+    company: 'ycombinator',
+    companyLabel: 'Hacker News',
+    country: 'WW',
+    tags: ['api', 'community'],
+    tier: 'six_hourly' as const,
+    rateLimitPerHour: 6,
+    kind: 'api' as const,
+    enabled: true,
+  },
+
   // --- Ashby boards: jobs.ashbyhq.com/<slug> --------------------------
   ...(
     [

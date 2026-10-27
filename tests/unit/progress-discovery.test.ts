@@ -101,3 +101,17 @@ describe('whole-corpus contextual statistics', () => {
     expect(jobFacets(jobs, { query: 'cybersecurity' }).total).toBe(1)
   })
 })
+
+it('runs ATS boards hourly, feed boards six-hourly, and daily boards daily', async () => {
+  const { dueForRun } = await import('../../src/server/public-schedule')
+  const sources = [
+    { id: 'a', tier: 'hourly' },
+    { id: 'b', tier: 'six_hourly' },
+    { id: 'c', tier: 'daily' },
+    { id: 'off', tier: 'hourly' },
+  ] as never
+  const off = new Set(['off'])
+  expect(dueForRun(sources, 3, off).map((source) => source.id)).toEqual(['a'])
+  expect(dueForRun(sources, 6, off).map((source) => source.id)).toEqual(['a', 'b'])
+  expect(dueForRun(sources, 0, off).map((source) => source.id)).toEqual(['a', 'b', 'c'])
+})

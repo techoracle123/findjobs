@@ -4,6 +4,7 @@ import { specialistRole } from '../shared/specialisms'
 import { buildQualitySnapshot, dedupeJobs, qualityPass } from './quality'
 import type { QualitySnapshot } from '../shared/quality'
 import { withTimeout } from './timeouts'
+import { logger } from './logging'
 import type { Job } from '../shared/types'
 import { SEED_SOURCES } from './sources/seed'
 import { fetchPublicSource } from './live-public'
@@ -12,7 +13,20 @@ export const REFRESH_HOURS = 12
 export const PUBLIC_SOURCES = SEED_SOURCES.filter(
   (source) =>
     source.enabled &&
-    ['greenhouse', 'lever', 'ashby', 'recruitee', 'rss', 'arbeitnow'].includes(source.parser),
+    [
+      'greenhouse',
+      'lever',
+      'ashby',
+      'recruitee',
+      'workable',
+      'rss',
+      'arbeitnow',
+      'remoteok',
+      'himalayas',
+      'workingnomads',
+      'jobicy',
+      'hn-hiring',
+    ].includes(source.parser),
 )
 const MAX_AGE = 36 * 3600000
 const EXPIRY = 3 * 86400
@@ -39,6 +53,30 @@ export interface PublicSnapshot {
   duplicatesDropped?: number
 }
 
+export async function isSourceDisabled(kv: KVNamespace, sourceId: string): Promise<boolean> {
+  return Boolean(await kv.get(`source:disabled:${sourceId}`))
+}
+
+/** Consecutive failures auto-disable a source after three, with the reason kept. */
+export async function noteSourceHealth(
+  kv: KVNamespace,
+  sourceId: string,
+  ok: boolean,
+  error = '',
+): Promise<void> {
+  const key = `source:health:${sourceId}`
+  const previous = (await kv.get<{ fails: number }>(key, 'json')) ?? { fails: 0 }
+  const fails = ok ? 0 : previous.fails + 1
+  await kv.put(key, JSON.stringify({ fails, at: Date.now(), error: error.slice(0, 300) }))
+  if (fails >= 3) {
+    await kv.put(
+      `source:disabled:${sourceId}`,
+      JSON.stringify({ at: Date.now(), error: error.slice(0, 300) }),
+    )
+    logger.error('source disabled after consecutive failures', { sourceId, fails, error })
+  }
+}
+
 export async function refreshPublicSource(
   kv: KVNamespace,
   sourceId: string,
@@ -48,9 +86,35 @@ export async function refreshPublicSource(
 ): Promise<number> {
   const source = PUBLIC_SOURCES.find((item) => item.id === sourceId)
   if (!source) throw new Error('Unknown public source')
-  const jobs = (await fetchPublicSource(source, fetcher, now)).filter(
-    (job) => job.jobStatus === 'open',
-  )
+  if (await isSourceDisabled(kv, sourceId))
+    throw new Error('Source disabled after repeated failures')
+  let jobs: Job[]
+  try {
+    jobs = (await fetchPublicSource(source, fetcher, now)).filter((job) => job.jobStatus === 'open')
+    await noteSourceHealth(kv, sourceId, true)
+  } catch (error) {
+    await noteSourceHealth(
+      kv,
+      sourceId,
+      false,
+      error instanceof Error ? error.message : String(error),
+    )
+    throw error
+  }
+  // Immutable raw archive keyed by content hash, before parsing is trusted
+  // downstream. KV stands in for R2 here (no R2 binding is provisioned).
+  try {
+    const rawHash = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(JSON.stringify(jobs)),
+    )
+    const rawKey = `raw:${[...new Uint8Array(rawHash)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`
+    if (!(await kv.get(rawKey)))
+      await kv.put(rawKey, JSON.stringify(jobs), { expirationTtl: 90 * 86_400 })
+  } catch {
+    /* The raw archive is observability, never a publication dependency. */
+  }
+
   // Bounded detail shards avoid rejecting a real, large employer board or
   // loading its entire descriptions collection for one job page.
   const index: SourceIndex = { sourceId, fetchedAt: now, jobs: [] }

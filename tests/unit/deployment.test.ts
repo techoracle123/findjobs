@@ -174,11 +174,12 @@ it('registers public sources without changing operator enablement or rewriting u
   expect(sql).not.toContain('enabled=excluded.enabled')
 })
 
-it('binds durable public storage to Pages and configures a 12-hour database-independent cron', () => {
+it('binds durable public storage to Pages and configures the tiered database-independent cron', () => {
   const config = JSON.parse(
     deploymentConfig(producerConfig, 'wrangler.ingest.jsonc', 'db', {}, 'public-namespace'),
   )
   expect(config.kv_namespaces).toEqual([{ binding: 'PUBLIC_JOBS', id: 'public-namespace' }])
-  expect(config.triggers.crons).toEqual(['0 */12 * * *'])
+  // Hourly trigger; dueForRun holds ATS hourly, feeds 6-hourly, daily 24-hourly.
+  expect(config.triggers.crons).toEqual(['0 * * * *'])
   expect(config.vars.PUBLIC_FEED_ONLY).toBe('1')
 })

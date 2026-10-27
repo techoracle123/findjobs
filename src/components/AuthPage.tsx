@@ -75,7 +75,7 @@ export function AuthPage() {
           <section className="auth-card" aria-labelledby="auth-heading">
             <ShieldCheck className="auth-icon" size={32} />
             <span className="eyebrow">Secure email sign-in</span>
-            <h2 id="auth-heading">
+            <h1 id="auth-heading">
               {signedIn
                 ? 'You’re signed in'
                 : recovery
@@ -83,7 +83,7 @@ export function AuthPage() {
                   : signup
                     ? 'Create your free account'
                     : 'Welcome back'}
-            </h2>
+            </h1>
             {signedIn ? (
               <>
                 <p>

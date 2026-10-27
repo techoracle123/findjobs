@@ -29,6 +29,8 @@ export const ROLE_FAMILIES = [
   'construction',
   'creative',
   'video',
+  'data-engineering',
+  'technical-writing',
   'social-impact',
 ] as const
 
@@ -73,6 +75,8 @@ export const ROLE_FAMILY_LABELS: Record<string, string> = {
   devops: 'DevOps',
   security: 'Cybersecurity & information security',
   video: 'Video editing & production',
+  'data-engineering': 'Data engineering',
+  'technical-writing': 'Technical writing & documentation',
   product: 'Product',
   design: 'Design',
   qa: 'Quality assurance',

@@ -24,7 +24,7 @@
   },
   "triggers": {
     // Public discovery refresh is independent of D1 and runs twice daily.
-    "crons": ["0 */12 * * *"],
+    "crons": ["0 * * * *"],
   },
   "vars": {
     "APP_MODE": "preview",

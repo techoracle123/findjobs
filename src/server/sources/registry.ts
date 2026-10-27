@@ -3,10 +3,17 @@ import { arbeitnow } from './arbeitnow'
 import { remotive } from './remotive'
 import { ATS_PARSERS } from './ats'
 import { FEED_PARSERS } from './feeds'
+import { PUBLIC_BOARD_PARSERS } from './public-boards'
 
 const PARSERS: Record<string, SourceParser> = {}
 
-for (const parser of [arbeitnow, remotive, ...ATS_PARSERS, ...FEED_PARSERS]) {
+for (const parser of [
+  arbeitnow,
+  remotive,
+  ...ATS_PARSERS,
+  ...FEED_PARSERS,
+  ...PUBLIC_BOARD_PARSERS,
+]) {
   PARSERS[parser.id] = parser
 }
 

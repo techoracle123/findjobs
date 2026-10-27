@@ -273,11 +273,33 @@ export const ROLE_FAMILY_KEYWORDS: { family: string; patterns: RegExp[] }[] = [
     family: 'data',
     patterns: [
       word('data analyst'),
-      word('data engineer'),
       word('data scientist'),
       word('data science'),
-      word('analytics'),
+      word('data analys(?:is|t)'),
+      word('business intelligence'),
+      word('analytics engineer'),
       bare('bi'),
+    ],
+  },
+  {
+    family: 'data-engineering',
+    patterns: [
+      word('data engineer'),
+      word('data engineering'),
+      word('data platform'),
+      word('data pipeline'),
+      word('etl developer'),
+      word('analytics engineer'),
+    ],
+  },
+  {
+    family: 'technical-writing',
+    patterns: [
+      word('technical writer'),
+      word('technical writing'),
+      word('documentation engineer'),
+      word('documentation specialist'),
+      word('developer writer'),
     ],
   },
   {
@@ -304,10 +326,16 @@ export const ROLE_FAMILY_KEYWORDS: { family: string; patterns: RegExp[] }[] = [
   {
     family: 'security',
     patterns: [
+      word('cyber ?security'),
       word('security engineer'),
+      word('security analyst'),
+      word('security architect'),
       word('appsec'),
       word('infosec'),
-      word('security analyst'),
+      word('information security'),
+      word('soc analyst'),
+      word('penetration test(?:er|ing)?'),
+      word('grc'),
     ],
   },
   {

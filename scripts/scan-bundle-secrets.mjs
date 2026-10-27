@@ -1,14 +1,14 @@
 /**
  * Fails the build if secret-looking material ships in the browser bundle.
- * Patterns are deliberately broad; each finding names the file and line only,
- * never the matched content.
+ * Patterns are deliberately broad; each finding names the file only, never
+ * the matched content.
  */
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const PATTERNS = [
   /sk-[A-Za-z0-9]{16,}/,
-  /AKIA[0-9A-Z]{12,}/,
+  /AKIA[0-9A-Z]{16}(?![0-9A-Z])/, // real AWS access keys are exactly 20 chars
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   /bachs[_-]?secret/i,
   /BACHS_SECRET_KEY\s*[:=]/,
@@ -25,14 +25,22 @@ async function walk(dir) {
     else if (/\.(js|mjs|css|html|json|map)$/.test(entry.name)) {
       const text = await readFile(path, 'utf8')
       for (const pattern of PATTERNS) {
-        const match = text.match(pattern)
-        if (match) findings.push(`${path} matches ${pattern.source.slice(0, 40)}`)
+        if (pattern.test(text)) findings.push(`${path} matches ${pattern.source.slice(0, 40)}`)
       }
     }
   }
 }
 
-await walk(dist)
+try {
+  await walk(dist)
+} catch (error) {
+  if (error && error.code === 'ENOENT') {
+    console.error(`No build output at ${dist}; run the build first.`)
+    process.exit(1)
+  }
+  throw error
+}
+
 if (findings.length) {
   console.error('Secret-looking material found in the built bundle:')
   for (const finding of findings) console.error(`  ${finding}`)
