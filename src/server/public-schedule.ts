@@ -1,7 +1,25 @@
 import type { Env } from './env'
 import { PUBLIC_SOURCES } from './public-feed'
 
-/** Hourly runs refresh ATS boards; feed boards are due every six hours. */
+/**
+ * Refresh cadence (Prompt 16): ATS boards every 2 hours, remote boards every
+ * 6 hours, Nigerian boards every 12 hours. Legacy tier names map onto the
+ * same cadence so existing source rows keep working.
+ */
+export const CADENCE_HOURS: Record<string, number> = {
+  ats: 2,
+  remote: 6,
+  nigeria: 12,
+  hourly: 2,
+  six_hourly: 6,
+  daily: 12,
+  weekly: 12,
+}
+
+export function cadenceHours(tier: string): number {
+  return CADENCE_HOURS[tier] ?? 12
+}
+
 export function dueForRun(
   sources: typeof PUBLIC_SOURCES,
   hourUtc: number,
@@ -9,9 +27,7 @@ export function dueForRun(
 ): typeof PUBLIC_SOURCES {
   return sources.filter((source) => {
     if (disabled.has(source.id)) return false
-    if (source.tier === 'hourly') return true
-    if (source.tier === 'six_hourly') return hourUtc % 6 === 0
-    return hourUtc % 24 === 0
+    return hourUtc % cadenceHours(source.tier) === 0
   })
 }
 

@@ -89,3 +89,69 @@ adminRoutes.get('/admin/copy', async (c) => {
     })),
   })
 })
+
+/**
+ * Source health (Prompt 16): one row per source with a 0–100 health score
+ * (yield, freshness and failure streak combined) and the projected KV write
+ * cost of its cadence, so the bill is visible before it is spent.
+ */
+adminRoutes.get('/admin/sources', async (c) => {
+  const denied = await requireAdmin(c)
+  if (denied) return denied
+  const limited = await enforceRateLimit(c, { bucket: 'admin', limit: 60, windowSeconds: 60 })
+  if (limited) return limited
+  const db = c.env?.DB
+  if (!db) return c.json({ error: 'storage_unavailable' }, 503)
+  const { cadenceHours, CADENCE_HOURS } = await import('../public-schedule')
+  const rows = await db
+    .prepare(
+      `SELECT s.id, s.name, s.refresh_tier, s.enabled, s.last_run_at, s.last_status,
+              s.consecutive_failures,
+              (SELECT COUNT(*) FROM jobs j WHERE j.source_id = s.id) AS live_jobs
+       FROM sources s ORDER BY s.id`,
+    )
+    .all<{
+      id: string
+      name: string
+      refresh_tier: string
+      enabled: number
+      last_run_at: string | null
+      last_status: string | null
+      consecutive_failures: number
+      live_jobs: number
+    }>()
+  const now = Date.now()
+  const sources = rows.results.map((row) => {
+    const ageHours = row.last_run_at ? (now - Date.parse(row.last_run_at)) / 3_600_000 : 48
+    const freshness = Math.max(0, 100 - ageHours * 2)
+    const yieldScore = Math.min(100, row.live_jobs * 2)
+    const failureScore = Math.max(0, 100 - row.consecutive_failures * 25)
+    const health = Math.round(freshness * 0.4 + yieldScore * 0.3 + failureScore * 0.3)
+    const runsPerDay = 24 / cadenceHours(row.refresh_tier)
+    return {
+      id: row.id,
+      name: row.name,
+      tier: row.refresh_tier,
+      enabled: row.enabled === 1,
+      lastRunAt: row.last_run_at,
+      lastStatus: row.last_status,
+      consecutiveFailures: row.consecutive_failures,
+      liveJobs: row.live_jobs,
+      health,
+      // Each run rewrites changed listings; budget at 2 KV writes per live job
+      // per run worst-case (skip-unchanged keeps the real number far lower).
+      projectedKvWritesPerDay: Math.round(runsPerDay * row.live_jobs * 2),
+    }
+  })
+  const totalWrites = sources.reduce((sum, source) => sum + source.projectedKvWritesPerDay, 0)
+  return c.json({
+    sources,
+    cadences: CADENCE_HOURS,
+    projected: {
+      kvWritesPerDay: totalWrites,
+      freeTierWritesPerDay: 1000,
+      withinFreeTier: totalWrites <= 1000,
+      note: 'Projection is the worst case without skip-unchanged. Real writes are far lower because unchanged listings are not rewritten.',
+    },
+  })
+})

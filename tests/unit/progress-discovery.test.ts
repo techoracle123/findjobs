@@ -102,7 +102,7 @@ describe('whole-corpus contextual statistics', () => {
   })
 })
 
-it('runs ATS boards hourly, feed boards six-hourly, and daily boards daily', async () => {
+it('runs ATS boards every 2h, remote boards every 6h, and Nigerian boards every 12h (Prompt 16)', async () => {
   const { dueForRun } = await import('../../src/server/public-schedule')
   const sources = [
     { id: 'a', tier: 'hourly' },
@@ -111,7 +111,7 @@ it('runs ATS boards hourly, feed boards six-hourly, and daily boards daily', asy
     { id: 'off', tier: 'hourly' },
   ] as never
   const off = new Set(['off'])
-  expect(dueForRun(sources, 3, off).map((source) => source.id)).toEqual(['a'])
+  expect(dueForRun(sources, 2, off).map((source) => source.id)).toEqual(['a'])
   expect(dueForRun(sources, 6, off).map((source) => source.id)).toEqual(['a', 'b'])
   expect(dueForRun(sources, 0, off).map((source) => source.id)).toEqual(['a', 'b', 'c'])
 })

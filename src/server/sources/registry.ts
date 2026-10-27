@@ -2,6 +2,7 @@ import type { SourceParser } from './types'
 import { arbeitnow } from './arbeitnow'
 import { remotive } from './remotive'
 import { ATS_PARSERS } from './ats'
+import { breezy, personio, teamtailor } from './ats-modern'
 import { FEED_PARSERS } from './feeds'
 import { PUBLIC_BOARD_PARSERS } from './public-boards'
 
@@ -11,6 +12,9 @@ for (const parser of [
   arbeitnow,
   remotive,
   ...ATS_PARSERS,
+  teamtailor,
+  personio,
+  breezy,
   ...FEED_PARSERS,
   ...PUBLIC_BOARD_PARSERS,
 ]) {
