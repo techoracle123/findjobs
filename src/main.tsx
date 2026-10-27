@@ -5,6 +5,7 @@ import { AuthPage } from './components/AuthPage'
 import { QualityWallboard } from './components/QualityWallboard'
 import { InfoPage } from './components/InfoPage'
 import { AdminCopy } from './components/AdminCopy'
+import { PricingPage } from './components/PricingPage'
 import './styles.css'
 
 const container = document.getElementById('root')
@@ -20,6 +21,8 @@ createRoot(container).render(
       <QualityWallboard />
     ) : window.location.pathname === '/admin/copy' ? (
       <AdminCopy />
+    ) : window.location.pathname === '/pricing' ? (
+      <PricingPage />
     ) : /^\/(about|privacy|terms|faq|scams|contact|employers)\/?$/.test(
         window.location.pathname,
       ) ? (

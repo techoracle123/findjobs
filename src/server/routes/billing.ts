@@ -4,6 +4,7 @@ import { readConfig } from '../config'
 import { hasRealProvider, providerFor } from '../billing/provider'
 import { planCatalogue } from '../billing/pricing'
 import { planEntitlements, type WebhookEvent } from '../billing/types'
+import { enforceRateLimit } from '../ratelimit'
 import {
   getEntitlements,
   getSubscription,
@@ -295,3 +296,30 @@ async function forgetBillingEvent(
     .bind(provider, eventId)
     .run()
 }
+
+/**
+ * Pricing waitlist (Prompt 17). Anonymous and rate limited; stores only the
+ * email and a timestamp. It is never a checkout.
+ */
+billingRoutes.post('/billing/waitlist', async (c) => {
+  const limited = await enforceRateLimit(c, { bucket: 'waitlist', limit: 5, windowSeconds: 3600 })
+  if (limited) return limited
+  const body = await c.req.json().catch(() => null)
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ error: 'bad_request' }, 400)
+  const db = c.env?.DB
+  if (!db) return c.json({ error: 'storage_unavailable' }, 503)
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS pricing_waitlist (
+        email TEXT PRIMARY KEY,
+        created_at INTEGER NOT NULL
+      )`,
+    )
+    .run()
+  await db
+    .prepare('INSERT OR IGNORE INTO pricing_waitlist (email, created_at) VALUES (?, ?)')
+    .bind(email, Date.now())
+    .run()
+  return c.json({ ok: true })
+})

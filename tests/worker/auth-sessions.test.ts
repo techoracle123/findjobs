@@ -93,3 +93,24 @@ describe('own sign-in (Prompt 18)', () => {
     expect(body.user?.email).toBe('tester@example.com')
   })
 })
+
+describe('pricing page plumbing (Prompt 17)', () => {
+  it('serves plans from config with a billingEnabled flag, never a dead checkout', async () => {
+    const response = await get('/api/billing/plans')
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      plans: Array<{ id: string; price: { amount: number } }>
+      billingEnabled: boolean
+    }
+    expect(body.plans.length).toBe(2)
+    expect(body.plans[0].price.amount).toBe(0)
+    expect(typeof body.billingEnabled).toBe('boolean')
+  })
+
+  it('accepts waitlist signups without storing anything else', async () => {
+    const response = await post('/api/billing/waitlist', { email: 'wait@example.com' })
+    expect(response.status).toBe(200)
+    const bad = await post('/api/billing/waitlist', { email: 'not-an-email' })
+    expect(bad.status).toBe(400)
+  })
+})
