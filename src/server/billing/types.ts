@@ -1,7 +1,7 @@
 import type { Subscription } from '../auth/accounts'
 
 /** The payment providers this build knows how to talk to. */
-export type BillingProviderId = 'fake' | 'stripe' | 'paystack' | 'flutterwave'
+export type BillingProviderId = 'fake' | 'stripe' | 'paystack' | 'flutterwave' | 'bachs'
 
 /** A price quoted in major units: 5000 means 5,000 naira, not 50 naira. */
 export interface PlanPrice {

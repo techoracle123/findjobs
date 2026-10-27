@@ -2611,3 +2611,106 @@ summary:focus-visible {
     height: 48px;
   }
 }
+
+/* ---------- admin stat cards (Prompt 14) ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.stat-card {
+  padding: 14px 16px;
+  border: 1px solid var(--line, #ddd);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-card__label {
+  font-size: 0.85rem;
+  color: var(--text-soft, #555);
+}
+.stat-card__value {
+  font-size: 1.4rem;
+}
+.query-list {
+  list-style: none;
+  padding: 0;
+  max-width: 480px;
+}
+.query-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line, #eee);
+}
+
+/* ---------- data tables (pricing + admin pages) ---------- */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 16px 0;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.table th,
+.table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line, #e3e3e3);
+  text-align: left;
+  vertical-align: top;
+}
+.table thead th {
+  font-weight: 600;
+  border-bottom: 2px solid var(--line, #ccc);
+  white-space: nowrap;
+}
+.table tbody th {
+  font-weight: 500;
+}
+.table td:not(:first-child),
+.table thead th:not(:first-child) {
+  text-align: center;
+}
+.pricing-table .price-line {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.9rem;
+  color: var(--text-soft, #555);
+}
+.waitlist {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid var(--line, #ddd);
+  border-radius: 14px;
+  background: var(--surface, #fafafa);
+}
+@media (max-width: 600px) {
+  .table {
+    font-size: 0.88rem;
+  }
+  .table th,
+  .table td {
+    padding: 8px 10px;
+  }
+}
+
+/* ---------- sign-in code boxes: alignment + focus ---------- */
+.code-boxes {
+  justify-content: center;
+}
+.code-box:focus-visible {
+  outline: 2px solid var(--accent, #0b6bcb);
+  outline-offset: 2px;
+}
+.device-list {
+  margin: 12px 0;
+  text-align: left;
+}
+.device-list h2 {
+  font-size: 1rem;
+}

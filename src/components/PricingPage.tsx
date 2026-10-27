@@ -31,7 +31,7 @@ const FAQ = [
   },
   {
     q: 'How do I pay?',
-    a: 'When billing opens, payments are handled by our payment partner. We never see or store your card details.',
+    a: 'When billing opens, you pay through our payment partner, Bachs. We never see or store your card details.',
   },
   {
     q: 'Can I cancel?',
@@ -77,7 +77,7 @@ export function PricingPage() {
       <main className="wrap" id="main">
         <h1>Simple pricing</h1>
         <p className="lede">
-          Find opportunities for free. Pay only when you want more help with applications.
+          Finding opportunities is free, always. Pay only when you want more help applying.
         </p>
         {plans && (
           <div className="table-wrap">
@@ -115,8 +115,8 @@ export function PricingPage() {
           <section className="waitlist" aria-label="Waitlist">
             <h2>Payments are not open yet</h2>
             <p>
-              We are finishing the payment side. Leave your email and we will tell you first when
-              paid plans open. No card needed now.
+              We are still setting up payments. Leave your email and we will tell you when paid
+              plans open. You do not need a card now.
             </p>
             {waitlist === 'done' ? (
               <p role="status">Thank you. We will email you when paid plans open.</p>
@@ -158,8 +158,8 @@ export function PricingPage() {
         )}
         {plans && plans.billingEnabled && (
           <p>
-            Payments open soon through our payment partner. Paid plans will appear in your account
-            page when they are live.
+            Paid plans are handled by our payment partner, Bachs. You can cancel any time. Your
+            shortlist and alerts stay free.
           </p>
         )}
         <section aria-label="Pricing questions">
@@ -172,7 +172,9 @@ export function PricingPage() {
           ))}
         </section>
         <p className="field__hint">
-          FJ is not an employer. We do not guarantee employment. Never pay anyone for a job offer.
+          FJ is not an employer. We do not own, verify or endorse any listing, and we never
+          guarantee employment. Always check the original post yourself. Never pay anyone for a job
+          or an application.
         </p>
         <script
           type="application/ld+json"

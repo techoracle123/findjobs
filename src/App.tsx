@@ -76,6 +76,7 @@ function routeJobId(): string | null {
 }
 
 import { copy } from './shared/copy'
+import { track } from './lib/analytics'
 
 export default function App() {
   const [knownJobs, setKnownJobs] = useState<Record<string, Job>>({})
@@ -159,6 +160,10 @@ export default function App() {
       : false
 
   useEffect(() => writeLocal('currency', displayCurrency), [displayCurrency])
+
+  useEffect(() => {
+    if (selectedId) track('job_view', selectedId)
+  }, [selectedId])
 
   const load = useCallback(
     async (force = false) => {
@@ -404,6 +409,7 @@ export default function App() {
   )
 
   const toggleSave = (jobId: string) => {
+    track('save', jobId)
     setSaved((current) => {
       if (current.some((entry) => entry.jobId === jobId)) {
         return current.filter((entry) => entry.jobId !== jobId)
@@ -443,8 +449,10 @@ export default function App() {
   }
 
   const runFastApply = async (jobId: string) => {
+    track('apply_start', jobId)
     try {
       const result = await fastApply(jobId)
+      track('apply_complete', jobId)
       setApplyQuota((current) =>
         current && result.remaining !== null
           ? { ...current, remaining: result.remaining, used: current.used + 1 }
@@ -723,6 +731,7 @@ export default function App() {
               label: ROLE_FAMILY_LABELS[family],
             }))}
             onSubmit={(next: SearchValues) => {
+              track('search', next.query || next.location || '')
               const updated = {
                 ...filters,
                 query: next.query,

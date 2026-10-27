@@ -38,6 +38,11 @@ export interface Env {
   // Payments
   /** fake | stripe | paystack | flutterwave. Inferred from the keys when unset. */
   BILLING_PROVIDER?: string
+  /** Bachs gateway (Prompts 4/7). Secret stays server-side; never in the bundle. */
+  BACHS_SECRET_KEY?: string
+  BACHS_WEBHOOK_SECRET?: string
+  /** Global affiliate payout kill switch: '1' (or unset with no approvals) blocks payouts. */
+  PAYOUT_KILL_SWITCH?: string
   /** The currency the plan is priced and settled in. */
   BILLING_CURRENCY?: string
   /** The price of the paid plan, in major units. */

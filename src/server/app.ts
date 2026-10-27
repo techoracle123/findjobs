@@ -8,7 +8,7 @@ import { getRates } from './rates'
 import { suggest } from './cv'
 import { scoreJob } from '../shared/scoring'
 import type { Profile, ScoredJob } from '../shared/types'
-import { requestContext, requireUser, stringList, unauthorized } from './http'
+import { requestContext, requireUser, stringList, unauthorized, type AppContext } from './http'
 import { enforceRateLimit } from './ratelimit'
 import { takeAiBudget } from './aiquota'
 import { buildReadiness } from './readiness'
@@ -124,6 +124,101 @@ app.post('/api/copy-render', async (c) => {
     await kv.put(key, String(current + 1))
   }
   return c.json({ ok: true })
+})
+
+/** Admin gate: verified identity plus the operator allowlist. */
+async function requireAdmin(c: AppContext): Promise<Response | null> {
+  const user = await requireUser(c)
+  if (!user) return unauthorized(c)
+  const allow = (c.env?.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+  if (!allow.length) return c.json({ error: 'admin_not_configured' }, 503)
+  if (!allow.includes(user.email.toLowerCase())) return c.json({ error: 'forbidden' }, 403)
+  return null
+}
+
+/**
+ * Product analytics (Prompt 14). Five events, zero PII: counts and content
+ * refs only. Aggregates live in KV so no per-user rows exist anywhere.
+ */
+app.post('/api/analytics/events', async (c) => {
+  const limited = await enforceRateLimit(c, { bucket: 'analytics', limit: 60, windowSeconds: 60 })
+  if (limited) return limited
+  const body = await c.req.json().catch(() => null)
+  const events = Array.isArray(body?.events) ? body.events.slice(0, 10) : []
+  const allowed = new Set(['search', 'job_view', 'save', 'apply_start', 'apply_complete'])
+  const kv = c.env?.PUBLIC_JOBS
+  const day = new Date().toISOString().slice(0, 10)
+  const updates = new Map<string, number>()
+  for (const entry of events) {
+    const event = typeof entry?.event === 'string' && allowed.has(entry.event) ? entry.event : null
+    if (!event) continue
+    updates.set(`analytics:${day}:${event}`, (updates.get(`analytics:${day}:${event}`) ?? 0) + 1)
+    if (event === 'search' && typeof entry.ref === 'string' && entry.ref.trim()) {
+      const query = entry.ref.trim().toLowerCase().slice(0, 60)
+      updates.set(
+        `analytics:${day}:q:${query}`,
+        (updates.get(`analytics:${day}:q:${query}`) ?? 0) + 1,
+      )
+    }
+  }
+  if (kv) {
+    for (const [key, delta] of updates) {
+      const current = Number((await kv.get(key)) ?? '0')
+      await kv.put(key, String(current + delta))
+    }
+  }
+  return c.json({ ok: true })
+})
+
+/**
+ * The eight operator questions (Prompt 14): search volume, what people look
+ * for, job views, saves, apply starts, completed applies, the two conversion
+ * rates, and how busy the product is — all aggregates, never per person.
+ */
+app.get('/api/admin/analytics', async (c) => {
+  const denied = await requireAdmin(c)
+  if (denied) return denied
+  const kv = c.env?.PUBLIC_JOBS
+  if (!kv) return c.json({ error: 'storage_unavailable' }, 503)
+  const days: Array<Record<string, number | string>> = []
+  const totals: Record<string, number> = {}
+  for (let back = 6; back >= 0; back -= 1) {
+    const day = new Date(Date.now() - back * 86400000).toISOString().slice(0, 10)
+    const row: Record<string, number | string> = { day }
+    for (const event of ['search', 'job_view', 'save', 'apply_start', 'apply_complete']) {
+      const count = Number((await kv.get(`analytics:${day}:${event}`)) ?? '0')
+      row[event] = count
+      totals[event] = (totals[event] ?? 0) + count
+    }
+    days.push(row)
+  }
+  const queries: Array<{ query: string; count: number }> = []
+  const keys = await kv.list({ prefix: `analytics:${new Date().toISOString().slice(0, 10)}:q:` })
+  for (const key of keys.keys) {
+    queries.push({
+      query: key.name.split(':q:')[1],
+      count: Number((await kv.get(key.name)) ?? '0'),
+    })
+  }
+  queries.sort((a, b) => b.count - a.count)
+  const rate = (from: string, to: string) =>
+    totals[from] ? Math.round(((totals[to] ?? 0) / totals[from]) * 1000) / 10 : 0
+  return c.json({
+    questions: {
+      searchesThisWeek: totals.search ?? 0,
+      topQueries: queries.slice(0, 10),
+      jobViewsThisWeek: totals.job_view ?? 0,
+      savesThisWeek: totals.save ?? 0,
+      applyStartsThisWeek: totals.apply_start ?? 0,
+      applyCompletesThisWeek: totals.apply_complete ?? 0,
+      viewToSavePercent: rate('job_view', 'save'),
+      applyStartToCompletePercent: rate('apply_start', 'apply_complete'),
+    },
+    days,
+  })
 })
 
 app.get('/api/health', async (c) => {

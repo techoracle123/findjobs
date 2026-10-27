@@ -6,6 +6,7 @@ import { QualityWallboard } from './components/QualityWallboard'
 import { InfoPage } from './components/InfoPage'
 import { AdminCopy } from './components/AdminCopy'
 import { PricingPage } from './components/PricingPage'
+import { AnalyticsWallboard } from './components/AnalyticsWallboard'
 import './styles.css'
 
 const container = document.getElementById('root')
@@ -21,6 +22,8 @@ createRoot(container).render(
       <QualityWallboard />
     ) : window.location.pathname === '/admin/copy' ? (
       <AdminCopy />
+    ) : window.location.pathname === '/admin/analytics' ? (
+      <AnalyticsWallboard />
     ) : window.location.pathname === '/pricing' ? (
       <PricingPage />
     ) : /^\/(about|privacy|terms|faq|scams|contact|employers)\/?$/.test(

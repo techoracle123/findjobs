@@ -3,6 +3,7 @@ import { FakeProvider } from './fake'
 import { FlutterwaveProvider } from './flutterwave'
 import { PaystackProvider } from './paystack'
 import { StripeProvider } from './stripe'
+import { BachsProvider } from './bachs'
 import { planPrices } from './pricing'
 import type { PaymentProvider } from './types'
 
@@ -37,6 +38,11 @@ export function providerFor(config: AppConfig): PaymentProvider {
     case 'stripe':
       if (billing.stripe.secretKey && billing.stripe.webhookSecret && billing.stripe.pricePro) {
         return new StripeProvider(billing.stripe.secretKey, billing.stripe.webhookSecret, plans)
+      }
+      break
+    case 'bachs':
+      if (billing.bachs.secretKey && billing.bachs.webhookSecret) {
+        return new BachsProvider(billing.bachs.secretKey, billing.bachs.webhookSecret, plans)
       }
       break
     case 'fake':

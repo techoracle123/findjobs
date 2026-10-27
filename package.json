@@ -23,6 +23,7 @@
     "doctor": "./node_modules/node/bin/node ./scripts/doctor.mjs"
   },
   "dependencies": {
+    "@bachs/sdk": "^2.0.0",
     "entities": "^8.1.0",
     "fflate": "^0.8.3",
     "franc-min": "^6.2.0",

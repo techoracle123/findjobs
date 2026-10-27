@@ -29,6 +29,11 @@ export interface FlutterwaveConfig {
   webhookSecret: string | null
 }
 
+export interface BachsConfig {
+  secretKey: string | null
+  webhookSecret: string | null
+}
+
 export interface BillingConfig {
   /**
    * Which gateway to use. Set it explicitly with `BILLING_PROVIDER`; when it
@@ -43,6 +48,7 @@ export interface BillingConfig {
   stripe: StripeConfig
   paystack: PaystackConfig
   flutterwave: FlutterwaveConfig
+  bachs: BachsConfig
 }
 
 export interface AppConfig {
@@ -136,6 +142,10 @@ export function readConfig(env: Env): AppConfig {
       flutterwave: {
         secretKey: env.FLUTTERWAVE_SECRET_KEY ?? null,
         webhookSecret: env.FLUTTERWAVE_WEBHOOK_SECRET ?? null,
+      },
+      bachs: {
+        secretKey: env.BACHS_SECRET_KEY ?? null,
+        webhookSecret: env.BACHS_WEBHOOK_SECRET ?? null,
       },
     },
     aiEnabled: Boolean(env.AI || env.OPENROUTER_API_KEY),
