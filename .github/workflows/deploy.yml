@@ -31,7 +31,7 @@ jobs:
     # No pull_request trigger: untrusted PR code must never receive deploy secrets.
     if: github.ref == 'refs/heads/arena/be298902-findjobs'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     env:
       CLOUDFLARE_PAGES_PROJECT: fj-find-jobs
       WRANGLER_SEND_METRICS: 'false'
