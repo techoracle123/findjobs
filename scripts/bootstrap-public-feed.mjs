@@ -67,6 +67,17 @@ export async function bootstrapPublicFeed(api, auth) {
       )
       return { id: ns.id, count: repaired.jobs.length }
     }
+    // Legacy fat shards (debug evidence inline) blow the free request budget.
+    // Rebuild the publication from the stored source indexes — no recrawl.
+    const sample = current.parts?.length ? await kv.get(current.parts[0]) : null
+    const fat = Array.isArray(sample) && sample.some((job) => job.quality?.skillEvidence?.length)
+    if (fat) {
+      const slimmed = await publishPublicSnapshot(kv)
+      console.log(
+        `::notice title=Publication slimmed::${slimmed.jobs.length} listings republished without inline evidence; no publisher recrawl.`,
+      )
+      return { id: ns.id, count: slimmed.jobs.length }
+    }
     console.log(
       `::notice title=Fresh public publication retained::${current.ids.length} listings already refreshed at ${current.refreshedAt}; avoiding duplicate publisher requests and KV writes. The independent 12-hour cron remains responsible for refreshes.`,
     )
