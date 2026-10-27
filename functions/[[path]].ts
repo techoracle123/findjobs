@@ -37,6 +37,10 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')
 
+  // Generated routes first; everything file-like falls through to the asset
+  // pipeline, which serves static files and the SPA shell.
+  const isFile = /\.[a-z0-9]+$/i.test(path)
+
   // A real robots.txt; the SPA catch-all must never swallow it.
   if (path === '/robots.txt') {
     return new Response(
@@ -98,6 +102,8 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     })
   }
 
+  if (isFile) return ctx.next()
+
   const jobMatch = path.match(/^\/jobs\/([A-Za-z0-9_-]+)$/)
   const job = jobMatch
     ? ((await publishedPublicJobs(ctx.env.PUBLIC_JOBS))?.jobs.find(
@@ -148,8 +154,15 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     })
   }
 
-  // Humans: the real app shell for known routes.
-  return ctx.env.ASSETS.fetch(ctx.request)
+  // Humans: the real app shell comes from the asset pipeline (static assets
+  // plus the SPA fallback). ASSETS.fetch is kept only as a last resort.
+  try {
+    return await ctx.next()
+  } catch {
+    const assets = (ctx.env as Partial<Env>).ASSETS
+    if (assets) return assets.fetch(ctx.request)
+    return new Response('Service unavailable', { status: 503 })
+  }
 }
 
 function escLite(value: string): string {
