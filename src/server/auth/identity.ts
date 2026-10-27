@@ -1,6 +1,7 @@
 import type { AppConfig } from '../config'
 import { extractBearer, verifyAccessToken } from './access'
 import type { AccessIdentity } from './access'
+import { resolveOwnSession } from '../routes/auth'
 
 export const ACCESS_JWT_HEADER = 'cf-access-jwt-assertion'
 export const ACCESS_EMAIL_HEADER = 'cf-access-authenticated-user-email'
@@ -19,7 +20,19 @@ export async function resolveIdentity(
   request: Request,
   config: AppConfig,
   now: number = Date.now(),
+  db?: D1Database,
 ): Promise<AccessIdentity | null> {
+  // Own sessions first (Prompt 18); Access stays valid in parallel (§E).
+  const ownToken = request.headers
+    .get('cookie')
+    ?.split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('fj_session='))
+    ?.slice('fj_session='.length)
+  if (db && ownToken) {
+    const session = await resolveOwnSession(db, ownToken, now)
+    if (session) return { email: session.email, subject: session.userId, groups: [] }
+  }
   const cookie = request.headers
     .get('cookie')
     ?.split(';')

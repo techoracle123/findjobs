@@ -20,6 +20,7 @@ import { telegramRoutes } from './routes/telegram'
 import { insightRoutes } from './routes/insights'
 import { applyRoutes } from './routes/apply'
 import { adminRoutes } from './routes/admin'
+import { authRoutes } from './routes/auth'
 import { trustRoutes } from './routes/trust'
 import { jobFacets } from './job-stats'
 import { withTimeout } from './timeouts'
@@ -83,7 +84,7 @@ function normaliseProfile(input: unknown): Profile {
 
 app.get('/api/auth/status', async (c) => {
   c.header('Cache-Control', 'private, no-store')
-  const identity = await resolveIdentity(c.req.raw, readConfig(c.env || {}))
+  const identity = await resolveIdentity(c.req.raw, readConfig(c.env || {}), Date.now(), c.env?.DB)
   return c.json({
     authenticated: !!identity,
     email: identity?.email || null,
@@ -92,7 +93,7 @@ app.get('/api/auth/status', async (c) => {
 })
 
 app.get('/api/auth/login', async (c) => {
-  const identity = await resolveIdentity(c.req.raw, readConfig(c.env ?? {}))
+  const identity = await resolveIdentity(c.req.raw, readConfig(c.env ?? {}), Date.now(), c.env?.DB)
   if (!identity)
     return c.json(
       {
@@ -387,6 +388,7 @@ app.route('/api', applyRoutes)
 app.route('/api', adminRoutes)
 app.route('/api', trustRoutes)
 app.route('/api', accountRoutes)
+app.route('/api', authRoutes)
 app.route('/api', sourceRoutes)
 app.route('/api', billingRoutes)
 app.route('/api', telegramRoutes)

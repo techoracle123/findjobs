@@ -42,7 +42,7 @@ export function requestId(c: AppContext): string {
  */
 export async function requireUser(c: AppContext): Promise<AccountUser | null> {
   const config = readConfig(c.env ?? {})
-  const identity = await resolveIdentity(c.req.raw, config)
+  const identity = await resolveIdentity(c.req.raw, config, Date.now(), c.env?.DB)
   if (!identity || !c.env?.DB) return null
 
   const user = await upsertUser(c.env.DB, identity.email, identity.subject)

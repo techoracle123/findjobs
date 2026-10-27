@@ -21,6 +21,9 @@ export interface Env {
   TELEGRAM_BOT_USERNAME?: string
   /** Comma-separated verified Access emails allowed on /api/admin/*. */
   ADMIN_EMAILS?: string
+  /** Sign-in codes are sent through Resend REST when set; console otherwise. */
+  RESEND_API_KEY?: string
+  EMAIL_FROM?: string
   /** Shared secret for the full /api/health readiness report. */
   HEALTH_CHECK_KEY?: string
 

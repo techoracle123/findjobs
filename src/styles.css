@@ -2579,3 +2579,35 @@ summary:focus-visible {
     margin: 6px 0 4px;
   }
 }
+
+/* ---------- sign-in code boxes (Prompt 18) ---------- */
+.code-boxes {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.code-box {
+  width: 44px;
+  height: 52px;
+  text-align: center;
+  font-size: 1.4rem;
+  border: 1px solid var(--line, #ccc);
+  border-radius: 10px;
+}
+.device-list ul {
+  list-style: none;
+  padding: 0;
+}
+.device-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+@media (max-width: 420px) {
+  .code-box {
+    width: 40px;
+    height: 48px;
+  }
+}

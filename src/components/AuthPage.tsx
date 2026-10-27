@@ -1,7 +1,59 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, Mail, ShieldCheck } from 'lucide-react'
 import { Footer } from './Footer'
 import { copy } from '../shared/copy'
+
+/** Six-box one-time-code entry with paste and mobile SMS/OTP autofill. */
+function CodeBoxes({
+  value,
+  onChange,
+  onDone,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onDone: () => void
+}) {
+  const refs = useRef<Array<HTMLInputElement | null>>([])
+  const digits = value.padEnd(6, ' ').slice(0, 6).split('')
+  return (
+    <div className="code-boxes" role="group" aria-label="6-digit sign-in code">
+      {digits.map((digit, index) => (
+        <input
+          key={index}
+          ref={(element) => {
+            refs.current[index] = element
+          }}
+          className="code-box"
+          inputMode="numeric"
+          autoComplete={index === 0 ? 'one-time-code' : 'off'}
+          aria-label={`Digit ${index + 1}`}
+          maxLength={1}
+          value={digit.trim()}
+          onChange={(event) => {
+            const next = value.padEnd(6, ' ').split('')
+            next[index] = event.target.value.slice(-1)
+            const joined = next.join('').replace(/\s/g, '')
+            onChange(joined)
+            if (event.target.value && index < 5) refs.current[index + 1]?.focus()
+            if (joined.length === 6) onDone()
+          }}
+          onPaste={(event) => {
+            const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+            if (!pasted) return
+            event.preventDefault()
+            onChange(pasted)
+            refs.current[Math.min(pasted.length, 5)]?.focus()
+            if (pasted.length === 6) onDone()
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Backspace' && !digit.trim() && index > 0)
+              refs.current[index - 1]?.focus()
+          }}
+        />
+      ))}
+    </div>
+  )
+}
 
 export function AuthPage() {
   const path = window.location.pathname.replace(/\/+$/, '')
@@ -9,32 +61,87 @@ export function AuthPage() {
     signup = path === '/auth/signup'
   const raw = new URLSearchParams(window.location.search).get('returnTo') || '/dashboard'
   const returnTo = /^\/(?:dashboard|jobs\/[A-Za-z0-9_-]+)?$/.test(raw) ? raw : '/dashboard'
-  const suffix = `?returnTo=${encodeURIComponent(returnTo)}`
-  const [ready, setReady] = useState<boolean | null>(null)
+  const [email, setEmail] = useState('')
+  const [stage, setStage] = useState<'email' | 'code' | 'done'>('email')
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const [signedIn, setSignedIn] = useState<string | null>(null)
+  const [devices, setDevices] = useState<Array<{ id: string; agent: string; lastSeenAt: number }>>(
+    [],
+  )
+
   useEffect(() => {
     document.title = `${recovery ? 'Recover access' : signup ? 'Create your account' : 'Sign in'} — FJ - Find Jobs`
-    let active = true
-    void fetch('/api/auth/status', { cache: 'no-store' })
-      .then((response) =>
-        response.ok ? (response.json() as Promise<{ configured: boolean }>) : null,
-      )
-      .then((status) => {
-        if (active) setReady(Boolean(status?.configured))
+    void (async () => {
+      const response = await fetch('/api/auth/session', {
+        credentials: 'same-origin',
+        cache: 'no-store',
       })
-      .catch(() => {
-        if (active) setReady(false)
+      if (!response.ok) return
+      const body = (await response.json()) as { user?: { email: string } | null }
+      if (!body.user) return
+      setSignedIn(body.user.email)
+      setStage('done')
+      const devicesResponse = await fetch('/api/auth/devices', {
+        credentials: 'same-origin',
+        cache: 'no-store',
       })
-    void fetch('/api/auth/status', { credentials: 'same-origin', cache: 'no-store' })
-      .then((r) => (r.ok ? (r.json() as Promise<{ authenticated: boolean; email: string }>) : null))
-      .then((status) => {
-        if (active && status?.authenticated) setSignedIn(status.email)
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
+      if (!devicesResponse.ok) return
+      const devicesBody = (await devicesResponse.json()) as {
+        devices?: Array<{ id: string; agent: string; lastSeenAt: number }>
+      }
+      if (devicesBody.devices) setDevices(devicesBody.devices)
+    })().catch(() => {})
   }, [recovery, signup])
+
+  const requestCode = async () => {
+    setBusy(true)
+    setNotice(null)
+    try {
+      const response = await fetch('/api/auth/otp/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      if (!response.ok) throw new Error('send-failed')
+      setStage('code')
+    } catch {
+      setNotice(copy('auth.sendFailed'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const verifyCode = async () => {
+    if (code.length !== 6) return
+    setBusy(true)
+    setNotice(null)
+    try {
+      const response = await fetch('/api/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      })
+      const body = (await response.json().catch(() => ({}))) as { error?: string }
+      if (!response.ok) {
+        if (body.error === 'code_expired') setNotice(copy('auth.codeExpired'))
+        else if (body.error === 'code_used') setNotice(copy('auth.codeUsed'))
+        else setNotice(copy('auth.codeInvalid'))
+        return
+      }
+      setStage('done')
+      setSignedIn(email)
+      window.setTimeout(() => {
+        window.location.href = returnTo
+      }, 600)
+    } catch {
+      setNotice(copy('auth.codeInvalid'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <>
       <main className="auth-page">
@@ -58,44 +165,65 @@ export function AuthPage() {
             </p>
             <ul>
               {[
-                'Discover roles across countries and professions',
-                'Keep your saved roles and preferences together',
-                'Track the applications you confirm each month',
-              ].map((text) => (
-                <li key={text}>
-                  <Check size={18} />
-                  {text}
+                'Save opportunities and track every application.',
+                'Get free alerts that match your skills.',
+                'Passwordless sign-in — one email code and you are in.',
+              ].map((line) => (
+                <li key={line}>
+                  <ShieldCheck size={16} /> {line}
                 </li>
               ))}
             </ul>
-            <p className="field__hint">
-              We link to opportunities. We are not employers or recruiters. Always verify the
-              original listing before applying.
-            </p>
           </section>
-          <section className="auth-card" aria-labelledby="auth-heading">
-            <ShieldCheck className="auth-icon" size={32} />
-            <span className="eyebrow">Secure email sign-in</span>
-            <h1 id="auth-heading">
-              {signedIn
-                ? 'You’re signed in'
-                : recovery
-                  ? 'Recover your account'
-                  : signup
-                    ? 'Create your free account'
-                    : 'Welcome back'}
-            </h1>
+          <section className="auth-card" aria-label="Account">
             {signedIn ? (
               <>
+                <h1>Signed in</h1>
                 <p>
-                  Signed in as <strong>{signedIn}</strong>.
+                  <Check size={16} /> {signedIn}
                 </p>
+                {devices.length > 0 && (
+                  <div className="device-list">
+                    <h2>Your devices</h2>
+                    <ul>
+                      {devices.map((device) => (
+                        <li key={device.id}>
+                          <span>{device.agent}</span>
+                          <button
+                            type="button"
+                            className="btn btn--sm"
+                            onClick={() => {
+                              void fetch('/api/auth/devices/revoke', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: device.id }),
+                              }).then(() =>
+                                setDevices((list) => list.filter((d) => d.id !== device.id)),
+                              )
+                            }}
+                          >
+                            Revoke
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <a className="btn btn--primary" href={returnTo}>
-                  Go to your dashboard <ArrowRight size={16} />
+                  Continue
                 </a>
-                <a className="btn" href="/cdn-cgi/access/logout">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    void fetch('/api/auth/logout', { method: 'POST' }).then(() => {
+                      setSignedIn(null)
+                      setStage('email')
+                    })
+                  }}
+                >
                   Sign out
-                </a>
+                </button>
               </>
             ) : (
               <>
@@ -104,14 +232,14 @@ export function AuthPage() {
                     <a
                       className="btn"
                       aria-current={signup ? 'page' : undefined}
-                      href={'/auth/signup' + suffix}
+                      href={'/auth/signup'}
                     >
                       Sign up
                     </a>
                     <a
                       className="btn"
                       aria-current={!signup ? 'page' : undefined}
-                      href={'/auth/login' + suffix}
+                      href={'/auth/login'}
                     >
                       Sign in
                     </a>
@@ -119,53 +247,72 @@ export function AuthPage() {
                 )}
                 <p>
                   {recovery
-                    ? 'Forgot a password or lost a sign-in code? FJ is passwordless. Request a fresh one-time code using the same email as your account.'
+                    ? 'FJ is passwordless. Request a fresh one-time code using the same email as your account.'
                     : signup
-                      ? 'Your first verified email sign-in creates your account. No password to remember, store or reset.'
-                      : 'Use your account email. Cloudflare Access sends you a fresh one-time verification code.'}
+                      ? 'Your first email sign-in creates your account. No password to remember, store or reset.'
+                      : 'Use your account email. We send you a fresh one-time code.'}
                 </p>
-                {recovery && (
-                  <div className="recovery-steps">
-                    <h3>Get back in, safely</h3>
-                    <ol>
-                      <li>Continue to secure email verification.</li>
-                      <li>Enter the email you used for FJ.</li>
-                      <li>
-                        Check your inbox and spam folder. Use the newest code before it expires.
-                      </li>
-                    </ol>
-                    <p>
-                      If you no longer control that inbox, recover the email account with your email
-                      provider first. We cannot bypass email verification.
-                    </p>
-                  </div>
+                {stage === 'email' && (
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      void requestCode()
+                    }}
+                  >
+                    <label className="field">
+                      Email
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        autoComplete="email"
+                      />
+                    </label>
+                    <button className="btn btn--primary auth-continue" disabled={busy || !email}>
+                      <Mail size={17} />
+                      Send me a code
+                      <ArrowRight size={17} />
+                    </button>
+                  </form>
                 )}
-                {ready === null ? (
-                  <p role="status">Checking secure sign-in…</p>
-                ) : ready ? (
-                  <a className="btn btn--primary auth-continue" href={'/api/auth/login' + suffix}>
-                    <Mail size={17} />
-                    {recovery ? 'Request a new sign-in code' : 'Continue with email'}
-                    <ArrowRight size={17} />
-                  </a>
-                ) : (
-                  <div className="banner banner--info" role="status">
-                    {copy('auth.unavailable')}{' '}
-                    <button className="btn btn--sm" onClick={() => window.location.reload()}>
-                      Try again
-                    </button>{' '}
-                    You can still browse opportunities without an account.
-                  </div>
+                {stage === 'code' && (
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      void verifyCode()
+                    }}
+                  >
+                    <p className="field__hint">Enter the 6-digit code we sent to {email}.</p>
+                    <CodeBoxes value={code} onChange={setCode} onDone={() => void verifyCode()} />
+                    <button
+                      className="btn btn--primary auth-continue"
+                      disabled={busy || code.length !== 6}
+                    >
+                      Sign in
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => {
+                        setCode('')
+                        void requestCode()
+                      }}
+                    >
+                      Send a new code
+                    </button>
+                  </form>
+                )}
+                {notice && (
+                  <p className="banner banner--demo" role="status">
+                    {notice}
+                  </p>
                 )}
                 <p className="field__hint">
-                  Enter your email and code only on our secure Cloudflare Access sign-in screen.
-                  Never share a code with anyone.
+                  Never share a code with anyone. FJ staff will never ask for it.
                 </p>
-                <a
-                  className="auth-recovery"
-                  href={(recovery ? '/auth/login' : '/auth/recovery') + suffix}
-                >
-                  {recovery ? 'Back to sign in' : 'Forgot password or can’t sign in?'}
+                <a className="auth-recovery" href={recovery ? '/auth/login' : '/auth/recovery'}>
+                  {recovery ? 'Back to sign in' : 'Can’t sign in?'}
                 </a>
               </>
             )}
