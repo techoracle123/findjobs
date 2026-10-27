@@ -126,7 +126,14 @@ export async function refreshPublicSource(
       throw new Error('Detail shard exceeds public storage safety bound')
     await kv.put(detailKey, text, { expirationTtl: EXPIRY })
     index.jobs.push(
-      ...chunk.map((job) => ({ ...job, description: job.description.slice(0, 600), detailKey })),
+      ...chunk.map((job) => ({
+        ...job,
+        description: job.description.slice(0, 600),
+        // Evidence sentences are debug detail — they live in the detail shard
+        // only, so the hot index stays small enough for the request budget.
+        quality: job.quality ? { ...job.quality, skillEvidence: [] } : undefined,
+        detailKey,
+      })),
     )
   }
   await kv.put(`source:${sourceId}`, JSON.stringify(index), { expirationTtl: EXPIRY })

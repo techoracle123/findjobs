@@ -25,7 +25,19 @@ function count(jobs: Job[], field: 'locationCountry' | 'roleFamily'): Record<str
 }
 /** Disjunctive facet counts: each selector excludes only its own selection.
  * Summary metrics always describe the exact full result set before pagination. */
+const facetCache = new Map<string, { at: number; value: JobFacets }>()
+
 export function jobFacets(jobs: Job[], search: JobSearch): JobFacets {
+  const key = `${jobs.length}:${JSON.stringify(search)}`
+  const hit = facetCache.get(key)
+  if (hit && Date.now() - hit.at < 60_000) return hit.value
+  const value = computeFacets(jobs, search)
+  if (facetCache.size > 50) facetCache.clear()
+  facetCache.set(key, { at: Date.now(), value })
+  return value
+}
+
+function computeFacets(jobs: Job[], search: JobSearch): JobFacets {
   const matched = matchingPublicJobs(jobs, search)
   return {
     total: matched.length,

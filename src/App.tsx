@@ -809,11 +809,6 @@ export default function App() {
               Your latest changes couldn’t sync. Please check your connection and try again.
             </div>
           )}
-          {dataNote && (
-            <div className="banner banner--info">
-              <span>{dataNote}</span>
-            </div>
-          )}
           {loadError && (
             <div className="banner banner--demo">
               <span>
@@ -883,6 +878,11 @@ export default function App() {
               match.
             </p>
           </details>
+          {dataNote && (
+            <div className="banner banner--info">
+              <span>{dataNote}</span>
+            </div>
+          )}
           {facets && (
             <p className="hint market-line">
               {facets.remote.toLocaleString()} listed remote · {facets.locations} stated countries ·

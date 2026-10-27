@@ -2519,3 +2519,23 @@ summary:focus-visible {
   font-weight: 700;
   color: var(--ink);
 }
+
+@media (max-width: 700px) {
+  /* Required caution copy stays, as a compact strip. */
+  .jobrow__caution {
+    padding: 3px 10px;
+    font-size: 13px;
+  }
+  .content.browse .page-intro h1 {
+    margin: 0 0 2px;
+  }
+  .content.browse .page-intro p {
+    margin: 0 0 6px;
+  }
+  .searchbar__input {
+    height: 40px;
+  }
+  .searchbar__submit {
+    min-height: 42px;
+  }
+}

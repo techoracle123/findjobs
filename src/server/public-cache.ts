@@ -10,6 +10,8 @@ const ALLOWED_QUERY = new Set([
   'levels',
   'limit',
   'offset',
+  'loc',
+  'ww',
 ])
 
 /** Only anonymous, identical-for-everyone GET data. Never account, AI or writes. */
