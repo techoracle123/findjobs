@@ -40,7 +40,7 @@ export function QualityWallboard() {
         )
       }
       setPayload((await response.json()) as Payload)
-    } catch (cause) {
+    } catch {
       setError(copy('admin.unavailable'))
     } finally {
       setLoading(false)

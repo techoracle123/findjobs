@@ -41,7 +41,7 @@ export function CvImport({ onApply }: CvImportProps) {
       setStage('suggesting')
       const result = await suggestFromCv(extracted.text)
       setSuggestion(result)
-    } catch (cause) {
+    } catch {
       setError(copy('cv.unreadable'))
     } finally {
       setBusy(false)

@@ -6,6 +6,7 @@ import {
   parseJsonLdPostings,
 } from '../../src/server/sources/ats-modern'
 import { CADENCE_HOURS, cadenceHours, dueForRun } from '../../src/server/public-schedule'
+import type { PUBLIC_SOURCES } from '../../src/server/public-feed'
 import { isInMarket, remoteOpenToNigeria, inMarketShare } from '../../src/server/market'
 import type { SourceRef } from '../../src/server/sources/types'
 import type { Job } from '../../src/shared/types'
@@ -97,7 +98,7 @@ describe('refresh cadence (Prompt 16)', () => {
       { id: 'a', tier: 'ats' },
       { id: 'r', tier: 'remote' },
       { id: 'n', tier: 'nigeria' },
-    ] as never as typeof import('../../src/server/public-feed').PUBLIC_SOURCES
+    ] as never as typeof PUBLIC_SOURCES
     expect(dueForRun(sources, 2).map((s) => s.id)).toEqual(['a'])
     expect(dueForRun(sources, 4).map((s) => s.id)).toEqual(['a'])
     expect(dueForRun(sources, 0).map((s) => s.id)).toEqual(['a', 'r', 'n'])
