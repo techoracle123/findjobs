@@ -22,6 +22,7 @@ import { applyRoutes } from './routes/apply'
 import { adminRoutes } from './routes/admin'
 import { trustRoutes } from './routes/trust'
 import { jobFacets } from './job-stats'
+import { withTimeout } from './timeouts'
 import { log } from './logging'
 import { publicDataCache } from './public-cache'
 import { livePublicEnabled, livePublicJobs, searchLivePublic } from './live-public'
@@ -150,9 +151,12 @@ app.get('/api/health', async (c) => {
 app.get('/api/feed-status', async (c) => {
   const snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
   if (!snapshot) return c.json({ available: false, refreshHours: 12 }, 503)
+  const visible = snapshot.jobs.filter((job) => job.quality?.isEnglish !== false)
   return c.json({
     available: true,
-    total: snapshot.jobs.length,
+    // The default feed is English-first; the full corpus is reported alongside.
+    total: visible.length,
+    totalAllLanguages: snapshot.jobs.length,
     sourceCount: snapshot.sourceCount,
     attemptedSources: snapshot.attemptedSources,
     olderSources: snapshot.olderSources,
@@ -213,7 +217,7 @@ app.get('/api/jobs', async (c) => {
     offset === undefined &&
     !['country', 'roles', 'modes', 'levels'].some((key) => url.searchParams.has(key))
   ) {
-    const { jobs, source, warning } = await listOpenJobs(env.DB)
+    const { jobs, source, warning } = await withTimeout(listOpenJobs(env.DB), 3000)
     if (warning && livePublicEnabled(env.APP_MODE)) {
       const current = await livePublicJobs(url.origin)
       return c.json({
@@ -237,7 +241,7 @@ app.get('/api/jobs', async (c) => {
   let dataSource: 'd1' | 'live-public' = 'd1'
   try {
     if (!env.DB) throw new Error('Database unavailable')
-    result = await searchJobs(env.DB, search)
+    result = await withTimeout(searchJobs(env.DB, search), 3000)
   } catch (error) {
     if (!livePublicEnabled(env.APP_MODE)) throw error
     result = searchLivePublic(await livePublicJobs(url.origin), search)

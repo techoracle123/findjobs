@@ -2539,3 +2539,12 @@ summary:focus-visible {
     min-height: 42px;
   }
 }
+
+@media (max-width: 700px) {
+  .content.browse {
+    padding-top: 8px;
+  }
+  .searchbar__input {
+    height: 38px;
+  }
+}

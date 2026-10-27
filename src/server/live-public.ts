@@ -176,6 +176,17 @@ export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResul
   return { jobs: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset }
 }
 
+const haystackCache = new WeakMap<Job, string>()
+function haystack(job: Job): string {
+  let value = haystackCache.get(job)
+  if (value === undefined) {
+    value =
+      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${job.description} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')}`.toLowerCase()
+    haystackCache.set(job, value)
+  }
+  return value
+}
+
 export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
   const terms = (search.query || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
   const place = (search.location || '').toLowerCase().trim()
@@ -194,10 +205,6 @@ export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
       (!search.seniorities?.length || search.seniorities.includes(job.seniority)) &&
       (!search.verification?.length ||
         search.verification.includes(job.verification || 'unverified')) &&
-      terms.every((term) =>
-        `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${job.description} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')}`
-          .toLowerCase()
-          .includes(term),
-      ),
+      terms.every((term) => haystack(job).includes(term)),
   )
 }

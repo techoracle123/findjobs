@@ -70,13 +70,13 @@ describe('durable broad public feed', () => {
     expect(snapshot.refreshHours).toBe(12)
     expect(snapshot.jobs[0].id).toBe(original.id)
   })
-  it('does not keep a failed publisher alive indefinitely through other publishers', async () => {
+  it('drops publishers that have not confirmed content within the freshness window', async () => {
     const now = Date.now(),
       fresh = await index(now)
     const old = {
       ...fresh,
       sourceId: 'outage',
-      fetchedAt: now - 37 * 3600000,
+      fetchedAt: now - 9 * 86_400_000,
       jobs: fresh.jobs.map((job) => ({ ...job, id: 'expired-source' })),
     }
     const snapshot = assemblePublicSnapshot([fresh, old], new Set([fresh.jobs[0].id]), now)

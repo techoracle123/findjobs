@@ -28,7 +28,9 @@ export const PUBLIC_SOURCES = SEED_SOURCES.filter(
       'hn-hiring',
     ].includes(source.parser),
 )
-const MAX_AGE = 36 * 3600000
+// Sources confirm aliveness by rewriting only when content changes (plus a
+// periodic freshness touch), so the confirmation window is 8 days, not 36h.
+const MAX_AGE = 8 * 86_400_000
 const EXPIRY = 3 * 86400
 export interface IndexedJob extends Job {
   detailKey: string
@@ -36,6 +38,7 @@ export interface IndexedJob extends Job {
 export interface SourceIndex {
   sourceId: string
   fetchedAt: number
+  contentHash?: string
   jobs: IndexedJob[]
 }
 export interface PublicSnapshot {
@@ -101,23 +104,42 @@ export async function refreshPublicSource(
     )
     throw error
   }
-  // Immutable raw archive keyed by content hash, before parsing is trusted
-  // downstream. KV stands in for R2 here (no R2 binding is provisioned).
+  // Immutable raw archive keyed by content hash. The hash doubles as the
+  // "content unchanged" test that keeps the free KV write budget intact.
+  let rawHash = ''
   try {
-    const rawHash = await crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(JSON.stringify(jobs)),
-    )
-    const rawKey = `raw:${[...new Uint8Array(rawHash)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`
-    if (!(await kv.get(rawKey)))
-      await kv.put(rawKey, JSON.stringify(jobs), { expirationTtl: 90 * 86_400 })
+    rawHash = [
+      ...new Uint8Array(
+        await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(jobs))),
+      ),
+    ]
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('')
   } catch {
-    /* The raw archive is observability, never a publication dependency. */
+    /* Hashing failure falls through to a normal write. */
   }
+  const previousIndex = rawHash ? await kv.get<SourceIndex>(`source:${sourceId}`, 'json') : null
+  const contentUnchanged = Boolean(rawHash) && previousIndex?.contentHash === rawHash
+  const ageingOut = previousIndex ? now - previousIndex.fetchedAt > 6 * 86_400_000 : false
+  if (rawHash) {
+    try {
+      const rawKey = `raw:${rawHash}`
+      if (!(await kv.get(rawKey)))
+        await kv.put(rawKey, JSON.stringify(jobs), { expirationTtl: 90 * 86_400 })
+    } catch {
+      /* The raw archive is observability, never a publication dependency. */
+    }
+  }
+  if (contentUnchanged && !ageingOut && previousIndex) return jobs.length
 
   // Bounded detail shards avoid rejecting a real, large employer board or
   // loading its entire descriptions collection for one job page.
-  const index: SourceIndex = { sourceId, fetchedAt: now, jobs: [] }
+  const index: SourceIndex = {
+    sourceId,
+    fetchedAt: now,
+    contentHash: rawHash || undefined,
+    jobs: [],
+  }
   for (let i = 0; i < jobs.length; i += 500) {
     const chunk = jobs.slice(i, i + 500),
       detailKey = `details:${sourceId}:${run}:${i / 500}`
