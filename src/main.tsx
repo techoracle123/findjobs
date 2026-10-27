@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { AuthPage } from './components/AuthPage'
 import { QualityWallboard } from './components/QualityWallboard'
+import { InfoPage } from './components/InfoPage'
 import './styles.css'
 
 const container = document.getElementById('root')
@@ -16,6 +17,8 @@ createRoot(container).render(
       <AuthPage />
     ) : window.location.pathname === '/admin/data-quality' ? (
       <QualityWallboard />
+    ) : /^\/(about|privacy|terms|scams|contact|employers)\/?$/.test(window.location.pathname) ? (
+      <InfoPage path={window.location.pathname.replace(/\/+$/, '')} />
     ) : (
       <App />
     )}

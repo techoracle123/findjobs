@@ -148,6 +148,8 @@ app.get('/api/jobs', async (c) => {
   const search: JobSearch = {
     query,
     country: url.searchParams.get('country')?.trim().toUpperCase().slice(0, 2) || undefined,
+    location: url.searchParams.get('loc')?.trim().slice(0, 80) || undefined,
+    worldwide: url.searchParams.get('ww') === '1',
     roleFamilies: (url.searchParams.get('roles') || '').split(',').filter(Boolean).slice(0, 30),
     workModes: (url.searchParams.get('modes') || '').split(',').filter(Boolean).slice(0, 3),
     seniorities: (url.searchParams.get('levels') || '').split(',').filter(Boolean).slice(0, 8),
@@ -193,6 +195,7 @@ app.get('/api/jobs', async (c) => {
         jobs: current,
         total: current.length,
         dataSource: 'live-public',
+        facets: { ...jobFacets(current, {}), total: current.length },
         warning:
           'Showing current public listings while account syncing is temporarily unavailable.',
       })
@@ -200,6 +203,7 @@ app.get('/api/jobs', async (c) => {
     return c.json({
       jobs,
       dataSource: source,
+      facets: { ...jobFacets(jobs, {}), total: jobs.length },
       ...(warning ? { warning } : {}),
     })
   }
@@ -221,6 +225,7 @@ app.get('/api/jobs', async (c) => {
     limit: result.limit,
     offset: result.offset,
     dataSource,
+    facets: { ...jobFacets(result.jobs, {}), total: result.total },
     ...(dataSource === 'live-public'
       ? {
           warning:

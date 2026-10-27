@@ -5,7 +5,7 @@
   --ink: #1b1e17;
   --ink-soft: #3d4237;
   --muted: #6b7160;
-  --faint: #8d9382;
+  --faint: #6a7062;
   --line: #e2e5d8;
   --line-strong: #cfd4c2;
   --accent: #2f6b4a;
@@ -83,7 +83,7 @@ a {
   align-items: center;
   gap: 16px;
   padding: 0 18px;
-  height: 54px;
+  height: 58px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   position: sticky;
@@ -214,7 +214,7 @@ a {
   background: var(--surface-sunken);
   border: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -259,7 +259,7 @@ a {
   color: var(--ink-soft);
   border-radius: 999px;
   padding: 3px 10px;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 500;
   transition:
     background 0.12s ease,
@@ -293,7 +293,7 @@ a {
   background: var(--accent-soft);
   border: 1px solid #cfe0cd;
   color: var(--accent-ink);
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 550;
 }
 
@@ -328,14 +328,14 @@ a {
 }
 
 .field__label {
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
   letter-spacing: 0.01em;
 }
 
 .field__hint {
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -379,7 +379,7 @@ a {
   color: var(--ink);
   border-radius: var(--radius-sm);
   padding: 6px 11px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 550;
   display: inline-flex;
   align-items: center;
@@ -424,7 +424,7 @@ a {
 
 .btn--sm {
   padding: 3px 8px;
-  font-size: 11.5px;
+  font-size: 13px;
 }
 
 .btnrow {
@@ -441,7 +441,7 @@ a {
   gap: 9px;
   padding: 9px 13px;
   border-radius: var(--radius);
-  font-size: 12.5px;
+  font-size: 13px;
   border: 1px solid;
 }
 
@@ -516,7 +516,7 @@ a {
 }
 
 .resultcount {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
   font-family: var(--mono);
 }
@@ -590,7 +590,7 @@ a {
 
 .jobrow__title {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 14px;
   letter-spacing: -0.005em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -598,7 +598,7 @@ a {
 }
 
 .jobrow__company {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -613,7 +613,7 @@ a {
 
 .jobrow__salary {
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -650,7 +650,7 @@ a {
   display: grid;
   place-items: center;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 650;
   color: var(--ink);
 }
@@ -693,7 +693,7 @@ a {
 }
 
 .detail__company {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -738,7 +738,7 @@ a {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .bd__name {
@@ -747,7 +747,7 @@ a {
 
 .bd__value {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -775,7 +775,7 @@ a {
 }
 
 .bd__detail {
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -804,14 +804,14 @@ a {
   font-weight: 600;
   color: var(--ink-soft);
   margin: 0 0 4px;
-  font-size: 13.5px;
+  font-size: 14px;
 }
 
 .kv {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 12.5px;
+  font-size: 13px;
   padding: 3px 0;
 }
 
@@ -842,7 +842,7 @@ a {
 }
 
 .rate {
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--faint);
   font-family: var(--mono);
 }
@@ -872,7 +872,7 @@ a {
   color: #fff;
   padding: 8px 14px;
   border-radius: 999px;
-  font-size: 12.5px;
+  font-size: 13px;
   box-shadow: var(--shadow);
   z-index: 50;
 }
@@ -902,7 +902,7 @@ a {
   border: 0;
   background: transparent;
   padding: 5px 9px;
-  font-size: 12.5px;
+  font-size: 13px;
   display: flex;
   justify-content: space-between;
   gap: 8px;
@@ -915,7 +915,7 @@ a {
 .combolist__code {
   font-family: var(--mono);
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 13px;
 }
 
 .progress {
@@ -1038,7 +1038,7 @@ a {
 .local-note {
   margin: -5px 0 0;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .local-note button {
   border: 0;
@@ -1086,7 +1086,7 @@ a {
   line-height: 1.3;
 }
 .btn--sm {
-  font-size: 12.5px;
+  font-size: 13px;
   padding: 7px 10px;
 }
 .chip {
@@ -1134,7 +1134,7 @@ a {
 }
 .jobrow__aside .field__hint {
   text-align: right;
-  font-size: 11.5px;
+  font-size: 13px;
 }
 .detail {
   position: static;
@@ -1542,11 +1542,11 @@ summary:focus-visible {
     text-align: left;
   }
   .site-disclaimer {
-    font-size: 11.5px;
+    font-size: 13px;
   }
 }
 .currency-note {
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--muted);
   margin: -8px 0 0;
 }
@@ -1987,4 +1987,479 @@ summary:focus-visible {
 .quality-table th {
   color: var(--muted);
   font-weight: 550;
+}
+
+/* ── Prompt 8 layout: search-first browse page ─────────────────────────── */
+.topnav {
+  display: flex;
+  gap: 4px;
+}
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 550;
+  text-decoration: none;
+  padding: 7px 11px;
+  border-radius: var(--radius-sm);
+}
+.topnav a:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+.topnav a[aria-current='page'] {
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+}
+
+.content.browse,
+.content.dashboard {
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 18px clamp(14px, 3vw, 28px) 40px;
+}
+.content.browse .page-intro h1 {
+  font-size: 34px;
+  letter-spacing: -1.1px;
+  margin: 6px 0 8px;
+}
+.content.browse .page-intro p {
+  color: var(--muted);
+  font-size: 16px;
+  max-width: 640px;
+  margin: 0 0 18px;
+}
+
+/* Search: two fields in one bordered container, full content width. */
+.searchbar {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: visible;
+}
+.searchbar__field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+}
+.searchbar__field:first-child {
+  border-radius: 12px 0 0 12px;
+}
+.searchbar__icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.searchbar__input {
+  border: 0;
+  background: transparent;
+  height: 52px;
+  font-size: 16px;
+  padding: 0;
+  width: 100%;
+}
+.searchbar__input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.searchbar__clear {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 8px;
+  line-height: 0;
+  border-radius: 50%;
+}
+.searchbar__divider {
+  width: 1px;
+  background: var(--line);
+  margin: 10px 0;
+}
+.searchbar__submit {
+  border-radius: 0 12px 12px 0;
+  padding: 0 22px;
+  min-height: 52px;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.searchbar__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+/* One filter chip row above the results. */
+.chipbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+  position: relative;
+}
+.chipbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.chipbtn:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.chipbtn--clear {
+  border-style: dashed;
+  color: var(--muted);
+}
+.chip-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 25;
+  width: min(360px, 92vw);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 10px;
+  max-height: 360px;
+  overflow: auto;
+}
+.chip-popover .combolist__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Result count and sort share one baseline, directly under the chips. */
+.results-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 12px;
+  min-height: 38px;
+}
+.results-head .resultcount {
+  font-size: 14px;
+  color: var(--ink-soft);
+  font-weight: 550;
+}
+
+/* Compact job card with monogram logo and a 44px save target. */
+.jobrow-wrap {
+  position: relative;
+}
+.jobrow {
+  gap: 12px;
+  padding: 12px 14px;
+  min-height: 0;
+}
+.jobrow__logo {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 650;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.jobrow__title {
+  font-size: 18px;
+  line-height: 1.25;
+}
+.jobrow__company {
+  font-size: 14px;
+}
+.jobrow__meta {
+  font-size: 13px;
+}
+.jobrow__badge {
+  margin-left: 6px;
+  font-size: 12px;
+  padding: 1px 7px;
+}
+.jobrow__save {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.jobrow__save:hover {
+  background: var(--surface-sunken);
+  color: var(--accent);
+}
+.jobrow__save[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 20px 0;
+}
+.pagination__gap {
+  color: var(--faint);
+}
+.market-line {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 10px 2px 0;
+}
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  margin-top: 32px;
+  padding: 22px clamp(14px, 3vw, 28px) 30px;
+  text-align: center;
+}
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.site-footer a {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.site-footer p {
+  color: var(--faint);
+  font-size: 13px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.info-card {
+  max-width: 720px;
+  margin: 26px auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: clamp(20px, 4vw, 36px);
+}
+.info-card h1 {
+  font-size: 34px;
+  letter-spacing: -1px;
+  margin: 0 0 14px;
+}
+.info-card p,
+.info-card li {
+  color: var(--ink-soft);
+  line-height: 1.75;
+  font-size: 16px;
+}
+
+@media (max-width: 700px) {
+  .searchbar {
+    flex-direction: column;
+    border-radius: 12px;
+  }
+  .searchbar__field:first-child {
+    border-radius: 12px 12px 0 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .searchbar__divider {
+    display: none;
+  }
+  .searchbar__submit {
+    border-radius: 0 0 12px 12px;
+    min-height: 48px;
+    justify-content: center;
+  }
+  .searchbar__input {
+    height: 46px;
+  }
+  .content.browse .page-intro h1 {
+    font-size: 26px;
+  }
+  .jobrow {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .jobrow__title {
+    font-size: 16px;
+  }
+  .jobrow__logo {
+    width: 36px;
+    height: 36px;
+    font-size: 13px;
+  }
+  .jobrow__aside .jobrow__salary {
+    font-size: 13px;
+  }
+  .topnav a {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+}
+
+/* Mobile header stays one line; first card must land within one screen. */
+.results-head .resultcount {
+  margin-left: 0;
+}
+@media (max-width: 700px) {
+  .topbar {
+    height: 56px;
+    padding: 0 12px;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .topbar .brand {
+    font-size: 14px;
+    gap: 8px;
+  }
+  .topbar .brand__logo {
+    width: 30px;
+    height: 30px;
+  }
+  .topnav .nav-dashboard,
+  .topbar .quota-meter,
+  .topbar .account-email,
+  .topbar button[aria-label='Reload'] {
+    display: none;
+  }
+  .topnav {
+    gap: 0;
+  }
+  .topnav a {
+    padding: 6px 7px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .content.browse {
+    padding: 12px 12px 32px;
+  }
+  .content.browse .page-intro h1 {
+    font-size: 24px;
+    margin: 2px 0 4px;
+    letter-spacing: -0.6px;
+  }
+  .content.browse .page-intro p {
+    font-size: 14px;
+    margin: 0 0 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .searchbar__input {
+    height: 42px;
+    font-size: 15px;
+  }
+  .searchbar__submit {
+    min-height: 44px;
+  }
+  .chipbar {
+    margin: 8px 0 6px;
+    gap: 6px;
+  }
+  .chipbtn {
+    padding: 6px 10px;
+  }
+  .results-head {
+    margin: 2px 0 8px;
+    min-height: 32px;
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar .brand > span {
+    display: none;
+  }
+  .topbar__actions .btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 7px 10px;
+  }
+  .topbar__actions .btn--primary {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar__actions {
+    flex-wrap: nowrap;
+  }
+  .topbar .nav-signup {
+    display: none;
+  }
+  .content.browse .page-intro p {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 340px) {
+  .topbar {
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .topnav a {
+    padding: 6px 5px;
+  }
+  .topbar__actions .btn {
+    padding: 7px 8px;
+  }
+}
+
+/* Spec: one horizontally scrollable chip row on mobile — never extra rows. */
+@media (max-width: 700px) {
+  .chipbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .chipbar::-webkit-scrollbar {
+    display: none;
+  }
+  .chipbtn {
+    flex-shrink: 0;
+  }
+}
+
+.chipbar-wrap {
+  position: relative;
 }

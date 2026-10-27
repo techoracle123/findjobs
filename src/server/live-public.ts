@@ -178,10 +178,17 @@ export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResul
 
 export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
   const terms = (search.query || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
+  const place = (search.location || '').toLowerCase().trim()
   return jobs.filter(
     (job) =>
       search.status !== 'closed' &&
+      // Confirmed non-English listings are hidden unless Worldwide is asked for.
+      (search.worldwide || job.quality?.isEnglish !== false) &&
       (!search.country || job.locationCountry === search.country) &&
+      (!place ||
+        `${job.locationLabel} ${job.quality?.location.city ?? ''} ${job.quality?.location.state ?? ''}`
+          .toLowerCase()
+          .includes(place)) &&
       (!search.roleFamilies?.length || search.roleFamilies.includes(job.roleFamily)) &&
       (!search.workModes?.length || search.workModes.includes(job.workMode)) &&
       (!search.seniorities?.length || search.seniorities.includes(job.seniority)) &&

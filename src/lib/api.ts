@@ -95,10 +95,16 @@ export function fetchJobs(
   query = '',
   filters?: Filters,
   force = false,
+  limit = 20,
 ): Promise<JobsResponse> {
-  const params = new URLSearchParams({ status: 'open', limit: '200', offset: String(offset) })
+  const params = new URLSearchParams({
+    status: 'open',
+    limit: String(limit),
+    offset: String(offset),
+  })
   if (query.trim()) params.set('q', query.trim())
   if (filters?.country) params.set('country', filters.country)
+  if (filters?.location) params.set('loc', filters.location)
   if (filters?.roleFamilies.length) params.set('roles', filters.roleFamilies.join(','))
   if (filters?.workModes.length) params.set('modes', filters.workModes.join(','))
   if (filters?.seniorities.length) params.set('levels', filters.seniorities.join(','))

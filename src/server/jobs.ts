@@ -199,6 +199,10 @@ export interface JobSearch {
   /** A free-text query, matched against the search index. */
   query?: string
   country?: string
+  /** City/state free text, matched against the structured location and label. */
+  location?: string
+  /** Include non-English listings. Default: English-first feed. */
+  worldwide?: boolean
   roleFamilies?: string[]
   workModes?: string[]
   seniorities?: string[]

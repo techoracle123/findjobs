@@ -161,7 +161,7 @@ it('serves the broad index without D1 and returns full descriptions on individua
     } as unknown as D1Database,
   }
   const feed = await app.request(
-    'https://public-feed-tests.example/api/jobs?status=open&limit=1',
+    'https://public-feed-tests.example/api/jobs?status=open&limit=1&ww=1',
     {},
     env,
   )
@@ -175,6 +175,19 @@ it('serves the broad index without D1 and returns full descriptions on individua
   expect(body.dataSource).toBe('public-snapshot')
   expect(body.jobs[0].descriptionPreview).toBe(true)
   expect(body.jobs[0].detailKey).toBeUndefined()
+  // The default feed is English-first: confirmed non-English listings stay out
+  // unless Worldwide is requested.
+  const englishOnly = await app.request(
+    'https://public-feed-tests.example/api/jobs?status=open&limit=5',
+    {},
+    env,
+  )
+  const englishBody = (await englishOnly.json()) as {
+    jobs: (IndexedJob & { quality?: { isEnglish?: boolean } })[]
+    total: number
+  }
+  expect(englishBody.total).toBeLessThanOrEqual(body.total)
+  expect(englishBody.jobs.every((job) => job.quality?.isEnglish !== false)).toBe(true)
   const detail = await app.request(
     `https://public-feed-tests.example/api/jobs/${body.jobs[0].id}`,
     {},

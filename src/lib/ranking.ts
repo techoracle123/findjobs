@@ -12,6 +12,8 @@ import { compareScoredJobs } from '../shared/scoring'
 
 export interface Filters {
   query: string
+  /** City/state free text from the Where field. */
+  location?: string
   country?: string
   workModes: string[]
   seniorities: string[]
@@ -26,6 +28,7 @@ export interface Filters {
 
 export const DEFAULT_FILTERS: Filters = {
   query: '',
+  location: '',
   country: '',
   workModes: [],
   seniorities: [],
