@@ -1,0 +1,29 @@
+{
+  "jobs": [
+    {
+      "id": "7f3d9a11-2222-4444-8888-abcdef012345",
+      "title": "Data Scientist",
+      "location": "Lagos, Nigeria",
+      "employmentType": "Full-time",
+      "department": "Data",
+      "team": "Risk",
+      "jobUrl": "https://jobs.ashbyhq.com/ashbydemo/7f3d9a11-2222-4444-8888-abcdef012345",
+      "applyUrl": "https://jobs.ashbyhq.com/ashbydemo/7f3d9a11-2222-4444-8888-abcdef012345/apply",
+      "publishedAt": "2026-10-14T08:00:00Z",
+      "descriptionHtml": "<p>Build and evaluate forecasting models. Python, SQL and machine learning.</p>",
+      "isListed": true
+    },
+    {
+      "id": "9a8b7c6d-3333-5555-9999-bcdef0123456",
+      "title": "Support Engineer",
+      "location": "Remote, Nigeria",
+      "employmentType": "Full-time",
+      "department": "Support",
+      "team": "Support",
+      "jobUrl": "https://jobs.ashbyhq.com/ashbydemo/9a8b7c6d-3333-5555-9999-bcdef012345",
+      "publishedAt": "2026-10-01T08:00:00Z",
+      "descriptionPlain": "Help customers. Linux and SQL.",
+      "isListed": false
+    }
+  ]
+}

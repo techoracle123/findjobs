@@ -1,0 +1,70 @@
+import type { AppConfig } from '../config'
+import { extractBearer, verifyAccessToken } from './access'
+import type { AccessIdentity } from './access'
+import { resolveOwnSession } from '../routes/auth'
+
+export const ACCESS_JWT_HEADER = 'cf-access-jwt-assertion'
+export const ACCESS_EMAIL_HEADER = 'cf-access-authenticated-user-email'
+export const DEV_EMAIL_HEADER = 'x-dev-user-email'
+
+/**
+ * Resolves the identity of a request.
+ *
+ * In production this is always a verified Cloudflare Access token. In local
+ * and test modes a header may stand in for Access, so the stack can be
+ * exercised without an Access application — but only when the app is not
+ * running in a hosted mode, and the bypass is never used to *upgrade* an
+ * unverified request into a real one.
+ */
+export async function resolveIdentity(
+  request: Request,
+  config: AppConfig,
+  now: number = Date.now(),
+  db?: D1Database,
+): Promise<AccessIdentity | null> {
+  // Own sessions first (Prompt 18); Access stays valid in parallel (§E).
+  const ownToken = request.headers
+    .get('cookie')
+    ?.split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('fj_session='))
+    ?.slice('fj_session='.length)
+  if (db && ownToken) {
+    const session = await resolveOwnSession(db, ownToken, now)
+    if (session) return { email: session.email, subject: session.userId, groups: [] }
+  }
+  const cookie = request.headers
+    .get('cookie')
+    ?.split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('CF_Authorization='))
+    ?.slice('CF_Authorization='.length)
+  const token =
+    extractBearer(request.headers.get('authorization')) ||
+    request.headers.get(ACCESS_JWT_HEADER) ||
+    cookie ||
+    null
+
+  if (token && config.access.teamDomain && config.access.aud) {
+    return verifyAccessToken(token, config.access, now)
+  }
+
+  if (!config.isLocal && !config.isTest) {
+    // Hosted staging, preview, production and unknown modes fail closed.
+    return null
+  }
+
+  const devEmail = request.headers.get(DEV_EMAIL_HEADER)
+  if (devEmail) {
+    const email = devEmail.trim().toLowerCase()
+    if (email) {
+      return { email, subject: `dev:${email}`, groups: ['dev'] }
+    }
+  }
+
+  return null
+}
+
+export function isDevIdentity(identity: AccessIdentity): boolean {
+  return identity.subject.startsWith('dev:')
+}

@@ -10,11 +10,16 @@
       "binding": "DB",
       "database_name": "rolesignal",
       "database_id": "00000000-0000-0000-0000-000000000001",
-      "migrations_dir": "migrations"
-    }
+      "migrations_dir": "migrations",
+    },
   ],
   "vars": {
     "APP_MODE": "local-preview",
-    "TELEGRAM_BOT_USERNAME": ""
-  }
+    "BILLING_PROVIDER": "fake",
+    "BILLING_CURRENCY": "NGN",
+    "BILLING_PRICE_PRO": "5000",
+    "TELEGRAM_BOT_USERNAME": "",
+    "AI_DAILY_LIMIT": "20",
+    "AI_GLOBAL_DAILY_LIMIT": "1000",
+  },
 }

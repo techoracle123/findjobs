@@ -8,11 +8,19 @@
       "binding": "DB",
       "database_name": "rolesignal",
       "database_id": "00000000-0000-0000-0000-000000000001",
-      "migrations_dir": "migrations"
-    }
+      "migrations_dir": "migrations",
+    },
   ],
   "vars": {
     "APP_MODE": "preview",
-    "TELEGRAM_BOT_USERNAME": ""
-  }
+    // The provider the paid plan is settled through: fake, paystack, flutterwave or stripe.
+    // When it is not set it is inferred from whichever key is present.
+    "BILLING_PROVIDER": "",
+    "BILLING_CURRENCY": "NGN",
+    "BILLING_PRICE_PRO": "5000",
+    "TELEGRAM_BOT_USERNAME": "",
+    // How many AI calls one account and the whole service may make in a day.
+    "AI_DAILY_LIMIT": "20",
+    "AI_GLOBAL_DAILY_LIMIT": "1000",
+  },
 }
