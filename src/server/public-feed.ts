@@ -26,6 +26,11 @@ export const PUBLIC_SOURCES = SEED_SOURCES.filter(
       'workingnomads',
       'jobicy',
       'hn-hiring',
+      'themuse',
+      'smartrecruiters',
+      'teamtailor',
+      'personio',
+      'breezy',
     ].includes(source.parser),
 )
 // Sources confirm aliveness by rewriting only when content changes (plus a

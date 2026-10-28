@@ -28,8 +28,6 @@ export interface Env {
   HEALTH_CHECK_KEY?: string
 
   // Cloudflare Access (identity)
-  ACCESS_TEAM_DOMAIN?: string
-  ACCESS_AUD?: string
 
   // Telegram
   TELEGRAM_BOT_TOKEN?: string

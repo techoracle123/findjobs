@@ -120,7 +120,7 @@ export const teamtailor: SourceParser = {
   verification: 'verified',
   verificationReason: "the employer's own Teamtailor career page",
   async fetchPostings(source, fetchImpl = fetch) {
-    const subdomain = source.options.subdomain
+    const subdomain = source.options.subdomain ?? source.options.company
     if (typeof subdomain !== 'string' || !subdomain.trim()) {
       throw new SourceError('This source has no subdomain configured', source.id)
     }
@@ -220,7 +220,7 @@ export const breezy: SourceParser = {
   verification: 'verified',
   verificationReason: "the employer's own Breezy career page",
   async fetchPostings(source, fetchImpl = fetch) {
-    const subdomain = source.options.subdomain
+    const subdomain = source.options.subdomain ?? source.options.company
     if (typeof subdomain !== 'string' || !subdomain.trim()) {
       throw new SourceError('This source has no subdomain configured', source.id)
     }

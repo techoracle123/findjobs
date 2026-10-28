@@ -8,70 +8,16 @@ export function annotation(level, title, message) {
   console.log(`::${level} title=${title}::${safe}`)
 }
 
-/** A path-scoped Access app protects login, while the board remains public.
- * Other API requests verify its signed CF_Authorization cookie themselves. */
-export async function provisionAccess(api, project, hostname = `${project}.pages.dev`) {
-  let org
-  try {
-    org = (await api('/access/organizations', { optional: true, diagnostic: true }))?.result
-  } catch (error) {
-    // A fresh account returns 403/not_enabled on READ, not 404. Bootstrap only
-    // that explicit state using Cloudflare's documented organization CREATE API.
-    // Ordinary authentication/permission failures must still abort unchanged.
-    if (!/access\.api\.error\.not_enabled/.test(error.message)) throw error
-  }
-  if (!org) {
-    org = (
-      await api('/access/organizations', {
-        method: 'POST',
-        diagnostic: true,
-        body: {
-          name: 'FJ - Find Jobs',
-        },
-      })
-    ).result
-  }
-  if (!org?.auth_domain) throw new Error('Cloudflare Access team domain is missing.')
-  const providers = (await api('/access/identity_providers')).result ?? []
-  let otp = providers.find((provider) => provider.type === 'onetimepin')
-  if (!otp)
-    otp = (
-      await api('/access/identity_providers', {
-        method: 'POST',
-        body: {
-          name: 'Find Jobs email code',
-          type: 'onetimepin',
-          config: {},
-        },
-      })
-    ).result
+/** Sign-in is FJ's own email-code flow now. Remove the legacy Cloudflare
+ * Access application (it intercepted /api/auth/login with a Cloudflare
+ * screen) so no Cloudflare page ever appears in the sign-in journey. */
+export async function removeAccess(api, project, hostname = `${project}.pages.dev`) {
   const domain = `${hostname}/api/auth/login`
-  const apps = (await api('/access/apps')).result ?? []
-  let app = apps.find((item) => item.domain === domain)
-  if (!app)
-    app = (
-      await api('/access/apps', {
-        method: 'POST',
-        body: {
-          name: 'Find Jobs sign-in',
-          domain,
-          type: 'self_hosted',
-          session_duration: '168h',
-          allowed_idps: [otp.id],
-          app_launcher_visible: false,
-          policies: [
-            {
-              name: 'Anyone with a verified email',
-              decision: 'allow',
-              include: [{ everyone: {} }],
-              precedence: 1,
-            },
-          ],
-        },
-      })
-    ).result
-  if (!app?.aud) throw new Error('Cloudflare Access did not return an application audience.')
-  return { ACCESS_TEAM_DOMAIN: org.auth_domain, ACCESS_AUD: app.aud }
+  const apps = (await api('/access/apps', { optional: true }))?.result ?? []
+  const app = apps.find((item) => item.domain === domain)
+  if (!app) return { removed: false }
+  await api(`/access/apps/${app.id}`, { method: 'DELETE' })
+  return { removed: true }
 }
 
 export async function telegramSetup(

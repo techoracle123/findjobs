@@ -104,7 +104,14 @@ export function AuthPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       })
-      if (!response.ok) throw new Error('send-failed')
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null
+        if (body?.error === 'email_not_configured') {
+          setNotice(copy('auth.unavailable'))
+          return
+        }
+        throw new Error('send-failed')
+      }
       setStage('code')
     } catch {
       setNotice(copy('auth.sendFailed'))

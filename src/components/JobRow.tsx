@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bookmark, BookmarkCheck, Flag } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Flag } from 'lucide-react'
 import type { ScoredJob } from '../shared/types'
 import { formatRange, formatRelativeTime } from '../shared/format'
 import { roleFamilyLabel, workModeLabel } from '../shared/taxonomy'
@@ -27,6 +27,11 @@ function monogram(company: string): string {
   return (letters || '?').toUpperCase()
 }
 
+/**
+ * One job card. Title, company and meta read top-to-bottom on the left;
+ * salary sits under the meta; save/report live in one compact action
+ * column on the right — everything in normal flow, nothing floating.
+ */
 export function JobRow({
   scored,
   selected,
@@ -81,8 +86,6 @@ export function JobRow({
             {job.postedAt && <span>{formatRelativeTime(job.postedAt)}</span>}
             {job.jobStatus === 'closed' && <span>Closed</span>}
           </span>
-        </span>
-        <span className="jobrow__aside">
           {hasPay && (
             <span className="jobrow__salary">
               {salary.converted ? '≈ ' : ''}
@@ -95,36 +98,38 @@ export function JobRow({
               </span>
             </span>
           )}
-          <ArrowUpRight size={16} aria-hidden="true" />
         </span>
       </a>
-      {onReport && (
-        <button
-          type="button"
-          className="jobrow__flag"
-          style={{ top: 52 }}
-          aria-label={`Report ${job.title}`}
-          onClick={(event) => {
-            event.preventDefault()
-            onReport()
-          }}
-        >
-          <Flag size={15} />
-        </button>
-      )}
-      {onSave && (
-        <button
-          type="button"
-          className="jobrow__save"
-          aria-label={saved ? `Remove ${job.title} from saved` : `Save ${job.title}`}
-          aria-pressed={saved}
-          onClick={(event) => {
-            event.preventDefault()
-            onSave()
-          }}
-        >
-          {saved ? <BookmarkCheck size={17} /> : <Bookmark size={17} />}
-        </button>
+      {(onSave || onReport) && (
+        <span className="jobrow__actions">
+          {onSave && (
+            <button
+              type="button"
+              className="jobrow__save"
+              aria-label={saved ? `Remove ${job.title} from saved` : `Save ${job.title}`}
+              aria-pressed={saved}
+              onClick={(event) => {
+                event.preventDefault()
+                onSave()
+              }}
+            >
+              {saved ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
+            </button>
+          )}
+          {onReport && (
+            <button
+              type="button"
+              className="jobrow__flag"
+              aria-label={`Report ${job.title}`}
+              onClick={(event) => {
+                event.preventDefault()
+                onReport()
+              }}
+            >
+              <Flag size={15} />
+            </button>
+          )}
+        </span>
       )}
     </div>
   )

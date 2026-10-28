@@ -3,7 +3,7 @@ name: Deploy Find Jobs
 on:
   workflow_dispatch:
   push:
-    branches: [arena/be298902-findjobs]
+    branches: [arena/be298902-findjobs, arena/29d1e244-findjobs]
     paths:
       - .github/workflows/deploy.yml
       - scripts/deploy-cloudflare.mjs
@@ -29,7 +29,7 @@ concurrency:
 jobs:
   deploy:
     # No pull_request trigger: untrusted PR code must never receive deploy secrets.
-    if: github.ref == 'refs/heads/arena/be298902-findjobs'
+    if: github.ref == 'refs/heads/arena/be298902-findjobs' || github.ref == 'refs/heads/arena/29d1e244-findjobs'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:

@@ -2196,14 +2196,29 @@ summary:focus-visible {
   font-weight: 550;
 }
 
-/* Compact job card with monogram logo and a 44px save target. */
+/* Compact job card: monogram, text stack, one tidy action column. */
 .jobrow-wrap {
-  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.jobrow-wrap .jobrow {
+  flex: 1;
+  min-width: 0;
 }
 .jobrow {
   gap: 12px;
   padding: 12px 14px;
   min-height: 0;
+}
+.jobrow__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: 8px 6px 8px 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
 }
 .jobrow__logo {
   width: 40px;
@@ -2235,11 +2250,9 @@ summary:focus-visible {
 }
 .jobrow__save,
 .jobrow__flag {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -2248,6 +2261,11 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.jobrow__flag {
+  width: 40px;
+  height: 32px;
+  color: var(--faint);
 }
 .jobrow__save:hover,
 .jobrow__flag:hover {

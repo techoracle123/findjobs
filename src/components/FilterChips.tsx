@@ -60,7 +60,9 @@ export function FilterChips({
   }, [open])
 
   const showExperience = controlEnabled(coverage, 'seniority', adminControls)
-  const showWorkMode = controlEnabled(coverage, 'workMode', adminControls)
+  // Work type is a first-class filter by product decision: always visible,
+  // even while source coverage for the field is still growing.
+  const showWorkMode = true
   const showSalary = controlEnabled(coverage, 'salary', adminControls)
   const showVerified = adminControls // 100% of the corpus is unverified today.
 
@@ -116,7 +118,11 @@ export function FilterChips({
             aria-expanded={open === 'workMode'}
             onClick={() => toggle('workMode')}
           >
-            <Clock size={13} /> Work mode <ChevronDown size={12} />
+            <Clock size={13} />{' '}
+            {filters.workModes.length
+              ? filters.workModes.map((mode) => WORK_MODE_LABELS[mode as 'remote']).join(', ')
+              : 'Work type'}{' '}
+            <ChevronDown size={12} />
           </button>
         )}
         {showSalary && (

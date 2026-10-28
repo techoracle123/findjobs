@@ -99,6 +99,11 @@ authRoutes.post('/auth/otp/request', async (c) => {
     .bind(crypto.randomUUID(), email, hash(`${email}:${code}`), now + OTP_TTL_MS, now)
     .run()
   const emailer = emailProviderFromEnv(c.env ?? {})
+  // Never pretend a code was emailed when no provider can send it. In
+  // production the console provider would silently drop the code.
+  if (emailer.name === 'console' && c.env?.APP_MODE === 'production') {
+    return c.json({ error: 'email_not_configured' }, 503)
+  }
   await emailer.send({
     to: email,
     subject: 'Your FJ sign-in code',

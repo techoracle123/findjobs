@@ -38,8 +38,8 @@ describe('suggestFromKeywords', () => {
     expect(suggestFromKeywords(SAMPLE).workModes).toContain('remote')
   })
 
-  it('is labelled as the keyword fallback', () => {
-    expect(suggestFromKeywords(SAMPLE).provider).toBe('keyword-fallback')
+  it('is labelled as on-device keyword matching', () => {
+    expect(suggestFromKeywords(SAMPLE).provider).toBe('on-device')
   })
 
   it('reports honestly when nothing is found', () => {

@@ -510,7 +510,7 @@ export default function App() {
           <a href="/jobs" aria-current={view === 'browse' ? 'page' : undefined}>
             Jobs
           </a>
-          <a href="/employers">For employers</a>
+          <a href="/pricing">Pricing</a>
           <a
             className="nav-dashboard"
             href="/dashboard"
@@ -708,10 +708,7 @@ export default function App() {
             coverage={facets?.coverage}
             adminControls={adminControls}
           />
-          <details className="cv-disclosure" open>
-            <summary>Or use your CV</summary>
-            <CvImport onApply={applySuggestion} />
-          </details>
+          <CvImport onApply={applySuggestion} />
           <Footer />
         </main>
       ) : (
@@ -880,18 +877,6 @@ export default function App() {
               </button>
             </p>
           )}
-          <details className="match-help">
-            <summary>
-              <span className="match-help__ring" aria-hidden="true" /> What does the green circle
-              mean?
-            </summary>
-            <p>
-              Add your skills and preferences to see match rings. More green means more overlap with
-              what you’ve added. It’s a guide to help you explore—not a job grade, employer
-              verification or a prediction that you’ll be hired. Open a job to see which preferences
-              match.
-            </p>
-          </details>
           {staleListings && (
             <p className="hint stale-line" role="status">
               {copy('stale.24h')}{' '}

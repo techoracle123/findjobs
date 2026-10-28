@@ -126,14 +126,14 @@ export interface ApiHealth {
   appMode: string
   aiBinding: boolean
   telegramConfigured: boolean
-  /** Cloudflare Access is configured and can issue identities. */
-  accessConfigured: boolean
+  /** A real email provider can send sign-in codes. */
+  emailConfigured: boolean
   /** A payment provider is configured. */
   billingConfigured: boolean
   /** Whether the account routes require a verified identity. */
   authenticationRequired: boolean
-  /** Where to send a person to sign in, when identity is available. */
-  accessLoginUrl: string | null
+  /** Where to send a person to sign in. */
+  signInUrl: string
   dataSource: 'd1' | 'fixture' | 'public-snapshot'
   /** Public browsing can continue independently when this is false. */
   storageAvailable?: boolean
@@ -148,7 +148,7 @@ export interface CvSuggestion {
   seniority: Seniority[]
   workModes: WorkMode[]
   summary: string
-  provider: 'workers-ai' | 'openrouter' | 'keyword-fallback'
+  provider: 'workers-ai' | 'openrouter' | 'keyword-fallback' | 'on-device'
   notes: string[]
 }
 

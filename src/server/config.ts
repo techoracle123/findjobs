@@ -1,13 +1,6 @@
 import type { Env } from './env'
 import type { BillingProviderId } from './billing/types'
 
-export interface AccessConfig {
-  /** The Access team domain, e.g. "myteam.cloudflareaccess.com". */
-  teamDomain: string | null
-  /** The Access application AUD tag that tokens must be issued for. */
-  aud: string | null
-}
-
 export interface TelegramConfig {
   botToken: string | null
   botUsername: string | null
@@ -57,7 +50,8 @@ export interface AppConfig {
   isStaging: boolean
   isTest: boolean
   isLocal: boolean
-  access: AccessConfig
+  /** True when a real email provider can send sign-in codes. */
+  emailConfigured: boolean
   telegram: TelegramConfig
   billing: BillingConfig
   /** True only when a Workers AI binding is actually present. */
@@ -119,10 +113,7 @@ export function readConfig(env: Env): AppConfig {
     isStaging: appMode === 'staging',
     isTest,
     isLocal,
-    access: {
-      teamDomain: env.ACCESS_TEAM_DOMAIN ?? null,
-      aud: env.ACCESS_AUD ?? null,
-    },
+    emailConfigured: Boolean(env.RESEND_API_KEY),
     telegram: {
       botToken: env.TELEGRAM_BOT_TOKEN ?? null,
       botUsername: env.TELEGRAM_BOT_USERNAME || null,
@@ -155,8 +146,8 @@ export function readConfig(env: Env): AppConfig {
   }
 }
 
-export function accessConfigured(config: AppConfig): boolean {
-  return Boolean(config.access.teamDomain && config.access.aud)
+export function emailConfigured(config: AppConfig): boolean {
+  return config.emailConfigured
 }
 
 export function telegramConfigured(config: AppConfig): boolean {

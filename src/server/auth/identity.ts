@@ -1,28 +1,29 @@
 import type { AppConfig } from '../config'
-import { extractBearer, verifyAccessToken } from './access'
-import type { AccessIdentity } from './access'
 import { resolveOwnSession } from '../routes/auth'
 
-export const ACCESS_JWT_HEADER = 'cf-access-jwt-assertion'
-export const ACCESS_EMAIL_HEADER = 'cf-access-authenticated-user-email'
 export const DEV_EMAIL_HEADER = 'x-dev-user-email'
 
+/** A verified identity from FJ's own sign-in (email code + session cookie). */
+export interface Identity {
+  email: string
+  subject: string
+  groups: string[]
+}
+
+/** Back-compat alias for callers written against the old Access type. */
+export type AccessIdentity = Identity
+
 /**
- * Resolves the identity of a request.
- *
- * In production this is always a verified Cloudflare Access token. In local
- * and test modes a header may stand in for Access, so the stack can be
- * exercised without an Access application — but only when the app is not
- * running in a hosted mode, and the bypass is never used to *upgrade* an
- * unverified request into a real one.
+ * Resolves the identity of a request from FJ's own session cookie.
+ * Cloudflare Access is not used anywhere in the sign-in journey.
+ * In local/test modes only, a dev header may stand in for a session.
  */
 export async function resolveIdentity(
   request: Request,
   config: AppConfig,
   now: number = Date.now(),
   db?: D1Database,
-): Promise<AccessIdentity | null> {
-  // Own sessions first (Prompt 18); Access stays valid in parallel (§E).
+): Promise<Identity | null> {
   const ownToken = request.headers
     .get('cookie')
     ?.split(';')
@@ -32,21 +33,6 @@ export async function resolveIdentity(
   if (db && ownToken) {
     const session = await resolveOwnSession(db, ownToken, now)
     if (session) return { email: session.email, subject: session.userId, groups: [] }
-  }
-  const cookie = request.headers
-    .get('cookie')
-    ?.split(';')
-    .map((part) => part.trim())
-    .find((part) => part.startsWith('CF_Authorization='))
-    ?.slice('CF_Authorization='.length)
-  const token =
-    extractBearer(request.headers.get('authorization')) ||
-    request.headers.get(ACCESS_JWT_HEADER) ||
-    cookie ||
-    null
-
-  if (token && config.access.teamDomain && config.access.aud) {
-    return verifyAccessToken(token, config.access, now)
   }
 
   if (!config.isLocal && !config.isTest) {
@@ -65,6 +51,6 @@ export async function resolveIdentity(
   return null
 }
 
-export function isDevIdentity(identity: AccessIdentity): boolean {
+export function isDevIdentity(identity: Identity): boolean {
   return identity.subject.startsWith('dev:')
 }

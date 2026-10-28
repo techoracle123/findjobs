@@ -1,19 +1,11 @@
-import { useEffect, useState } from 'react'
-import {
-  Bookmark,
-  BookmarkCheck,
-  ExternalLink,
-  Flag,
-  LoaderCircle,
-  Send,
-  Sparkles,
-} from 'lucide-react'
-import type { JobAdvice, JobTranslation, Profile, RatesPayload, ScoredJob } from '../shared/types'
+import { useState } from 'react'
+import { Bookmark, BookmarkCheck, ExternalLink, Flag, Send } from 'lucide-react'
+import type { Profile, RatesPayload, ScoredJob } from '../shared/types'
 import { formatRange, formatRelativeTime, PERIOD_LABELS } from '../shared/format'
 import { roleFamilyLabel, seniorityLabel, workModeLabel } from '../shared/taxonomy'
 import { applyLinkOf, isClosed } from '../shared/verification'
 import { ScoreBreakdown } from './ScoreBreakdown'
-import { jobAdvice, recordApplyClick, translateJob } from '../lib/api'
+import { recordApplyClick } from '../lib/api'
 import { copy } from '../shared/copy'
 import { ReportDialog } from './ReportDialog'
 import { LeavingWarning } from './LeavingWarning'
@@ -52,75 +44,13 @@ export function JobDetail({
   const [reporting, setReporting] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [fastMessage, setFastMessage] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
-  const [translation, setTranslation] = useState<JobTranslation | null>(null)
-  const [original, setOriginal] = useState(false)
-  const [translating, setTranslating] = useState(false)
-  const [translationError, setTranslationError] = useState<string | null>(null)
-  const [advice, setAdvice] = useState<JobAdvice | null>(null)
-  const [advising, setAdvising] = useState(false)
-  const [adviceError, setAdviceError] = useState<string | null>(null)
-  const id = scored?.job.id
-
-  useEffect(() => {
-    if (!id) return
-    let cancelled = false
-    setTranslating(true)
-    void translateJob(id)
-      .then((result) => {
-        if (!cancelled) setTranslation(result)
-      })
-      .catch(() => {
-        if (!cancelled)
-          setTranslationError(
-            'Translation is unavailable right now. The original description is shown.',
-          )
-      })
-      .finally(() => {
-        if (!cancelled) setTranslating(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [id])
 
   if (!scored || !salary) return null
   const { job } = scored
   const closed = isClosed(job)
   const applyUrl = applyLinkOf(job)
   const hasPay = job.salaryMin > 0 || job.salaryMax > 0
-  const description =
-    !original && translation?.translated
-      ? translation.description
-      : job.descriptionPreview
-        ? 'Loading the full listing…'
-        : job.description
-  const sourceName = job.sourceName
-    .replace(/\s*(?:Job Board )?API\b/gi, '')
-    .split('—')[0]
-    .trim()
-
-  const requestAdvice = async () => {
-    setAdvising(true)
-    setAdviceError(null)
-    try {
-      setAdvice(await jobAdvice(job.id, profile.skills))
-    } catch {
-      setAdviceError(copy('advice.failed'))
-    } finally {
-      setAdvising(false)
-    }
-  }
-  const retryTranslation = async () => {
-    setTranslating(true)
-    setTranslationError(null)
-    try {
-      setTranslation(await translateJob(job.id))
-    } catch {
-      setTranslationError(copy('translation.failed'))
-    } finally {
-      setTranslating(false)
-    }
-  }
+  const description = job.descriptionPreview ? 'Loading the full listing…' : job.description
 
   return (
     <article className="detail">
@@ -224,7 +154,7 @@ export function JobDetail({
           )}
           {!closed && job.applyMode === 'onsite' && applyUrl && (
             <a className="btn" href={applyUrl} target="_blank" rel="noopener noreferrer">
-              Open original listing <ExternalLink size={13} />
+              Apply on employer site <ExternalLink size={13} />
             </a>
           )}
           <button className="btn" type="button" onClick={onSave}>
@@ -274,42 +204,10 @@ export function JobDetail({
         <section className="detail-section">
           <div className="section-heading">
             <h2>About this role</h2>
-            {translation?.translated && (
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => setOriginal(!original)}
-              >
-                {original ? 'Read in English' : 'View original'}
-              </button>
-            )}
           </div>
-          {translating && (
-            <p className="field__hint" role="status">
-              Preparing the English description…
-            </p>
-          )}
-          {translation?.translated && !original && (
-            <p className="field__hint">
-              AI-translated into English. Check the original wording for important details.
-            </p>
-          )}
-          {(translation?.message || translationError) && (
-            <p className="field__hint">
-              {translationError || translation?.message}{' '}
-              <button
-                type="button"
-                className="text-button"
-                disabled={translating}
-                onClick={() => void retryTranslation()}
-              >
-                Retry translation
-              </button>
-            </p>
-          )}
           <div className="detail__text">
             {description ||
-              'This source only provides a short listing. Open the original listing for the full responsibilities and application instructions.'}
+              'This source only provides a short listing. Open the employer’s page for the full responsibilities and application instructions.'}
           </div>
         </section>
         {(job.requiredSkills.length > 0 || job.usefulSkills.length > 0) && (
@@ -326,49 +224,14 @@ export function JobDetail({
         )}
         <section className="detail-section">
           <div className="section-heading">
-            <h2>Make your application count</h2>
-            <Sparkles size={17} />
+            <h2>Before you apply</h2>
           </div>
-          <p className="field__hint">
-            Get advice tailored to this listing
-            {profile.skills.length ? ' and your listed skills' : ''}. Requesting advice sends the
-            job text and your skills, not your CV, to our AI provider. Suggestions are not employer
-            requirements or a guarantee.
-          </p>
-          <button
-            type="button"
-            className="btn"
-            disabled={advising}
-            onClick={() => void requestAdvice()}
-          >
-            {advising ? <LoaderCircle size={14} className="icon-spin" /> : <Sparkles size={14} />}
-            {advising
-              ? 'Preparing advice…'
-              : advice
-                ? 'Refresh application tips'
-                : 'Get application tips'}
-          </button>
-          {adviceError && (
-            <p role="alert" className="field__hint">
-              {adviceError}
-            </p>
-          )}
-          {advice && (
-            <>
-              <ol className="application-tips">
-                {advice.tips.map((tip) => (
-                  <li key={tip.title}>
-                    <h3>{tip.title}</h3>
-                    <p>{tip.text}</p>
-                  </li>
-                ))}
-              </ol>
-              <p className="field__hint">
-                {advice.message ||
-                  'AI-generated advice. Review it and only include truthful experience in your application.'}
-              </p>
-            </>
-          )}
+          <ul className="application-tips">
+            <li>Read the full role description and check the location and work type.</li>
+            <li>Confirm the employer and role on the employer's own website.</li>
+            <li>Tailor your CV to the skills named in this listing — truthfully.</li>
+            <li>Never pay anyone for a job, an interview, or an application.</li>
+          </ul>
         </section>
         {profile.skills.length > 0 && (
           <details className="detail-section">
@@ -376,11 +239,6 @@ export function JobDetail({
             <ScoreBreakdown components={scored.components} />
           </details>
         )}
-        <footer className="original-listing">
-          <a href={job.sourceUrl || applyUrl || '#'} target="_blank" rel="noopener noreferrer">
-            Original listing{sourceName ? ` · ${sourceName}` : ''} <ExternalLink size={12} />
-          </a>
-        </footer>
       </div>
       {reporting && <ReportDialog jobId={job.id} onClose={() => setReporting(false)} />}
       <LeavingWarning

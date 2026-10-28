@@ -1,4 +1,5 @@
 import type { RawPosting, SourceParser, SourceRef } from './types'
+import { stripHtml } from './html'
 
 /**
  * Public job-board adapters. One parser per response shape; adding a company
@@ -78,20 +79,118 @@ export const remoteok = jsonBoard('remoteok', 'remoteok', (body) =>
     ),
 )
 
-/** Himalayas returns { jobs: [...] }. */
-export const himalayas = jsonBoard('himalayas', 'himalayas', (body) =>
-  ((body as { jobs?: Record<string, unknown>[] }).jobs ?? []).map((item) =>
-    posting(
-      String(item.id ?? item.url),
-      String(item.title ?? ''),
-      String(item.companyName ?? item.company ?? 'Employer not stated'),
-      `https://himalayas.app/jobs/${String(item.slug ?? item.id ?? '')}`,
-      [item.location, item.countries].flat().filter(Boolean).join(', ') || 'Remote',
-      String(item.description ?? ''),
-      { remote: item.remote === true || item.isRemote === true },
-    ),
-  ),
-)
+/** Himalayas returns { jobs: [...] } and paginates with limit/offset. */
+export const himalayas: SourceParser = {
+  id: 'himalayas',
+  name: 'Himalayas',
+  kind: 'api',
+  platform: 'himalayas',
+  homepage: 'https://himalayas.app',
+  attribution: 'Himalayas public job feed',
+  verification: 'unverified',
+  verificationReason: 'A public opportunity; verify with the employer.',
+  async fetchPostings(source: SourceRef, fetchImpl: typeof fetch = fetch) {
+    const pageSize = 100
+    const seen = new Set<string>()
+    const postings: RawPosting[] = []
+    for (let page = 0; page < 10; page += 1) {
+      const url = `${source.listingUrl}?limit=${pageSize}&offset=${page * pageSize}`
+      const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
+      if (!response.ok) {
+        if (page === 0) throw new Error(`himalayas returned ${response.status}`)
+        break
+      }
+      const body = (await response.json()) as { jobs?: Record<string, unknown>[] }
+      const jobs = body.jobs ?? []
+      let fresh = 0
+      for (const item of jobs) {
+        const id = String(item.id ?? item.url ?? '')
+        if (!id || seen.has(id)) continue
+        seen.add(id)
+        fresh += 1
+        postings.push(
+          posting(
+            id,
+            String(item.title ?? ''),
+            String(item.companyName ?? item.company ?? 'Employer not stated'),
+            `https://himalayas.app/jobs/${String(item.slug ?? item.id ?? '')}`,
+            [item.location, item.countries].flat().filter(Boolean).join(', ') || 'Remote',
+            String(item.description ?? ''),
+            { remote: true },
+          ),
+        )
+      }
+      if (jobs.length < pageSize || fresh === 0) break
+    }
+    return postings
+  },
+}
+
+/**
+ * The Muse public jobs API: 20 results per page, `page` is zero-based.
+ * Contents arrive as HTML and are stripped to text like every other source.
+ */
+export const themuse: SourceParser = {
+  id: 'themuse',
+  name: 'The Muse',
+  kind: 'api',
+  platform: 'themuse',
+  homepage: 'https://www.themuse.com',
+  attribution: 'The Muse public jobs feed',
+  verification: 'unverified',
+  verificationReason: 'A public opportunity; verify with the employer.',
+  async fetchPostings(source: SourceRef, fetchImpl: typeof fetch = fetch) {
+    const seen = new Set<string>()
+    const postings: RawPosting[] = []
+    for (let page = 0; page < 25; page += 1) {
+      const base = source.listingUrl || 'https://www.themuse.com/api/public/jobs'
+      const response = await fetchImpl(`${base}?page=${page}`, {
+        headers: { accept: 'application/json' },
+      })
+      if (!response.ok) {
+        if (page === 0) throw new Error(`themuse returned ${response.status}`)
+        break
+      }
+      const body = (await response.json()) as {
+        results?: Record<string, unknown>[]
+        page_count?: number
+      }
+      const results = body.results ?? []
+      let fresh = 0
+      for (const item of results) {
+        const id = String(item.id ?? '')
+        if (!id || seen.has(id)) continue
+        seen.add(id)
+        fresh += 1
+        const company = (item.company ?? {}) as { name?: string }
+        const refs = (item.refs ?? {}) as { landing_page?: string }
+        const locations = Array.isArray(item.locations)
+          ? (item.locations as { name?: string }[])
+              .map((loc) => loc.name)
+              .filter(Boolean)
+              .join(', ')
+          : ''
+        postings.push(
+          posting(
+            id,
+            String(item.name ?? ''),
+            String(company.name ?? 'Employer not stated'),
+            String(refs.landing_page ?? ''),
+            locations,
+            stripHtml(String(item.contents ?? '')),
+            {
+              publishedAt: typeof item.publication_date === 'string' ? item.publication_date : null,
+              remote: /flexible|remote/i.test(locations),
+            },
+          ),
+        )
+      }
+      if (!results.length || fresh === 0) break
+      if (typeof body.page_count === 'number' && page + 1 >= body.page_count) break
+    }
+    return postings
+  },
+}
 
 /** Working Nomads exposes [{...}] with url/title/company. */
 export const workingNomads = jsonBoard('workingnomads', 'workingnomads', (body) =>
@@ -203,6 +302,7 @@ export const hnHiring: SourceParser = {
 export const PUBLIC_BOARD_PARSERS: SourceParser[] = [
   remoteok,
   himalayas,
+  themuse,
   workingNomads,
   jobicy,
   workable,
