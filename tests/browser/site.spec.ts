@@ -225,20 +225,18 @@ test('dedicated sign-up, sign-in and recovery pages work on small phones', async
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
 })
 
-test('match rings are visible on phones, explained, and never show a numeric grade', async ({
-  page,
-}) => {
+test('match rings are visible on phones and never show a numeric grade', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/profile')
   await page.getByLabel('Skills', { exact: true }).fill('Python')
   await page.getByLabel('Skills', { exact: true }).press('Enter')
   await page.getByLabel('preferred profession', { exact: false }).selectOption('administration')
   await page.goto('/')
-  await expect(page.locator('.scorebadge, .match-help__ring').first()).toBeVisible()
+  await expect(page.locator('.scorebadge').first()).toBeVisible()
   const ringText = await page.locator('.joblist').first().innerText()
   expect(ringText).not.toMatch(/\b\d{1,3}%\b/)
-  await page.locator('.match-help summary').click()
-  await expect(page.locator('.match-help')).toContainText('guide')
+  // The green-circle explainer was removed by product decision.
+  await expect(page.locator('.match-help')).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
@@ -487,13 +485,13 @@ test('UI controls with no backing data stay hidden unless admin override', async
   const facets = (
     await (await page.request.get('/api/jobs?status=open&limit=1', { timeout: 30_000 })).json()
   ).facets
-  if (facets.coverage.workMode < 0.6)
-    await expect(page.getByRole('button', { name: /Work mode/ })).toHaveCount(0)
+  // Work type is always visible by product decision, whatever the coverage.
+  await expect(page.getByRole('button', { name: /Work type/ })).toHaveCount(1)
   if (facets.coverage.seniority < 0.6)
     await expect(page.getByRole('button', { name: /Experience/ })).toHaveCount(0)
   if (facets.coverage.salary < 0.6) await expect(page.locator('#sort option')).toHaveCount(2)
   // The admin override always exposes every control for testing.
   await page.goto('/?adminControls=1')
-  await expect(page.getByRole('button', { name: /Work mode/ })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /Work type/ })).toHaveCount(1)
   await expect(page.getByRole('button', { name: /Verified only/ })).toHaveCount(1)
 })
