@@ -395,9 +395,24 @@ test('What and Where search suggestions are keyboard navigable', async ({ page }
 })
 
 test('filter combinations are shareable and survive reload', async ({ page }) => {
-  // Pick a profession that exists in whatever real corpus is loaded.
-  const facets = (await (await page.request.get('/api/jobs?status=open&limit=1')).json()).facets
-  const profession = Object.entries(facets.professions as Record<string, number>)
+  // Pick a profession that exists in whatever real corpus is loaded. The
+  // probe retries: right after a deploy the public snapshot republish can
+  // make the first request slow (observed >60s on 2026-10-27).
+  let facets: { professions: Record<string, number> } | undefined
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get('/api/jobs?status=open&limit=1', {
+          timeout: 20_000,
+        })
+        if (!response.ok()) return false
+        facets = ((await response.json()) as { facets: typeof facets }).facets
+        return facets !== undefined
+      },
+      { timeout: 90_000, intervals: [1000, 2000, 5000] },
+    )
+    .toBe(true)
+  const profession = Object.entries(facets!.professions)
     .filter(([id, count]) => id !== 'unknown' && count > 0)
     .sort((a, b) => b[1] - a[1])[0]?.[0]
   expect(profession).toBeTruthy()
