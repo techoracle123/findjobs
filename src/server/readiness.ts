@@ -1,5 +1,5 @@
 import type { Env } from './env'
-import { accessConfigured, readConfig, telegramConfigured } from './config'
+import { emailConfigured, readConfig, telegramConfigured } from './config'
 import { hasRealProvider, providerFor } from './billing/provider'
 import { planCatalogue } from './billing/pricing'
 import { getRates } from './rates'
@@ -125,24 +125,23 @@ export async function buildReadiness(env: Env): Promise<ReadinessReport> {
 
   /* ---------- identity ---------- */
 
-  if (accessConfigured(config)) {
+  if (emailConfigured(config)) {
     checks.push({
       id: 'identity',
-      name: 'Sign-in (Cloudflare Access)',
+      name: 'Sign-in (FJ email codes)',
       status: 'ok',
       required: production,
-      detail: `Access is configured for ${config.access.teamDomain}.`,
+      detail: 'Email sign-in codes can be sent.',
       action: null,
     })
   } else {
     checks.push({
       id: 'identity',
-      name: 'Sign-in (Cloudflare Access)',
+      name: 'Sign-in (FJ email codes)',
       status: production ? 'missing' : 'warn',
       required: production,
-      detail: 'No Access application is configured, so every visitor is anonymous.',
-      action:
-        'Set ACCESS_TEAM_DOMAIN and ACCESS_AUD, then protect the app with an Access application.',
+      detail: 'No email provider is configured, so sign-in codes cannot be sent yet.',
+      action: 'Set RESEND_API_KEY (and EMAIL_FROM) so FJ can email sign-in codes.',
     })
   }
 

@@ -8,7 +8,7 @@ export function Footer() {
         <a href="/terms">Terms</a>
         <a href="/scams">How to spot a job scam</a>
         <a href="/faq">FAQ</a>
-        <a href="/employers">For employers</a>
+        <a href="/pricing">Pricing</a>
         <a href="/contact">Contact</a>
       </nav>
       <p>

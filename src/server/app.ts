@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { AppEnv } from './env'
 import { DEFAULT_APP_MODE } from './env'
-import { accessConfigured, readConfig, telegramConfigured } from './config'
+import { emailConfigured, readConfig, telegramConfigured } from './config'
 import { hasRealProvider } from './billing/provider'
 import { listOpenJobs, findJob, searchJobs } from './jobs'
 import { getRates } from './rates'
@@ -89,22 +89,17 @@ app.get('/api/auth/status', async (c) => {
   return c.json({
     authenticated: !!identity,
     email: identity?.email || null,
-    configured: accessConfigured(readConfig(c.env || {})),
+    configured: emailConfigured(readConfig(c.env || {})),
+    emailConfigured: emailConfigured(readConfig(c.env || {})),
   })
 })
 
+// Sign-in is FJ's own email-code flow. This legacy path simply forwards to
+// the sign-in page; Cloudflare Access plays no part anywhere.
 app.get('/api/auth/login', async (c) => {
-  const identity = await resolveIdentity(c.req.raw, readConfig(c.env ?? {}), Date.now(), c.env?.DB)
-  if (!identity)
-    return c.json(
-      {
-        error: 'sign_in_unavailable',
-        message: 'Sign-in is not available yet. You can still browse and save jobs on this device.',
-      },
-      503,
-    )
-  const returnTo = c.req.query('returnTo') || '/'
-  return c.redirect(/^\/(?:dashboard|jobs\/[A-Za-z0-9_-]+)?$/.test(returnTo) ? returnTo : '/')
+  const returnTo = c.req.query('returnTo') || '/dashboard'
+  const safe = /^\/(?:dashboard|jobs\/[A-Za-z0-9_-]+)?$/.test(returnTo) ? returnTo : '/dashboard'
+  return c.redirect(`/auth/login?returnTo=${encodeURIComponent(safe)}`)
 })
 
 /**
@@ -245,17 +240,17 @@ app.get('/api/health', async (c) => {
     : null
   const rates = await getRates(config.appMode !== 'test', env.DB)
   const storageAvailable = Boolean(count)
-  const accessLoginUrl = accessConfigured(config) ? '/api/auth/login' : null
+  const signInUrl = '/auth/login'
   c.header('Cache-Control', 'private, no-store')
   return c.json({
     ok: true,
     appMode: config.appMode || DEFAULT_APP_MODE,
     aiBinding: config.aiEnabled,
     telegramConfigured: telegramConfigured(config),
-    accessConfigured: accessConfigured(config),
+    emailConfigured: emailConfigured(config),
     billingConfigured: hasRealProvider(config),
     authenticationRequired: config.isProduction,
-    accessLoginUrl,
+    signInUrl,
     dataSource: published ? 'public-snapshot' : 'd1',
     jobCount: published?.jobs.length ?? count?.n ?? 0,
     storageAvailable,

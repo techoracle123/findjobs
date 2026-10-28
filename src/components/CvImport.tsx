@@ -1,60 +1,56 @@
 import { useRef, useState } from 'react'
-import { FileText, LoaderCircle, Sparkles, Upload } from 'lucide-react'
+import { FileText, LoaderCircle, Upload } from 'lucide-react'
 import { copy } from '../shared/copy'
 import type { CvSuggestion } from '../shared/types'
-import { suggestFromCv } from '../lib/api'
+import { suggestFromKeywords } from '../shared/cv-suggest'
 
 interface CvImportProps {
   onApply: (suggestion: CvSuggestion) => void
 }
 
 /**
- * Parses a CV in the browser and asks the API for profile suggestions. Only
- * the extracted text is sent; the file itself never leaves the device.
+ * CV upload that never leaves the device: the file is read in the browser,
+ * skills are matched against the catalogue locally, and nothing is sent to
+ * a server or any third party. The user reviews the detected skills and
+ * chooses whether to apply them.
  */
 export function CvImport({ onApply }: CvImportProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
-  const [stage, setStage] = useState<'idle' | 'extracting' | 'suggesting'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [suggestion, setSuggestion] = useState<CvSuggestion | null>(null)
+  const [applied, setApplied] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
 
-  const [acknowledged, setAcknowledged] = useState(false)
-
   const handleFile = async (file: File) => {
-    if (!acknowledged) {
-      setError(copy('cv.needsNotice'))
-      return
-    }
     setError(null)
     setSuggestion(null)
+    setApplied(false)
     setBusy(true)
-    setStage('extracting')
     setFileName(file.name)
-
     try {
       // Lazy-loaded so the PDF/DOCX parser stays out of the main bundle.
       const { extractCvText } = await import('../lib/cv/extract')
       const extracted = await extractCvText(file)
-
-      setStage('suggesting')
-      const result = await suggestFromCv(extracted.text)
-      setSuggestion(result)
+      setSuggestion(suggestFromKeywords(extracted.text))
     } catch {
       setError(copy('cv.unreadable'))
     } finally {
       setBusy(false)
-      setStage('idle')
     }
   }
 
   return (
     <section className="panel">
       <div className="panel__head">
-        <h2 className="panel__title">Import a CV</h2>
+        <h2 className="panel__title">Upload your CV</h2>
       </div>
       <div className="panel__body">
+        <p className="panel__note">
+          Add a PDF, DOCX or TXT CV and we will fill in your skills and preferences automatically.
+          Your file is read on this device only — it is never uploaded or shared. Scanned-image PDFs
+          are not supported.
+        </p>
         <input
           ref={inputRef}
           type="file"
@@ -67,26 +63,15 @@ export function CvImport({ onApply }: CvImportProps) {
             if (file) void handleFile(file)
           }}
         />
-        <label className="cv-notice">
-          <input
-            type="checkbox"
-            checked={acknowledged}
-            onChange={(event) => setAcknowledged(event.target.checked)}
-          />
-          <span>
-            I understand that the text I upload is sent to FJ’s AI provider, OpenRouter, to generate
-            suggestions. The file itself stays on my device. See <a href="/privacy">Privacy</a>.
-          </span>
-        </label>
         <div className="btnrow">
           <button
             type="button"
-            className="btn"
+            className="btn btn--primary"
             onClick={() => inputRef.current?.click()}
-            disabled={busy || !acknowledged}
+            disabled={busy}
           >
             {busy ? <LoaderCircle size={14} className="icon-spin" /> : <Upload size={14} />}
-            {busy ? 'Reading…' : 'Choose file'}
+            {busy ? 'Reading your CV…' : 'Choose CV file'}
           </button>
           {fileName && !busy && (
             <span className="field__hint" style={{ alignSelf: 'center' }}>
@@ -95,20 +80,8 @@ export function CvImport({ onApply }: CvImportProps) {
           )}
         </div>
 
-        <p className="panel__note">
-          Choosing a PDF, DOCX or TXT file sends its extracted text to our server and, when enabled,
-          OpenRouter for profile suggestions. Remove personal details first. The file itself stays
-          on your device. Scanned PDFs are not supported.
-        </p>
-
-        {busy && (
-          <p className="field__hint">
-            {stage === 'extracting' ? 'Extracting text in the browser…' : 'Deriving suggestions…'}
-          </p>
-        )}
-
         {error && (
-          <div className="banner banner--demo">
+          <div className="banner banner--demo" role="alert">
             <FileText size={15} />
             <span>{error}</span>
           </div>
@@ -117,12 +90,11 @@ export function CvImport({ onApply }: CvImportProps) {
         {suggestion && (
           <div className="stack stack--sm">
             <div className="section__label" style={{ margin: 0 }}>
-              Suggestions
+              Found in your CV
             </div>
             <p className="field__hint" style={{ margin: 0 }}>
               {suggestion.summary}
             </p>
-
             {suggestion.skills.length > 0 && (
               <div className="taglist">
                 {suggestion.skills.map((skill) => (
@@ -132,7 +104,6 @@ export function CvImport({ onApply }: CvImportProps) {
                 ))}
               </div>
             )}
-
             {suggestion.notes.length > 0 && (
               <ul style={{ margin: 0, paddingLeft: 16, color: 'var(--muted)', fontSize: 12 }}>
                 {suggestion.notes.map((note) => (
@@ -140,21 +111,18 @@ export function CvImport({ onApply }: CvImportProps) {
                 ))}
               </ul>
             )}
-
             <div className="btnrow">
               <button
                 type="button"
                 className="btn btn--primary btn--sm"
-                onClick={() => onApply(suggestion)}
+                disabled={applied}
+                onClick={() => {
+                  onApply(suggestion)
+                  setApplied(true)
+                }}
               >
-                <Sparkles size={13} />
-                Apply to profile
+                {applied ? 'Added to your profile' : 'Add to my profile'}
               </button>
-              <span className="field__hint" style={{ alignSelf: 'center' }}>
-                {suggestion.provider === 'keyword-fallback'
-                  ? 'Keyword-based suggestions'
-                  : 'AI-generated suggestions'}
-              </span>
             </div>
           </div>
         )}

@@ -6,7 +6,7 @@ import ts from 'typescript'
 import { bootstrapPublicFeed } from './bootstrap-public-feed.mjs'
 import {
   annotation,
-  provisionAccess,
+  removeAccess,
   reservePageNames,
   telegramSetup,
   pageSecrets,
@@ -261,20 +261,19 @@ export async function main() {
   } catch (error) {
     annotation('warning', 'Alternative name check incomplete', error.message)
   }
-  let access = {}
+  // FJ sign-in is built in (email codes). Make sure no legacy Cloudflare
+  // Access application intercepts the sign-in journey.
   try {
-    access = await provisionAccess(api, project, hostname)
-    annotation('notice', 'Sign-in configured', 'Cloudflare Access email sign-in is configured.')
+    const result = await removeAccess(api, project, hostname)
+    annotation(
+      'notice',
+      'Sign-in configured',
+      result.removed
+        ? 'Legacy Cloudflare Access application removed; FJ email-code sign-in is the only sign-in.'
+        : 'FJ email-code sign-in is the only sign-in (no Cloudflare Access application found).',
+    )
   } catch (error) {
-    annotation('warning', 'Sign-in provisioning blocked', error.message)
-    for (const path of ['/access/apps', '/access/identity_providers']) {
-      try {
-        await api(path, { diagnostic: true })
-        annotation('notice', 'Access permission diagnostic', `${path} is readable.`)
-      } catch (failure) {
-        annotation('warning', 'Access permission diagnostic', failure.message)
-      }
-    }
+    annotation('warning', 'Access removal incomplete', error.message)
   }
   const telegram = await telegramSetup(
     process.env.TELEGRAM_BOT_TOKEN?.trim(),
@@ -294,6 +293,16 @@ export async function main() {
         TELEGRAM_WEBHOOK_SECRET: telegram.secret,
       }
     : {}
+  if (process.env.RESEND_API_KEY?.trim()) {
+    secrets.RESEND_API_KEY = process.env.RESEND_API_KEY.trim()
+    if (process.env.EMAIL_FROM?.trim()) secrets.EMAIL_FROM = process.env.EMAIL_FROM.trim()
+    annotation('notice', 'Email sign-in configured', 'Sign-in codes will be emailed by Resend.')
+  } else
+    annotation(
+      'warning',
+      'Email sign-in not configured',
+      'Save RESEND_API_KEY as an encrypted repository secret so FJ can email sign-in codes. Until then sign-in honestly reports itself unavailable.',
+    )
   if (process.env.OPENROUTER_API_KEY?.trim()) {
     secrets.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY.trim()
     annotation(
@@ -308,7 +317,7 @@ export async function main() {
       'Save a rotated OPENROUTER_API_KEY as an encrypted repository secret to enable English translation and AI advice.',
     )
   await pageSecrets(api, project, secrets)
-  const vars = { ...access, ...(telegram ? { TELEGRAM_BOT_USERNAME: telegram.username } : {}) }
+  const vars = { ...(telegram ? { TELEGRAM_BOT_USERNAME: telegram.username } : {}) }
   const files = ['wrangler.jsonc', 'wrangler.ingest.jsonc', 'wrangler.ingest-consumer.jsonc']
   const originals = new Map()
   try {
@@ -472,7 +481,7 @@ export async function main() {
     if (process.env.GITHUB_STEP_SUMMARY) {
       await writeFile(
         process.env.GITHUB_STEP_SUMMARY,
-        `## Find Jobs deployed\n\n${url}\n\n${feed.total} live open jobs. Payments disabled.\nSign-in: ${Object.keys(access).length ? 'configured' : 'requires Access permissions'}. Telegram: ${telegram ? 'bot and webhook verified' : 'requires encrypted bot token'}.\n`,
+        `## Find Jobs deployed\n\n${url}\n\n${feed.total} live open jobs. Payments disabled.\nSign-in: FJ email codes${process.env.RESEND_API_KEY?.trim() ? ' (email sending on)' : ' (needs RESEND_API_KEY)'}. Telegram: ${telegram ? 'bot and webhook verified' : 'requires encrypted bot token'}.\n`,
         { flag: 'a' },
       )
     }

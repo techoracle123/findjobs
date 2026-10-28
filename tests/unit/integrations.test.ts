@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 // @ts-expect-error Deployment helpers run as plain JavaScript in Node.
 import * as integrations from '../../scripts/cloudflare-integrations.mjs'
 
-const { telegramSetup, provisionAccess, workerSecrets, reservePageNames } = integrations
+const { telegramSetup, removeAccess, workerSecrets, reservePageNames } = integrations
 
 describe('encrypted deployment integrations', () => {
   it('does not call Telegram without an encrypted token', async () => {
@@ -47,25 +47,22 @@ describe('encrypted deployment integrations', () => {
       'secret-token',
     )
   })
-  it('creates a login-only Access application with verified email OTP', async () => {
+  it('deletes the legacy Access application that intercepted sign-in', async () => {
     const api = vi
       .fn()
-      .mockResolvedValueOnce({ result: { auth_domain: 'team.cloudflareaccess.com' } })
-      .mockResolvedValueOnce({ result: [{ id: 'otp-id', type: 'onetimepin' }] })
-      .mockResolvedValueOnce({ result: [] })
-      .mockResolvedValueOnce({ result: { aud: 'app-aud' } })
-    expect(await provisionAccess(api, 'find-jobs', 'assigned.pages.dev')).toEqual({
-      ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com',
-      ACCESS_AUD: 'app-aud',
-    })
-    const application = api.mock.calls[3][1].body
-    expect(application.domain).toBe('assigned.pages.dev/api/auth/login')
-    expect(application.allowed_idps).toEqual(['otp-id'])
-    expect(application.policies[0].decision).toBe('allow')
+      .mockResolvedValueOnce({
+        result: [
+          { id: 'other-app', domain: 'elsewhere.example.com' },
+          { id: 'login-app', domain: 'assigned.pages.dev/api/auth/login' },
+        ],
+      })
+      .mockResolvedValueOnce({ result: true })
+    expect(await removeAccess(api, 'find-jobs', 'assigned.pages.dev')).toEqual({ removed: true })
+    expect(api.mock.calls[1]).toEqual(['/access/apps/login-app', { method: 'DELETE' }])
   })
-  it('does not bypass Access permissions or overwrite unrelated apps', async () => {
-    const api = vi.fn().mockRejectedValue(new Error('HTTP 403'))
-    await expect(provisionAccess(api, 'find-jobs')).rejects.toThrow('HTTP 403')
+  it('does nothing when no legacy Access application exists', async () => {
+    const api = vi.fn().mockResolvedValueOnce({ result: [] })
+    expect(await removeAccess(api, 'find-jobs')).toEqual({ removed: false })
     expect(api).toHaveBeenCalledTimes(1)
   })
   it('stores worker credentials only as secret_text', async () => {
@@ -90,24 +87,4 @@ it('confirms alternative hostnames from Cloudflare assignment, not missing DNS',
     { requested: 'find-jobs-fj.pages.dev', assigned: 'find-jobs-fj-xyz.pages.dev', exact: false },
   ])
   expect(api).toHaveBeenCalledTimes(3)
-})
-
-it('bootstraps only the explicit Access-not-enabled account state with the documented creation API', async () => {
-  const api = vi
-    .fn()
-    .mockRejectedValueOnce(
-      new Error('HTTP 403: access.api.error.not_enabled: Access is not enabled'),
-    )
-    .mockResolvedValueOnce({ result: { auth_domain: 'generated-team.cloudflareaccess.com' } })
-    .mockResolvedValueOnce({ result: [{ id: 'otp', type: 'onetimepin' }] })
-    .mockResolvedValueOnce({ result: [] })
-    .mockResolvedValueOnce({ result: { aud: 'audience' } })
-  expect(await provisionAccess(api, 'find-jobs', 'assigned.pages.dev')).toEqual({
-    ACCESS_TEAM_DOMAIN: 'generated-team.cloudflareaccess.com',
-    ACCESS_AUD: 'audience',
-  })
-  expect(api.mock.calls[1]).toEqual([
-    '/access/organizations',
-    { method: 'POST', diagnostic: true, body: { name: 'FJ - Find Jobs' } },
-  ])
 })

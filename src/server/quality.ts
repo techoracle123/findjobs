@@ -231,12 +231,17 @@ export function salaryPlausible(
 const WORK_MODE_SIGNALS: { mode: WorkMode; pattern: RegExp }[] = [
   {
     mode: 'remote',
-    pattern: /\b(?:fully remote|100% remote|remote[- ]only|work from home|wfh|telecommut)/i,
+    pattern:
+      /\b(?:fully remote|100% remote|remote[- ]only|remote[- ]first|work from home|work remotely|home[- ]based|wfh|telecommut|telework|distributed team)\b/i,
   },
-  { mode: 'hybrid', pattern: /\bhybrid\b/i },
+  {
+    mode: 'hybrid',
+    pattern: /\bhybrid\b|\b\d\s*days?\s*(?:per|a)\s*week\s*(?:in|at)\s*(?:the\s*)?office\b/i,
+  },
   {
     mode: 'onsite',
-    pattern: /\b(?:on[- ]?site|in[- ]?office|office[- ]based|on[- ]premises|work from office)\b/i,
+    pattern:
+      /\b(?:on[- ]?site|in[- ]?office|in[- ]person|office[- ]based|on[- ]premises|work from office)\b/i,
   },
 ]
 

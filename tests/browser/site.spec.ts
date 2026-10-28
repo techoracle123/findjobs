@@ -135,13 +135,29 @@ test('job deep links, browser history and scroll return to the results', async (
   await expect(page).not.toHaveURL(jobUrl)
 })
 
-test('application advice is usable with or without an AI key', async ({ page }) => {
+test('pricing is linked in the header and the page loads', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('.topnav').getByRole('link', { name: 'Pricing' }).click()
+  await expect(page).toHaveURL(/\/pricing$/)
+  await expect(page.getByRole('heading', { name: 'Simple pricing' })).toBeVisible()
+})
+
+test('work type filter is visible and employers link is gone', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: /Work type/ }).click()
+  await page.getByRole('button', { name: 'Remote', exact: true }).click()
+  await expect(page).toHaveURL(/mode=remote/)
+  await expect(page.getByText('What does the green circle mean?')).toHaveCount(0)
+  await expect(page.locator('.topnav').getByText('For employers')).toHaveCount(0)
+})
+
+test('job detail shows a plain before-you-apply checklist and no AI panels', async ({ page }) => {
   await page.goto('/')
   await page.locator('.joblist .jobrow').first().click()
-  await page.getByRole('button', { name: 'Get application tips' }).click()
-  await expect(page.locator('.detail__body')).toContainText(/tip|advice|CV|employer/i, {
-    timeout: 45000,
-  })
+  await expect(page.getByRole('heading', { name: 'Before you apply' })).toBeVisible()
+  await expect(page.locator('.detail')).toContainText(/Never pay anyone/)
+  await expect(page.getByText(/Original listing ·/)).toHaveCount(0)
+  await expect(page.getByText(/AI-generated|Get application tips/)).toHaveCount(0)
 })
 
 test('Nigeria and general professions are selectable without repetitive badges', async ({
@@ -174,13 +190,12 @@ test('public browsing and sign-in availability are reported honestly', async ({ 
   expect(health).toEqual({ ok: true }) // never a stack map to anonymous callers
   const status = await (await request.get('/api/auth/status')).json()
   expect((await request.get('/')).ok()).toBe(true)
+  void status
+  // Sign-in is FJ's own page. No Cloudflare Access screen anywhere.
   const login = await request.get('/api/auth/login', { maxRedirects: 0 })
-  if (!status.configured) {
-    expect([503]).toContain(login.status())
-    return
-  }
   expect([302, 303]).toContain(login.status())
-  expect(login.headers().location).toMatch(/^https:\/\/[^/]+\.cloudflareaccess\.com\//)
+  expect(login.headers().location).toMatch(/\/auth\/login/)
+  expect(login.headers().location).not.toMatch(/cloudflareaccess/)
   expect((await request.get('/')).ok()).toBe(true)
 })
 

@@ -3,7 +3,7 @@ name: Deploy Find Jobs
 on:
   workflow_dispatch:
   push:
-    branches: [arena/be298902-findjobs]
+    branches: [arena/be298902-findjobs, arena/29d1e244-findjobs]
     paths:
       - .github/workflows/deploy.yml
       - scripts/deploy-cloudflare.mjs
