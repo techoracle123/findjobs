@@ -57,6 +57,12 @@ const entries: CopyEntry[] = [
     where: 'Auth pages',
   },
   {
+    id: 'auth.rateLimited',
+    text: 'Too many codes requested. Wait about 10 minutes, then try again — and check your spam folder for the last one.',
+    className: USER_ACTION,
+    where: 'Auth pages',
+  },
+  {
     id: 'auth.codeInvalid',
     text: 'That code doesn’t match. Check the latest email and try again.',
     className: USER_ACTION,
@@ -191,13 +197,8 @@ const entries: CopyEntry[] = [
     where: 'Admin pages',
   },
   // ── Legally mandated disclosures: the only named-party copy. ──
-  {
-    id: 'legal.aiProvider',
-    text: 'When you use AI features, the text you submit is sent to our AI provider, OpenRouter.',
-    className: DEGRADED,
-    where: '/privacy',
-    legal: true,
-  },
+  // (Empty today: CV matching runs on-device and no user text leaves the
+  // browser, so there is no third-party processor left to disclose.)
 ]
 
 export const COPY: Record<string, CopyEntry> = Object.fromEntries(

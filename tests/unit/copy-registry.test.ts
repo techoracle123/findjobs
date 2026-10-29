@@ -17,10 +17,13 @@ describe('copy registry', () => {
     }
   })
 
-  it('keeps the mandated OpenRouter disclosure as the only legal entry', () => {
+  it('carries no vendor names in any user-facing string', () => {
+    // The old AI-provider disclosure went with the AI features themselves:
+    // CV matching is on-device now, so nothing user-facing may name a vendor.
+    const banned = /OpenRouter|Cloudflare|Resend|Greenhouse|Ashby|Lever/
+    for (const entry of Object.values(COPY)) expect(entry.text).not.toMatch(banned)
     const legal = Object.entries(COPY).filter(([, entry]) => entry.legal)
-    expect(legal.length).toBe(1)
-    expect(legal[0][0]).toBe('legal.aiProvider')
+    expect(legal.length).toBe(0)
   })
 
   it('renders nothing for INTERNAL failures', () => {

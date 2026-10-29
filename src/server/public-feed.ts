@@ -61,8 +61,19 @@ export interface PublicSnapshot {
   duplicatesDropped?: number
 }
 
+/**
+ * A disable is a cooldown, not a life sentence: after 24 hours the source
+ * gets one more chance. Without this, every board knocked out by a since-
+ * fixed bug (the robots.txt misfire disabled all of Ashby) stays dead
+ * forever even though the underlying problem is gone.
+ */
+const DISABLED_COOLDOWN_MS = 24 * 3600_000
+
 export async function isSourceDisabled(kv: KVNamespace, sourceId: string): Promise<boolean> {
-  return Boolean(await kv.get(`source:disabled:${sourceId}`))
+  const record = await kv.get<{ at?: number }>(`source:disabled:${sourceId}`, 'json')
+  if (!record) return false
+  if (typeof record.at === 'number' && Date.now() - record.at > DISABLED_COOLDOWN_MS) return false
+  return true
 }
 
 /** One source's last observed run, as shown to operators. */
@@ -123,6 +134,15 @@ export async function noteSourceHealth(
       itemCount: extra.itemCount ?? null,
     }),
   )
+  if (ok) {
+    // A success clears any disable outright; the cooldown is only the
+    // backstop for sources nobody has retried yet.
+    try {
+      await kv.delete(`source:disabled:${sourceId}`)
+    } catch {
+      /* The 24h cooldown still applies if the delete races. */
+    }
+  }
   if (fails >= 3) {
     await kv.put(
       `source:disabled:${sourceId}`,

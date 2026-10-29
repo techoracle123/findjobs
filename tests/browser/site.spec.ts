@@ -199,25 +199,30 @@ test('public browsing and sign-in availability are reported honestly', async ({ 
   expect((await request.get('/')).ok()).toBe(true)
 })
 
-test('dedicated sign-up, sign-in and recovery pages work on small phones', async ({ page }) => {
+test('one unified sign-in, sign-up and recovery flow works on small phones', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 750 })
+  // Sign-up and sign-in are the same passwordless page: one email, one code.
   await page.goto('/auth/signup')
-  await expect(page.getByRole('heading', { name: 'Create your free account' })).toBeVisible()
-  await expect(page.locator('.auth-card')).toContainText(
-    'first verified email sign-in creates your account',
-  )
-  await page.getByRole('link', { name: 'Sign in', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
-  await page.getByRole('link', { name: 'Forgot password or can’t sign in?' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Sign in or create your free account' }),
+  ).toBeVisible()
+  await expect(page.locator('.auth-card')).toContainText('creates your free account')
+  await page.goto('/auth/login')
+  await expect(
+    page.getByRole('heading', { name: 'Sign in or create your free account' }),
+  ).toBeVisible()
+  await page.getByRole('link', { name: 'Can’t get into your email?' }).click()
   await expect(page).toHaveURL(/\/auth\/recovery/)
   await expect(page.getByRole('heading', { name: 'Recover your account' })).toBeVisible()
-  await expect(page.locator('.auth-card')).toContainText('FJ is passwordless')
+  await expect(page.locator('.auth-card')).toContainText('FJ has no passwords')
   await expect(page.locator('.auth-card')).toContainText('inbox and spam folder')
   // Own sign-in (Prompt 18): the card carries our own email + code flow.
   await page.getByRole('link', { name: 'Back to sign in' }).click()
-  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Sign in or create your free account' }),
+  ).toBeVisible()
   await expect(page.getByLabel('Email')).toBeVisible()
-  await expect(page.getByRole('button', { name: /Send me a code/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Email me a code/ })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )

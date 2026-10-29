@@ -314,7 +314,12 @@ app.get('/api/jobs', async (c) => {
       updatedAt: published.refreshedAt,
       refreshHours: published.refreshHours,
       sourceCount: published.sourceCount,
-      ...(published.olderSources ? { warning: 'stale' } : {}),
+      // Stale means the snapshot itself is old — computed from its age at
+      // request time, never from whether some source index is ageing (that
+      // pinned this warning on permanently while data was an hour old).
+      ...(Date.now() - Date.parse(published.refreshedAt) > 12 * 3600_000
+        ? { warning: 'stale' }
+        : {}),
     })
   }
 

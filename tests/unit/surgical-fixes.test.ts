@@ -172,6 +172,44 @@ describe('plan catalogue (3.2, 3.3, 3.4)', () => {
   })
 })
 
+describe('disabled-source cooldown (stage 2 follow-through)', () => {
+  function fakeKv(initial: Record<string, string>) {
+    const store = new Map(Object.entries(initial))
+    return {
+      get: async (key: string, type?: string) => {
+        const raw = store.get(key)
+        if (raw === undefined) return null
+        return type === 'json' ? JSON.parse(raw) : raw
+      },
+      put: async (key: string, value: string) => void store.set(key, value),
+      delete: async (key: string) => void store.delete(key),
+    } as unknown as KVNamespace
+  }
+
+  it('keeps a freshly disabled source off, but retries after 24 hours', async () => {
+    const { isSourceDisabled } = await import('../../src/server/public-feed')
+    const fresh = fakeKv({
+      'source:disabled:ashby-x': JSON.stringify({ at: Date.now(), error: 'boom' }),
+    })
+    expect(await isSourceDisabled(fresh, 'ashby-x')).toBe(true)
+    const stale = fakeKv({
+      'source:disabled:ashby-x': JSON.stringify({ at: Date.now() - 25 * 3600_000, error: 'boom' }),
+    })
+    expect(await isSourceDisabled(stale, 'ashby-x')).toBe(false)
+    expect(await isSourceDisabled(stale, 'never-disabled')).toBe(false)
+  })
+
+  it('a success clears the disable outright', async () => {
+    const { isSourceDisabled, noteSourceHealth } = await import('../../src/server/public-feed')
+    const kv = fakeKv({
+      'source:disabled:s1': JSON.stringify({ at: Date.now(), error: 'boom' }),
+      'source:health:s1': JSON.stringify({ fails: 3 }),
+    })
+    await noteSourceHealth(kv, 's1', true, '', { durationMs: 5, itemCount: 3 })
+    expect(await isSourceDisabled(kv, 's1')).toBe(false)
+  })
+})
+
 describe('crawler bodies (3.1) and email (1)', () => {
   it('serves real content, not a meta-description stub', () => {
     expect(pageBody('/privacy').length).toBeGreaterThan(1200)
