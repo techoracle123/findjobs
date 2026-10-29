@@ -65,17 +65,64 @@ export async function isSourceDisabled(kv: KVNamespace, sourceId: string): Promi
   return Boolean(await kv.get(`source:disabled:${sourceId}`))
 }
 
+/** One source's last observed run, as shown to operators. */
+export interface SourceRunRecord {
+  sourceId: string
+  lastRunAt: string | null
+  lastStatus: 'ok' | 'error' | null
+  lastError: string
+  durationMs: number | null
+  itemCount: number | null
+  consecutiveFailures: number
+}
+
+export const SOURCE_RUNS_KEY = 'source-runs'
+export const HEARTBEAT_KEY = 'scheduler:heartbeat'
+
+export interface SchedulerHeartbeat {
+  at: string
+  detail: string
+}
+
+/** The scheduler proves it is alive on every tick and every publish. */
+export async function noteSchedulerHeartbeat(kv: KVNamespace, detail: string): Promise<void> {
+  try {
+    await kv.put(HEARTBEAT_KEY, JSON.stringify({ at: new Date().toISOString(), detail }))
+  } catch {
+    /* A heartbeat must never break the run it describes. */
+  }
+}
+
+export async function getSchedulerHeartbeat(kv: KVNamespace): Promise<SchedulerHeartbeat | null> {
+  return kv.get<SchedulerHeartbeat>(HEARTBEAT_KEY, 'json')
+}
+
+export async function getSourceRuns(kv: KVNamespace): Promise<SourceRunRecord[]> {
+  return (await kv.get<SourceRunRecord[]>(SOURCE_RUNS_KEY, 'json')) ?? []
+}
+
 /** Consecutive failures auto-disable a source after three, with the reason kept. */
 export async function noteSourceHealth(
   kv: KVNamespace,
   sourceId: string,
   ok: boolean,
   error = '',
+  extra: { durationMs?: number; itemCount?: number } = {},
 ): Promise<void> {
   const key = `source:health:${sourceId}`
   const previous = (await kv.get<{ fails: number }>(key, 'json')) ?? { fails: 0 }
   const fails = ok ? 0 : previous.fails + 1
-  await kv.put(key, JSON.stringify({ fails, at: Date.now(), error: error.slice(0, 300) }))
+  await kv.put(
+    key,
+    JSON.stringify({
+      fails,
+      at: Date.now(),
+      status: ok ? 'ok' : 'error',
+      error: error.slice(0, 300),
+      durationMs: extra.durationMs ?? null,
+      itemCount: extra.itemCount ?? null,
+    }),
+  )
   if (fails >= 3) {
     await kv.put(
       `source:disabled:${sourceId}`,
@@ -97,15 +144,20 @@ export async function refreshPublicSource(
   if (await isSourceDisabled(kv, sourceId))
     throw new Error('Source disabled after repeated failures')
   let jobs: Job[]
+  const startedAt = Date.now()
   try {
     jobs = (await fetchPublicSource(source, fetcher, now)).filter((job) => job.jobStatus === 'open')
-    await noteSourceHealth(kv, sourceId, true)
+    await noteSourceHealth(kv, sourceId, true, '', {
+      durationMs: Date.now() - startedAt,
+      itemCount: jobs.length,
+    })
   } catch (error) {
     await noteSourceHealth(
       kv,
       sourceId,
       false,
       error instanceof Error ? error.message : String(error),
+      { durationMs: Date.now() - startedAt },
     )
     throw error
   }
@@ -214,6 +266,8 @@ export function assemblePublicSnapshot(
       title: job.title,
       company: job.company,
       description: job.description,
+      applyUrl: job.applyUrl,
+      sourceUrl: job.sourceUrl,
       tags: [...job.requiredSkills, ...job.usefulSkills],
       locationLabel: job.locationLabel,
       locationCountry: job.locationCountry,
@@ -306,6 +360,51 @@ export async function publishPublicSnapshot(
     JSON.stringify({ ...snapshot, jobs: [], ids: snapshot.jobs.map((job) => job.id), parts }),
     { expirationTtl: EXPIRY },
   )
+  // Operator truth in one read: every source's last run, plus the heartbeat.
+  // Assembled here because publish already holds every source index.
+  try {
+    const byId = new Map(indexes.map((index) => [index.sourceId, index]))
+    const runs: SourceRunRecord[] = []
+    for (let i = 0; i < PUBLIC_SOURCES.length; i += 4) {
+      const batch = PUBLIC_SOURCES.slice(i, i + 4)
+      const health = await Promise.all(
+        batch.map((source) =>
+          kv.get<{
+            fails: number
+            at: number
+            status?: 'ok' | 'error'
+            error?: string
+            durationMs?: number | null
+            itemCount?: number | null
+          }>(`source:health:${source.id}`, 'json'),
+        ),
+      )
+      batch.forEach((source, position) => {
+        const index = byId.get(source.id)
+        const record = health[position]
+        runs.push({
+          sourceId: source.id,
+          lastRunAt: record?.at
+            ? new Date(record.at).toISOString()
+            : index
+              ? new Date(index.fetchedAt).toISOString()
+              : null,
+          lastStatus: record?.status ?? (index ? 'ok' : null),
+          lastError: record?.error ?? '',
+          durationMs: record?.durationMs ?? null,
+          itemCount: record?.itemCount ?? index?.jobs.length ?? null,
+          consecutiveFailures: record?.fails ?? 0,
+        })
+      })
+    }
+    await kv.put(SOURCE_RUNS_KEY, JSON.stringify(runs), { expirationTtl: EXPIRY })
+    await noteSchedulerHeartbeat(
+      kv,
+      `published ${snapshot.jobs.length} jobs from ${snapshot.sourceCount} sources`,
+    )
+  } catch {
+    /* Observability writes never block the feed. */
+  }
   return snapshot
 }
 

@@ -6,6 +6,9 @@ export interface PlanDefinition {
   label: string
   entitlements: string[]
   price: PlanPrice
+  /** Billing interval for display; 'waitlist' plans cannot be bought yet. */
+  interval: 'free' | 'month' | 'year' | 'waitlist'
+  audience: 'seeker' | 'employer'
 }
 
 /**
@@ -25,12 +28,41 @@ export function planCatalogue(config: AppConfig): PlanDefinition[] {
       label: PLANS.free.label,
       entitlements: [...PLANS.free.entitlements],
       price: { amount: 0, currency },
+      interval: 'free',
+      audience: 'seeker',
+    },
+    {
+      id: PLANS.pro_graduate.id,
+      label: PLANS.pro_graduate.label,
+      entitlements: [...PLANS.pro_graduate.entitlements],
+      price: { amount: config.billing.priceGraduate, currency },
+      interval: 'month',
+      audience: 'seeker',
     },
     {
       id: PLANS.pro.id,
       label: PLANS.pro.label,
       entitlements: [...PLANS.pro.entitlements],
       price: { amount: config.billing.pricePro, currency },
+      interval: 'month',
+      audience: 'seeker',
+    },
+    {
+      id: PLANS.pro_annual.id,
+      label: PLANS.pro_annual.label,
+      entitlements: [...PLANS.pro_annual.entitlements],
+      price: { amount: config.billing.priceAnnual, currency },
+      interval: 'year',
+      audience: 'seeker',
+    },
+    {
+      id: PLANS.employer.id,
+      label: PLANS.employer.label,
+      entitlements: [...PLANS.employer.entitlements],
+      // Employer pricing opens with the waitlist; never invent a charge.
+      price: { amount: 0, currency },
+      interval: 'waitlist',
+      audience: 'employer',
     },
   ]
 }

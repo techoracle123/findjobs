@@ -81,12 +81,29 @@ export const PLANS = {
   free: {
     id: 'free',
     label: 'Desk',
-    entitlements: [] as string[],
+    // Alerts are free for everyone; they were never meant to sit behind a
+    // paywall, and the server has never charged for them.
+    entitlements: ['alerts'] as string[],
+  },
+  pro_graduate: {
+    id: 'pro_graduate',
+    label: 'Desk+ Graduate',
+    entitlements: ['alerts', 'weekly_digest', 'verified_source_badges'],
   },
   pro: {
     id: 'pro',
     label: 'Desk+',
     entitlements: ['alerts', 'weekly_digest', 'verified_source_badges'],
+  },
+  pro_annual: {
+    id: 'pro_annual',
+    label: 'Desk+ Annual',
+    entitlements: ['alerts', 'weekly_digest', 'verified_source_badges'],
+  },
+  employer: {
+    id: 'employer',
+    label: 'Employers',
+    entitlements: ['employer_waitlist'],
   },
 } as const
 

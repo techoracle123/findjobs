@@ -103,7 +103,12 @@ export async function loadRobots(
       signal: controller.signal,
     })
     if (!response.ok) {
-      if (response.status === 404) return DEFAULT_POLICY
+      // Per RFC 9309, a 4xx answer for robots.txt (other than 429, which asks
+      // us to slow down) means the file is unavailable and there are no
+      // restrictions. Treating it as a blanket deny blocked documented JSON
+      // APIs whose robots.txt sits behind auth (e.g. api.ashbyhq.com → 401).
+      if (response.status >= 400 && response.status < 500 && response.status !== 429)
+        return DEFAULT_POLICY
       return { allowed: false, crawlDelayMs: 60000, rules: 'User-agent: *\nDisallow: /' }
     }
     const text = await response.text()

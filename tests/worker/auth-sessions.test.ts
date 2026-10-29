@@ -102,8 +102,10 @@ describe('pricing page plumbing (Prompt 17)', () => {
       plans: Array<{ id: string; price: { amount: number } }>
       billingEnabled: boolean
     }
-    expect(body.plans.length).toBe(2)
+    // free, graduate, pro monthly, pro annual, employer waitlist.
+    expect(body.plans.length).toBe(5)
     expect(body.plans[0].price.amount).toBe(0)
+    expect(body.plans.find((plan) => plan.id === 'pro')?.price.amount).toBe(10000)
     expect(typeof body.billingEnabled).toBe('boolean')
   })
 

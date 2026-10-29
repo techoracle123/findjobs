@@ -164,6 +164,115 @@ export interface StructuredLocation {
   country: string | null
 }
 
+/** Country names as boards actually write them in location labels. */
+const COUNTRY_NAMES: [RegExp, string][] = [
+  [/\bnigeria\b/i, 'NG'],
+  [/\b(?:united states|usa|u\.s\.a\.?)\b/i, 'US'],
+  [/\b(?:united kingdom|uk|u\.k\.|england|scotland|wales|great britain)\b/i, 'GB'],
+  [/\bgermany\b|\bdeutschland\b/i, 'DE'],
+  [/\bfrance\b/i, 'FR'],
+  [/\bspain\b/i, 'ES'],
+  [/\bitaly\b|\bitalia\b/i, 'IT'],
+  [/\bnetherlands\b|\bnederland\b/i, 'NL'],
+  [/\bpoland\b|\bpolska\b/i, 'PL'],
+  [/\bportugal\b/i, 'PT'],
+  [/\bireland\b/i, 'IE'],
+  [/\bsweden\b|\bsverige\b/i, 'SE'],
+  [/\bswitzerland\b|\bschweiz\b|\bsuisse\b/i, 'CH'],
+  [/\baustria\b/i, 'AT'],
+  [/\bbelgium\b/i, 'BE'],
+  [/\bcanada\b/i, 'CA'],
+  [/\bmexico\b/i, 'MX'],
+  [/\bbrazil\b|\bbrasil\b/i, 'BR'],
+  [/\bargentina\b/i, 'AR'],
+  [/\bcolombia\b/i, 'CO'],
+  [/\bchile\b/i, 'CL'],
+  [/\bindia\b/i, 'IN'],
+  [/\bpakistan\b/i, 'PK'],
+  [/\bphilippines\b/i, 'PH'],
+  [/\bindonesia\b/i, 'ID'],
+  [/\bvietnam\b/i, 'VN'],
+  [/\bsingapore\b/i, 'SG'],
+  [/\bjapan\b/i, 'JP'],
+  [/\b(?:south korea|korea)\b/i, 'KR'],
+  [/\bchina\b/i, 'CN'],
+  [/\baustralia\b/i, 'AU'],
+  [/\bnew zealand\b/i, 'NZ'],
+  [/\bsouth africa\b/i, 'ZA'],
+  [/\bkenya\b/i, 'KE'],
+  [/\bghana\b/i, 'GH'],
+  [/\begypt\b/i, 'EG'],
+  [/\bmorocco\b/i, 'MA'],
+  [/\b(?:united arab emirates|uae|dubai|abu dhabi)\b/i, 'AE'],
+  [/\bsaudi arabia\b/i, 'SA'],
+  [/\bisrael\b/i, 'IL'],
+  [/\bturkey\b/i, 'TR'],
+  [/\bukraine\b/i, 'UA'],
+  [/\bromania\b/i, 'RO'],
+  [/\bczech(?:ia| republic)\b/i, 'CZ'],
+  [/\bgreece\b/i, 'GR'],
+  [/\bestonia\b/i, 'EE'],
+  [/\blithuania\b/i, 'LT'],
+  [/\blatvia\b/i, 'LV'],
+  [/\bfinland\b/i, 'FI'],
+  [/\bnorway\b/i, 'NO'],
+  [/\bdenmark\b/i, 'DK'],
+]
+
+const US_STATE_CODES = new Set([
+  'AL',
+  'AK',
+  'AZ',
+  'AR',
+  'CA',
+  'CO',
+  'CT',
+  'DE',
+  'FL',
+  'GA',
+  'HI',
+  'ID',
+  'IL',
+  'IN',
+  'IA',
+  'KS',
+  'KY',
+  'LA',
+  'ME',
+  'MD',
+  'MA',
+  'MI',
+  'MN',
+  'MS',
+  'MO',
+  'MT',
+  'NE',
+  'NV',
+  'NH',
+  'NJ',
+  'NM',
+  'NY',
+  'NC',
+  'ND',
+  'OH',
+  'OK',
+  'OR',
+  'PA',
+  'RI',
+  'SC',
+  'SD',
+  'TN',
+  'TX',
+  'UT',
+  'VT',
+  'VA',
+  'WA',
+  'WV',
+  'WI',
+  'WY',
+  'DC',
+])
+
 /** Parses free-text location into structured fields. Unresolved parts stay null. */
 export function parseLocation(raw: string, countryCode: string): StructuredLocation {
   const text = raw.trim()
@@ -182,7 +291,32 @@ export function parseLocation(raw: string, countryCode: string): StructuredLocat
       break
     }
   }
-  return { city, state, country: countryCode || (/\bnigeria\b/i.test(text) ? 'NG' : null) }
+  let country = countryCode || null
+  if (!country && (city || state)) country = 'NG'
+  if (!country) {
+    for (const [pattern, code] of COUNTRY_NAMES) {
+      if (pattern.test(text)) {
+        country = code
+        break
+      }
+    }
+  }
+  // "Austin, TX" — a trailing US state code settles the country.
+  if (!country) {
+    const stateMatch = /,\s*([A-Z]{2})(?:\s+\d{5})?\s*$/.exec(text)
+    if (stateMatch && US_STATE_CODES.has(stateMatch[1])) {
+      country = 'US'
+      state = state ?? stateMatch[1]
+      city = city ?? text.slice(0, stateMatch.index).trim().split(',').pop()?.trim() ?? null
+    }
+  }
+  // "Berlin, Germany" — the segment before the country is the city.
+  if (!city && country && country !== 'NG' && text.includes(',')) {
+    const first = text.split(',')[0]?.trim()
+    if (first && first.length >= 2 && first.length <= 40 && !/remote|hybrid/i.test(first))
+      city = first
+  }
+  return { city, state, country }
 }
 
 /* ---------------- salary plausibility ---------------- */
@@ -229,19 +363,21 @@ export function salaryPlausible(
 /* ---------------- confidence-gated inference ---------------- */
 
 const WORK_MODE_SIGNALS: { mode: WorkMode; pattern: RegExp }[] = [
-  {
-    mode: 'remote',
-    pattern:
-      /\b(?:fully remote|100% remote|remote[- ]only|remote[- ]first|work from home|work remotely|home[- ]based|wfh|telecommut|telework|distributed team)\b/i,
-  },
+  // Hybrid first: "hybrid, remote-friendly" is hybrid, not remote.
   {
     mode: 'hybrid',
-    pattern: /\bhybrid\b|\b\d\s*days?\s*(?:per|a)\s*week\s*(?:in|at)\s*(?:the\s*)?office\b/i,
+    pattern:
+      /\bhybrid\b|\b\d\s*days?\s*(?:per|a)\s*week\s*(?:in|at)\s*(?:the\s*)?office\b|\bpartly remote\b|\bpartially remote\b/i,
   },
   {
     mode: 'onsite',
     pattern:
-      /\b(?:on[- ]?site|in[- ]?office|in[- ]person|office[- ]based|on[- ]premises|work from office)\b/i,
+      /\b(?:not (?:a )?remote|no remote|on[- ]?site|in[- ]?office|in[- ]person|office[- ]based|on[- ]premises|work from (?:the )?office|based in our [^.]{0,40}office)\b/i,
+  },
+  {
+    mode: 'remote',
+    pattern:
+      /\b(?:fully remote|100% remote|remote[- ]only|remote[- ]first|remote work|work from home|work remotely|work from anywhere|home[- ]based|home office|wfh|telecommut|telework|distributed team|fully distributed|remote[- ]friendly role|this is a remote (?:role|position|job))\b/i,
   },
 ]
 
@@ -255,26 +391,65 @@ export function inferWorkModeQuality(
   return { mode: 'unknown', confidence: 0 }
 }
 
+/** Boards write the mode into the location itself: "Remote", "Remote — EU". */
+export function workModeFromLocation(locationLabel: string): WorkMode {
+  const label = locationLabel.trim()
+  if (/^remote\b/i.test(label) && !/hybrid/i.test(label)) return 'remote'
+  if (/\bhybrid\b/i.test(label)) return 'hybrid'
+  return 'unknown'
+}
+
 const SENIORITY_SIGNALS: { level: Seniority; pattern: RegExp }[] = [
   {
     level: 'intern',
-    pattern: /\b(?:intern(?:ship)?|trainee|graduate scheme|national youth service|nysc)\b/i,
+    pattern: /\b(?:intern(?:ship)?|trainee|graduate scheme|national youth service|nysc|corper)\b/i,
   },
-  { level: 'junior', pattern: /\b(?:junior|entry[- ]level|entry level|graduate)\b/i },
-  { level: 'mid', pattern: /\b(?:mid[- ]level|mid level|experienced)\b/i },
-  { level: 'senior', pattern: /\bsenior\b/i },
-  { level: 'lead', pattern: /\b(?:lead|team lead|principal)\b/i },
-  { level: 'staff', pattern: /\bstaff\b/i },
+  { level: 'junior', pattern: /\b(?:junior|jr\.?|entry[- ]level|entry level|graduate)\b/i },
   { level: 'principal', pattern: /\bprincipal\b/i },
-  { level: 'lead', pattern: /\b(?:head of|director|vp\b|vice president|chief|executive)\b/i },
+  { level: 'staff', pattern: /\bstaff\b/i },
+  { level: 'senior', pattern: /\b(?:senior|sr\.?|snr)\b/i },
+  { level: 'mid', pattern: /\b(?:mid[- ]level|mid level|intermediate|experienced)\b/i },
+  {
+    level: 'lead',
+    pattern: /\b(?:lead|team lead|head of|director|vp\b|vice president|chief|executive|manager)\b/i,
+  },
 ]
+
+/**
+ * "5+ years of experience", "3–5 years' experience", "at least 7 years".
+ * Returns the smallest stated number of years — the floor the employer set.
+ */
+export function yearsOfExperience(text: string): number | null {
+  const patterns = [
+    /(\d{1,2})\s*(?:\+|or more|plus)?\s*(?:-|–|—|to)\s*(\d{1,2})\s*(?:years?|yrs?)\b[^.]{0,30}?(?:experience|exp\b)/i,
+    /(?:at least|minimum(?: of)?|min\.?|over|more than)?\s*(\d{1,2})\+?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:relevant\s+|professional\s+|work\s+|hands-on\s+)?experience/i,
+    /experience[^.]{0,40}?\b(\d{1,2})\+?\s*(?:years?|yrs?)\b/i,
+  ]
+  for (const pattern of patterns) {
+    const match = pattern.exec(text)
+    if (match) {
+      const years = Number(match[1])
+      if (years >= 0 && years <= 40) return years
+    }
+  }
+  return null
+}
 
 export function inferSeniorityQuality(
   title: string,
   fallback: Seniority,
+  description = '',
 ): { level: Seniority; confidence: number } {
   for (const signal of SENIORITY_SIGNALS)
     if (signal.pattern.test(title)) return { level: signal.level, confidence: 0.8 }
+  const years = yearsOfExperience(description.slice(0, 6000))
+  if (years !== null) {
+    if (years >= 8) return { level: 'senior', confidence: 0.65 }
+    if (years >= 5) return { level: 'senior', confidence: 0.6 }
+    if (years >= 3) return { level: 'mid', confidence: 0.6 }
+    if (years >= 1) return { level: 'junior', confidence: 0.55 }
+    return { level: 'junior', confidence: 0.5 }
+  }
   if (fallback !== 'unknown') return { level: fallback, confidence: 0.7 }
   return { level: 'unknown', confidence: 0 }
 }
@@ -312,6 +487,8 @@ export interface QualityInput {
   title: string
   company: string
   description: string
+  applyUrl?: string
+  sourceUrl?: string
   tags: string[]
   locationLabel: string
   locationCountry: string
@@ -359,11 +536,15 @@ export function qualityPass(input: QualityInput): QualityResult {
   const company = cleanCompany(input.company)
   const language = detectLanguage(title, input.description)
   const location = parseLocation(input.locationLabel, input.locationCountry)
-  const workMode = inferWorkModeQuality(
-    `${title} ${input.locationLabel} ${input.description.slice(0, 800)}`,
-    input.workMode,
-  )
-  const seniority = inferSeniorityQuality(title, input.seniority)
+  const fromLocation = workModeFromLocation(input.locationLabel)
+  const workMode =
+    fromLocation !== 'unknown'
+      ? { mode: fromLocation, confidence: 0.8 }
+      : inferWorkModeQuality(
+          `${title} ${input.locationLabel} ${input.description.slice(0, 3000)}`,
+          input.workMode,
+        )
+  const seniority = inferSeniorityQuality(title, input.seniority, input.description)
 
   const plausible = salaryPlausible(
     input.salaryMin,
@@ -415,6 +596,8 @@ export function qualityPass(input: QualityInput): QualityResult {
     title,
     company,
     description: input.description,
+    applyUrl: input.applyUrl,
+    sourceUrl: input.sourceUrl,
     salaryMin: input.salaryMin,
     salaryMax: input.salaryMax,
     salaryCurrency: input.salaryCurrency,

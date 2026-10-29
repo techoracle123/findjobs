@@ -10,7 +10,7 @@
  * refreshed without one invocation having to fetch all of them.
  */
 import { enqueuePublicRefresh, dueForRun } from './server/public-schedule'
-import { PUBLIC_SOURCES, isSourceDisabled } from './server/public-feed'
+import { PUBLIC_SOURCES, isSourceDisabled, noteSchedulerHeartbeat } from './server/public-feed'
 import { ensureSources, runDueSources, runIngestion } from './server/ingest'
 import { logger } from './server/logging'
 import type { Env } from './server/env'
@@ -51,6 +51,11 @@ export default {
             String(event.scheduledTime ?? Date.now()),
             due,
           )
+          if (env.PUBLIC_JOBS)
+            await noteSchedulerHeartbeat(
+              env.PUBLIC_JOBS,
+              `tick queued ${queued} sources (${disabled.size} disabled)`,
+            )
           logger.info('tiered public refresh queued', { queued, hourUtc, disabled: disabled.size })
         })(),
       )

@@ -4,7 +4,7 @@ import type { JobSearch, JobSearchResult } from './jobs'
 import { SEED_SOURCES } from './sources/seed'
 import { getParser } from './sources/registry'
 import { normalizePosting } from './sources/normalize'
-import { createPoliteFetch } from './sources/polite'
+import { createPoliteFetch, createTimedFetch, robotsGatedKind } from './sources/polite'
 
 const TTL = 30 * 60 * 1000
 const SOURCES = [
@@ -70,11 +70,16 @@ export async function fetchPublicSource(
       verification: 'unverified',
       verificationReason: 'A public opportunity; verify with the employer.',
     },
-    createPoliteFetch(
-      id,
-      'RoleSignalBot/1.0 (+https://fj-find-jobs.pages.dev; public job discovery)',
-      fetcher,
-    ),
+    robotsGatedKind(parser.kind)
+      ? createPoliteFetch(
+          id,
+          'RoleSignalBot/1.0 (+https://fj-find-jobs.pages.dev; public job discovery)',
+          fetcher,
+        )
+      : createTimedFetch(
+          'RoleSignalBot/1.0 (+https://fj-find-jobs.pages.dev; public job discovery)',
+          fetcher,
+        ),
   )
   if (limit !== 100 && raw.length > limit)
     throw new Error('Publisher exceeds ingestion safety bound')

@@ -6,6 +6,7 @@ import { QualityWallboard } from './components/QualityWallboard'
 import { InfoPage } from './components/InfoPage'
 import { AdminCopy } from './components/AdminCopy'
 import { PricingPage } from './components/PricingPage'
+import { EmployersPage } from './components/EmployersPage'
 import { AnalyticsWallboard } from './components/AnalyticsWallboard'
 import './styles.css'
 
@@ -26,9 +27,9 @@ createRoot(container).render(
       <AnalyticsWallboard />
     ) : window.location.pathname === '/pricing' ? (
       <PricingPage />
-    ) : /^\/(about|privacy|terms|faq|scams|contact|employers)\/?$/.test(
-        window.location.pathname,
-      ) ? (
+    ) : window.location.pathname === '/employers' ? (
+      <EmployersPage />
+    ) : /^\/(about|privacy|terms|faq|scams|contact)\/?$/.test(window.location.pathname) ? (
       <InfoPage path={window.location.pathname.replace(/\/+$/, '')} />
     ) : (
       <App />

@@ -30,15 +30,18 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           browsing needs no account and stores only device-local preferences.
         </p>
         <p>
-          <strong>AI features.</strong> When you use CV suggestions, application tips or
-          translations, the text you submit is sent to our AI provider, <strong>OpenRouter</strong>,
-          to generate a response. Do not upload information you are not comfortable sharing with
-          that service. CV text is used only to produce your suggestion and is cached briefly for
-          reliability; it is not sold or used to train models by us.
+          <strong>Your CV stays on your device.</strong> When you upload a CV to improve your
+          matches, the text is read and matched against skills in your own browser. Your CV file is
+          not uploaded to FJ or to any third party.
         </p>
         <p>
-          <strong>Payments.</strong> When paid plans launch, payments will be handled by our payment
-          processor (Bachs). We never see or store your card details.
+          <strong>Sign-in codes.</strong> When you sign in, we send a one-time code to your email
+          through our email delivery partner, which processes your email address only to deliver
+          that message.
+        </p>
+        <p>
+          <strong>Payments.</strong> Paid plans are not open yet. When they launch, card payments
+          will be handled by our payment partner; we will never see or store your card details.
         </p>
         <p>
           <strong>Retention.</strong> Account data is kept until you delete your account. Aggregated
@@ -161,18 +164,6 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
       </>
     ),
   },
-  '/employers': {
-    title: 'For employers',
-    body: (
-      <>
-        <p>
-          Employer accounts and job posting are on the way. Until then, publish vacancies on your
-          public careers page or an established job board — FJ collects from them automatically.
-        </p>
-        <p>Verified employer profiles, direct posting and applicant tools are in development.</p>
-      </>
-    ),
-  },
 }
 
 export function InfoPage({ path }: { path: string }) {
@@ -180,7 +171,7 @@ export function InfoPage({ path }: { path: string }) {
   return (
     <div className="app">
       <header className="topbar">
-        <a className="brand" href="/">
+        <a className="brand" href="/" aria-label="FJ - Find Jobs">
           <img className="brand__logo" src="/favicon.svg" alt="" width="36" height="36" />
           <span>
             FJ{' '}

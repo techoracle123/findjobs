@@ -345,8 +345,10 @@ describe('timing safe comparison', () => {
 
 describe('entitlements', () => {
   it('maps plans to their entitlements', () => {
-    expect(planEntitlements('free')).toEqual([])
+    // Alerts are free for everyone (they were never charged for).
+    expect(planEntitlements('free')).toEqual(['alerts'])
     expect(planEntitlements('pro')).toContain('alerts')
+    expect(planEntitlements('pro_graduate')).toContain('weekly_digest')
     expect(planEntitlements('unknown-plan')).toEqual([])
   })
 

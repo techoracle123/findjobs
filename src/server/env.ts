@@ -24,6 +24,8 @@ export interface Env {
   /** Sign-in codes are sent through Resend REST when set; console otherwise. */
   RESEND_API_KEY?: string
   EMAIL_FROM?: string
+  /** Alias for EMAIL_FROM, accepted so either secret name works. */
+  OTP_FROM?: string
   /** Shared secret for the full /api/health readiness report. */
   HEALTH_CHECK_KEY?: string
 
@@ -45,6 +47,8 @@ export interface Env {
   BILLING_CURRENCY?: string
   /** The price of the paid plan, in major units. */
   BILLING_PRICE_PRO?: string
+  BILLING_PRICE_GRADUATE?: string
+  BILLING_PRICE_ANNUAL?: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_PRICE_PRO?: string

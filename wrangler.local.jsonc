@@ -17,7 +17,7 @@
     "APP_MODE": "local-preview",
     "BILLING_PROVIDER": "fake",
     "BILLING_CURRENCY": "NGN",
-    "BILLING_PRICE_PRO": "5000",
+    "BILLING_PRICE_PRO": "10000",
     "TELEGRAM_BOT_USERNAME": "",
     "AI_DAILY_LIMIT": "20",
     "AI_GLOBAL_DAILY_LIMIT": "1000",

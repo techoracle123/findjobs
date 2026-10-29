@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../env'
 import { readConfig } from '../config'
 import { ensureSources, runDueSources, runIngestion } from '../ingest'
+import { getSchedulerHeartbeat, getSourceRuns } from '../public-feed'
 import { listParsers } from '../sources/registry'
 import { requireUser, unauthorized } from '../http'
 import type { AppContext } from '../http'
@@ -66,30 +67,54 @@ sourceRoutes.get('/sources', async (c) => {
     verification: parser.verification,
   }))
 
+  // The public collector records runs in KV (one aggregated document written
+  // at publish). Overlay it so this view shows the runs that actually feed
+  // the site, not only the legacy D1 pipeline's bookkeeping.
+  const kv = c.env?.PUBLIC_JOBS
+  const [runs, heartbeat] = kv
+    ? await Promise.all([getSourceRuns(kv), getSchedulerHeartbeat(kv)])
+    : [[], null]
+  const runBySource = new Map(runs.map((run) => [run.sourceId, run]))
+  const heartbeatAgeMs = heartbeat ? Date.now() - Date.parse(heartbeat.at) : null
+
   return c.json({
-    sources: (rows.results ?? []).map((row) => ({
-      id: row.id,
-      name: row.name,
-      parser: row.adapter,
-      kind: row.kind,
-      platform: row.platform,
-      enabled: Boolean(row.enabled),
-      homepage: row.homepage,
-      listingUrl: row.listing_url,
-      country: row.country,
-      tags: row.tags,
-      verification: row.verification,
-      refreshTier: row.refresh_tier,
-      rateLimitPerHour: row.rate_limit_per_hour,
-      lastRunAt: row.last_run_at,
-      lastStatus: row.last_status,
-      lastError: row.last_error,
-      consecutiveFailures: row.consecutive_failures,
-      disabledReason: row.disabled_reason,
-      liveJobs: row.live_jobs ?? 0,
-      closedJobs: row.closed_jobs ?? 0,
-    })),
+    sources: (rows.results ?? []).map((row) => {
+      const run = runBySource.get(row.id)
+      return {
+        id: row.id,
+        name: row.name,
+        parser: row.adapter,
+        kind: row.kind,
+        platform: row.platform,
+        enabled: Boolean(row.enabled),
+        homepage: row.homepage,
+        listingUrl: row.listing_url,
+        country: row.country,
+        tags: row.tags,
+        verification: row.verification,
+        refreshTier: row.refresh_tier,
+        rateLimitPerHour: row.rate_limit_per_hour,
+        lastRunAt: run?.lastRunAt ?? row.last_run_at,
+        lastStatus: run?.lastStatus ?? row.last_status,
+        lastError: run?.lastError || row.last_error,
+        durationMs: run?.durationMs ?? null,
+        itemCount: run?.itemCount ?? null,
+        consecutiveFailures: run?.consecutiveFailures ?? row.consecutive_failures,
+        disabledReason: row.disabled_reason,
+        liveJobs: row.live_jobs ?? 0,
+        closedJobs: row.closed_jobs ?? 0,
+      }
+    }),
     parsers: adapters,
+    scheduler: {
+      heartbeatAt: heartbeat?.at ?? null,
+      detail: heartbeat?.detail ?? null,
+      // The producer ticks hourly; older than two ticks means it is stuck.
+      stale: heartbeatAgeMs === null || heartbeatAgeMs > 2 * 3600_000,
+      sourcesReportingOk: runs.filter((run) => run.lastStatus === 'ok').length,
+      sourcesReportingError: runs.filter((run) => run.lastStatus === 'error').length,
+      sourcesNeverRun: runs.filter((run) => run.lastStatus === null).length,
+    },
   })
 })
 

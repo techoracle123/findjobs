@@ -5,7 +5,7 @@
  * interface.
  */
 
-export const NORMALIZER_VERSION = '2026.10.27'
+export const NORMALIZER_VERSION = '2026.10.29'
 export const FIELD_THRESHOLD = 0.6
 
 /** Fields measured for completeness on every publication. */

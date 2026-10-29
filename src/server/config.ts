@@ -38,6 +38,10 @@ export interface BillingConfig {
   currency: string
   /** The price of the paid plan, in major units. */
   pricePro: number
+  /** Graduate-tier monthly price, in major units. */
+  priceGraduate: number
+  /** Annual price, in major units. */
+  priceAnnual: number
   stripe: StripeConfig
   paystack: PaystackConfig
   flutterwave: FlutterwaveConfig
@@ -121,7 +125,9 @@ export function readConfig(env: Env): AppConfig {
     billing: {
       provider: resolveProvider(env),
       currency: (env.BILLING_CURRENCY || 'NGN').trim().toUpperCase().slice(0, 3),
-      pricePro: number(env.BILLING_PRICE_PRO, 5000),
+      pricePro: number(env.BILLING_PRICE_PRO, 10000),
+      priceGraduate: number(env.BILLING_PRICE_GRADUATE, 3000),
+      priceAnnual: number(env.BILLING_PRICE_ANNUAL, 100000),
       stripe: {
         secretKey: env.STRIPE_SECRET_KEY ?? null,
         webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? null,

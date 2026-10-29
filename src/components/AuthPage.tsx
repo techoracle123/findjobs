@@ -157,7 +157,7 @@ export function AuthPage() {
         </a>
         <div className="auth-layout">
           <section className="auth-story">
-            <a className="brand" href="/">
+            <a className="brand" href="/" aria-label="FJ - Find Jobs">
               <img src="/favicon.svg" width="40" height="40" alt="" /> FJ — Find Jobs
             </a>
             <span className="eyebrow">Your next chapter starts here</span>
