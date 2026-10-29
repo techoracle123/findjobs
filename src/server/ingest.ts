@@ -2,7 +2,7 @@ import type { Job, VerificationLevel } from '../shared/types'
 import { getParser } from './sources/registry'
 import type { RawPosting, SourceRef } from './sources/types'
 import { normalizePosting } from './sources/normalize'
-import { createPoliteFetch } from './sources/polite'
+import { createPoliteFetch, createTimedFetch, robotsGatedKind } from './sources/polite'
 import { SEED_SOURCES } from './sources/seed'
 import { logger } from './logging'
 
@@ -396,11 +396,9 @@ export async function runIngestion(
     .bind(runId, sourceId, nowIso)
     .run()
 
-  const politeFetch = createPoliteFetch(
-    sourceId,
-    options.userAgent ?? USER_AGENT,
-    options.fetchImpl ?? fetch,
-  )
+  const politeFetch = robotsGatedKind(parser.kind)
+    ? createPoliteFetch(sourceId, options.userAgent ?? USER_AGENT, options.fetchImpl ?? fetch)
+    : createTimedFetch(options.userAgent ?? USER_AGENT, options.fetchImpl ?? fetch)
 
   try {
     const sourceRef = sourceRefFrom(row, parser.verification)

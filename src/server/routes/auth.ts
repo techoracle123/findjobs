@@ -7,7 +7,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../env'
 import { requireUser, unauthorized, readJson, type AppContext } from '../http'
 import { enforceRateLimit } from '../ratelimit'
-import { emailProviderFromEnv } from '../email/provider'
+import { emailProviderFromEnv, otpEmail } from '../email/provider'
 import { upsertUser } from '../auth/accounts'
 
 const OTP_TTL_MS = 10 * 60_000
@@ -104,15 +104,15 @@ authRoutes.post('/auth/otp/request', async (c) => {
   if (emailer.name === 'console' && c.env?.APP_MODE === 'production') {
     return c.json({ error: 'email_not_configured' }, 503)
   }
-  await emailer.send({
-    to: email,
-    subject: 'Your FJ sign-in code',
-    text: `Your FJ sign-in code is ${code}. It works once and expires in 10 minutes. If you did not ask for this, ignore this email.`,
-  })
-  // Test-only hook: the local harness reads the code from this response.
-  // APP_MODE is never 'test' in a hosted deployment.
+  await emailer.send({ to: email, ...otpEmail(code) })
+  // Dev fallback: local and test harnesses read the code from this response
+  // so development is never blocked on a mail provider. APP_MODE is never
+  // 'test' or 'local' in a hosted deployment — production and preview can
+  // never see a code in a response body.
+  const devMode =
+    c.env?.APP_MODE === 'test' || c.env?.APP_MODE === 'local' || c.env?.APP_MODE === 'local-preview'
   return c.json(
-    c.env?.APP_MODE === 'test'
+    devMode
       ? { ok: true, ttlSeconds: OTP_TTL_MS / 1000, devCode: code }
       : { ok: true, ttlSeconds: OTP_TTL_MS / 1000 },
   )

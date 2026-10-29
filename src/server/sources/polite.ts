@@ -13,6 +13,33 @@ const REQUEST_TIMEOUT_MS = 12_000
 const cache = new Map<string, HostPolicy>()
 
 /**
+ * robots.txt governs crawling web pages. Documented public JSON APIs and
+ * published feeds are not crawling, so only the HTML-scraping adapters
+ * (jsonld careers pages) are robots-gated; api/ats/rss adapters call their
+ * endpoints directly with the same UA and timeout discipline.
+ */
+export function robotsGatedKind(kind: string | undefined): boolean {
+  return kind === 'jsonld'
+}
+
+/** UA + hard timeout, no robots gate. For documented public APIs and feeds. */
+export function createTimedFetch(userAgent: string, fetchImpl: typeof fetch = fetch): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    try {
+      return await fetchImpl(input as RequestInfo, {
+        ...init,
+        signal: controller.signal,
+        headers: { 'user-agent': userAgent, ...(init?.headers ?? {}) },
+      })
+    } finally {
+      clearTimeout(timer)
+    }
+  }) as typeof fetch
+}
+
+/**
  * A fetch that behaves the way a considerate crawler should: it reads
  * `robots.txt` before the first request to a host, honours the rules and
  * the crawl delay, and keeps a note of when it last called.

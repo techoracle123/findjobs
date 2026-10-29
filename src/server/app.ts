@@ -28,7 +28,7 @@ import { withTimeout } from './timeouts'
 import { log } from './logging'
 import { publicDataCache } from './public-cache'
 import { livePublicEnabled, livePublicJobs, searchLivePublic } from './live-public'
-import { publishedPublicJobs, findPublishedJob } from './public-feed'
+import { publishedPublicJobs, findPublishedJob, getSchedulerHeartbeat } from './public-feed'
 import type { JobSearch } from './jobs'
 
 export const app = new Hono<AppEnv>()
@@ -263,6 +263,8 @@ app.get('/api/feed-status', async (c) => {
   const snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
   if (!snapshot) return c.json({ available: false, refreshHours: 12 }, 503)
   const visible = snapshot.jobs.filter((job) => job.quality?.isEnglish !== false)
+  const heartbeat = c.env?.PUBLIC_JOBS ? await getSchedulerHeartbeat(c.env.PUBLIC_JOBS) : null
+  const heartbeatAgeMs = heartbeat ? Date.now() - Date.parse(heartbeat.at) : null
   return c.json({
     available: true,
     // The default feed is English-first; the full corpus is reported alongside.
@@ -274,6 +276,9 @@ app.get('/api/feed-status', async (c) => {
     updatedAt: snapshot.refreshedAt,
     refreshHours: 12,
     added: snapshot.added,
+    schedulerHeartbeatAt: heartbeat?.at ?? null,
+    // The producer ticks hourly; older than two ticks means it is stuck.
+    schedulerStale: heartbeatAgeMs === null || heartbeatAgeMs > 2 * 3600_000,
   })
 })
 
@@ -372,6 +377,42 @@ app.get('/api/jobs', async (c) => {
           warning: 'stale',
         }
       : {}),
+  })
+})
+
+/**
+ * Corpus statistics for operators and the fj-check harness: totals plus the
+ * field-coverage shares the quality floors are measured against. Registered
+ * before /api/jobs/:id so "stats" is never mistaken for a job id.
+ */
+app.get('/api/jobs/stats', async (c) => {
+  const limited = await enforceRateLimit(c, { bucket: 'jobs-stats', limit: 30, windowSeconds: 60 })
+  if (limited) return limited
+  const snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
+  if (!snapshot) return c.json({ available: false }, 503)
+  const jobs = snapshot.jobs
+  const total = jobs.length
+  const share = (count: number) => (total ? Math.round((count / total) * 1000) / 1000 : 0)
+  const count = (pick: (job: (typeof jobs)[number]) => boolean) => jobs.filter(pick).length
+  return c.json({
+    available: true,
+    total,
+    english: count((job) => job.quality?.isEnglish !== false),
+    sourceCount: snapshot.sourceCount,
+    attemptedSources: snapshot.attemptedSources,
+    updatedAt: snapshot.refreshedAt,
+    coverage: {
+      workMode: share(count((job) => job.workMode !== 'unknown')),
+      seniority: share(count((job) => job.seniority !== 'unknown')),
+      requiredSkills: share(count((job) => job.requiredSkills.length > 0)),
+      locationCountry: share(count((job) => Boolean(job.locationCountry))),
+      salary: share(count((job) => job.salaryMin > 0)),
+    },
+    moderation: {
+      caution: share(count((job) => (job.moderationState ?? 'publish') === 'caution')),
+      publish: share(count((job) => (job.moderationState ?? 'publish') === 'publish')),
+    },
+    duplicatesDropped: snapshot.duplicatesDropped ?? 0,
   })
 })
 

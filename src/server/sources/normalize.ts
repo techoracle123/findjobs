@@ -247,6 +247,8 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
     title: raw.title,
     company: raw.company,
     description: cleanJobText(raw.description).slice(0, 16000),
+    applyUrl: raw.applyUrl || raw.url,
+    sourceUrl: raw.url,
     tags: raw.tags,
     locationLabel: raw.location,
     locationCountry: inferCountry(raw.location),
@@ -266,8 +268,11 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
     locationCountry: patch.quality.location.country || inferCountry(raw.location),
     locationLabel: raw.location.trim(),
     description: cleanJobText(raw.description).slice(0, 16000),
-    requiredSkills: required,
-    usefulSkills: useful,
+    // The quality pass owns the required/useful split (it merges these same
+    // tag/text skills with section- and cue-based evidence). Overwriting it
+    // here was why production rows carried zero required skills.
+    requiredSkills: patch.requiredSkills,
+    usefulSkills: patch.usefulSkills,
     eligibleCountries: [],
     sponsorship: 'unknown' as Sponsorship,
     postedAt:

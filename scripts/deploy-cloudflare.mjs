@@ -296,6 +296,7 @@ export async function main() {
   if (process.env.RESEND_API_KEY?.trim()) {
     secrets.RESEND_API_KEY = process.env.RESEND_API_KEY.trim()
     if (process.env.EMAIL_FROM?.trim()) secrets.EMAIL_FROM = process.env.EMAIL_FROM.trim()
+    else if (process.env.OTP_FROM?.trim()) secrets.EMAIL_FROM = process.env.OTP_FROM.trim()
     annotation('notice', 'Email sign-in configured', 'Sign-in codes will be emailed by Resend.')
   } else
     annotation(

@@ -490,6 +490,7 @@ export default function App() {
         <a
           className="brand"
           href="/"
+          aria-label="FJ - Find Jobs"
           onClick={(event) => {
             if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
             event.preventDefault()

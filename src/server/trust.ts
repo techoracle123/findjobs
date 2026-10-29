@@ -20,6 +20,96 @@ export interface ScamResult {
 const FREE_WEBMAIL =
   /@(?:gmail|yahoo|hotmail|outlook|live|icloud|aol|protonmail|mail)\.(?:com|net|org|co)\b/i
 
+/**
+ * Employers whose identity is not in doubt. "No company website" must never
+ * fire on them just because an ATS payload omitted the URL — that single
+ * signal once pushed every listing on the site into "caution".
+ */
+const KNOWN_COMPANIES = new Set(
+  [
+    'wiz',
+    'airbnb',
+    'adyen',
+    'datadog',
+    'gitlab',
+    'monzo',
+    'stripe',
+    'shopify',
+    'spotify',
+    'klarna',
+    'wise',
+    'revolut',
+    'figma',
+    'notion',
+    'linear',
+    'vercel',
+    'cloudflare',
+    'anthropic',
+    'openai',
+    'coinbase',
+    'doordash',
+    'pinterest',
+    'reddit',
+    'dropbox',
+    'hubspot',
+    'zoom',
+    'twilio',
+    'okta',
+    'snowflake',
+    'databricks',
+    'mongodb',
+    'elastic',
+    'grafana',
+    'hashicorp',
+    'gitlab',
+    'miro',
+    'intercom',
+    'zendesk',
+    'freshworks',
+    'typeform',
+    'algolia',
+    'doctolib',
+    'contentsquare',
+    'scaleway',
+    'king',
+    'bosch',
+    'trivago',
+    'allegro',
+    'glovo',
+    'mango',
+    'seek',
+    'razorpay',
+    'zomato',
+    'swiggy',
+    'cred',
+    'hasura',
+    'chargebee',
+    'segment',
+    'circle',
+    'givedirectly',
+    'oneacrefund',
+    'flutterwave',
+    'moniepoint',
+    'kuda',
+    'wave',
+    'mkopa',
+    'andela',
+    'safaricom',
+  ].map((name) => name.replace(/[^a-z0-9]/g, '')),
+)
+
+/** Apply-link hosts that are themselves evidence of a real, verifiable listing. */
+const VERIFIABLE_HOST =
+  /(?:greenhouse\.io|lever\.co|ashbyhq\.com|smartrecruiters\.com|workable\.com|recruitee\.com|personio\.|teamtailor\.com|breezy\.hr|myworkdayjobs\.com|icims\.com|jobvite\.com|arbeitnow\.|remoteok\.com|himalayas\.app|themuse\.com|jobicy\.com|workingnomads\.com|weworkremotely\.com|myjobmag\.com|jobberman\.com)/i
+
+function hostOf(url: string | undefined): string {
+  try {
+    return url ? new URL(url).host : ''
+  } catch {
+    return ''
+  }
+}
+
 // Nigerian English + Pidgin money-request phrases.
 const MONEY_REQUEST =
   /\b(?:registration fee|processing fee|training fee|service fee|form fee|guarantee fee|visa fee|equipment fee|uniform fee|refundable deposit|pay small (?:token|money)|send (?:money|token|cash)|pay (?:before|to apply|to register|up ?front)|activation fee|clearance fee|registration fee|we require payment|fee is (?:required|needed))\b/i
@@ -66,6 +156,8 @@ export function scamScore(
     company: string
     description: string
     companyUrl?: string
+    applyUrl?: string
+    sourceUrl?: string
     salaryMin: number
     salaryMax: number
     salaryCurrency: string
@@ -83,15 +175,29 @@ export function scamScore(
 
   const contacts = textContacts(description)
   if (contacts.freeWebmail) signals.push({ label: 'Free webmail is the only contact', delta: 20 })
-  if (!job.companyUrl && !context.hasCac && !context.employerVerified)
-    signals.push({ label: 'No company website or registration evidence', delta: 15 })
+  // Website evidence comes from more than an explicit company URL: a known
+  // employer, an apply link on a mainstream ATS/board host, or an apply
+  // host that carries the company name all count. On its own the missing-
+  // website signal (10) stays below the caution threshold (15).
+  const companyToken = (job.company || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const applyHost = hostOf(job.applyUrl || job.sourceUrl)
+  const hasWebsiteEvidence = Boolean(
+    job.companyUrl ||
+    context.hasCac ||
+    context.employerVerified ||
+    (companyToken && KNOWN_COMPANIES.has(companyToken)) ||
+    VERIFIABLE_HOST.test(applyHost) ||
+    (companyToken.length > 3 && applyHost.replace(/[^a-z0-9]/g, '').includes(companyToken)),
+  )
+  if (!hasWebsiteEvidence)
+    signals.push({ label: 'No company website or registration evidence', delta: 10 })
   if (SPAMMY_TITLE.test(job.title.toLowerCase()))
     signals.push({ label: 'Spammy title wording', delta: 10 })
   if (description.length > 0 && description.length < 200)
     signals.push({ label: 'Very short description', delta: 10 })
   if ((context.companyRoles7d ?? 0) > 10)
     signals.push({ label: 'Same company posted 10+ roles in 7 days', delta: 10 })
-  if (contacts.phone && !job.companyUrl)
+  if (contacts.phone && !hasWebsiteEvidence)
     signals.push({ label: 'Mobile contact with no verifiable website', delta: 10 })
 
   // Salary wildly out of band for a non-executive role.

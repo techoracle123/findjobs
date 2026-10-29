@@ -573,6 +573,16 @@ function sectionOf(
 }
 
 /**
+ * Requirement verbs inside a sentence: "experience with X", "proficient in Y",
+ * "must have Z". When a listing has no clear headings (most do not), these
+ * cues are what separates a required skill from a merely mentioned one.
+ */
+const REQUIRED_CUE =
+  /\b(?:must|required|requires?|needs?|experience (?:with|in|using)|proficient|proficiency|strong (?:knowledge|skills?|experience|background)|expertise|hands[- ]on|familiarity with|knowledge of|skilled in|ability to|working knowledge|deep understanding|solid understanding)\b/i
+const PREFERRED_CUE =
+  /\b(?:nice to have|bonus|preferred|desirable|a plus|advantage|ideally|good to have)\b/i
+
+/**
  * Extracts skills with the sentence that triggered each match. A skill counts
  * as required only when its sentence sits under a requirements heading; when
  * the structure is unclear it is never promoted to required.
@@ -595,21 +605,34 @@ export function extractSkills(text: string, tags: string[] = []): SkillMatch[] {
   }
 
   let section: 'required' | 'preferred' | 'unknown' = 'unknown'
-  for (const rawLine of text.split(/\n+/)) {
+  // Long unbroken paragraphs are split into sentences so a requirement cue
+  // attaches to the skills in its own sentence, not the whole paragraph.
+  const lines = text
+    .split(/\n+/)
+    .flatMap((raw) => (raw.length > 400 ? raw.split(/(?<=[.!?])\s+/) : [raw]))
+  for (const rawLine of lines) {
     const line = rawLine.trim()
     if (!line) continue
     const previous: 'required' | 'preferred' | 'unknown' = section
     section = sectionOf(line, section)
-    // A heading names a section; it is not itself skill evidence.
-    if (section !== previous && (REQUIRED_HEADING.test(line) || PREFERRED_HEADING.test(line)))
+    // A short heading names a section; it is not itself skill evidence. A
+    // long line that merely starts "Requirements: …" still carries evidence.
+    if (
+      section !== previous &&
+      line.length <= 80 &&
+      (REQUIRED_HEADING.test(line) || PREFERRED_HEADING.test(line))
+    )
       continue
+    const lineRequired =
+      section === 'required' ||
+      (section !== 'preferred' && REQUIRED_CUE.test(line) && !PREFERRED_CUE.test(line))
     for (const matcher of TEXT_MATCHERS) {
       if (matches.has(matcher.name)) continue
       if (matcher.regex.test(line)) {
         matches.set(matcher.name, {
           name: matcher.name,
-          required: section === 'required',
-          confidence: section === 'unknown' ? 0.6 : 0.85,
+          required: lineRequired,
+          confidence: section === 'unknown' && !lineRequired ? 0.6 : 0.85,
           sentence: line.slice(0, 240),
         })
       }

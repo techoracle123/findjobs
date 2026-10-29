@@ -136,6 +136,61 @@ export function pageMeta(pathname: string): { title: string; description: string
   return pages[pathname] ?? pages['/']
 }
 
+/**
+ * Real body copy for crawlers, mirroring what humans read in the app. A
+ * meta-description-only shell (what this used to serve) tells search
+ * engines the page is nearly empty. Keep these in step with InfoPage.
+ */
+export function pageBody(pathname: string): string {
+  const bodies: Record<string, string> = {
+    '/': `<p>FJ — Find Jobs helps people in Nigeria and around the world discover real job opportunities across professions. We collect public listings from employer career pages and job boards, clean them up, and link you to the original posting.</p>
+<p>Search thousands of current openings by profession, country, work type (remote, hybrid, on-site) and experience level. Finding opportunities and applying on the employer's own site is always free — never pay anyone for a job or an application.</p>
+<p>FJ is not an employer or recruiter. We do not verify or endorse listings. Always verify the employer and the original listing before applying.</p>`,
+    '/jobs': `<p>Browse current job openings collected from employer career pages and established job boards. Filter by profession, country, work type — remote, hybrid or on-site — and experience level.</p>
+<p>Every listing links to the original posting, where applying is always free. FJ does not verify or endorse employers; always check the employer's official website and confirm the vacancy there.</p>`,
+    '/about': `<p>FJ — Find Jobs helps people in Nigeria and around the world discover real job opportunities across professions. We collect public listings from employer career pages and job boards, clean them up, and link you to the original posting.</p>
+<p>FJ is an information broker, not an employer or recruiter. We do not verify or endorse listings, and we never charge job seekers. Always verify the employer and the original listing before applying. Never pay to apply.</p>
+<p>Our job is to make it easy to find opportunities — applying well is yours.</p>`,
+    '/privacy': `<p><strong>What we collect.</strong> Your account email, the profile you build (skills, preferences), saved jobs, your confirmed application history, and job alerts. Anonymous browsing needs no account and stores only device-local preferences.</p>
+<p><strong>Your CV stays on your device.</strong> When you upload a CV to improve your matches, the text is read and matched against skills in your own browser. Your CV file is not uploaded to FJ or to any third party.</p>
+<p><strong>Sign-in codes.</strong> When you sign in, we send a one-time code to your email through our email delivery partner, which processes your email address only to deliver that message.</p>
+<p><strong>Payments.</strong> Paid plans are not open yet. When they launch, card payments will be handled by our payment partner; we will never see or store your card details.</p>
+<p><strong>Retention.</strong> Account data is kept until you delete your account. Aggregated application history is retained so your monthly progress works. Operational logs are kept for up to 30 days.</p>
+<p><strong>Your rights (NDPA and similar laws).</strong> You may access, correct, export or erase your personal data, object to processing, and withdraw consent at any time. Use the account export/delete controls, or contact us. We respond within the periods the law requires.</p>`,
+    '/terms': `<p><strong>What FJ is.</strong> FJ aggregates publicly listed job opportunities. We do not guarantee that any listing is accurate, current, genuine, or that any employer will respond. No employment relationship exists between you and FJ.</p>
+<p><strong>Job seekers never pay.</strong> We do not charge job seekers to browse, save or apply. Anyone asking you for money to get a job found through FJ should be reported.</p>
+<p><strong>Your use of FJ.</strong> Use the service lawfully, do not scrape or abuse it, and verify listings independently before sharing personal information.</p>
+<p><strong>Liability.</strong> FJ is provided "as is". To the extent permitted by law, we are not liable for decisions made based on listings, or for the conduct of employers.</p>`,
+    '/faq': `<p><strong>Do I pay to apply?</strong> No. Applying on the employer's own site is always free and unlimited. FJ never asks you to pay for a job or an application.</p>
+<p><strong>Are the jobs verified?</strong> We collect public listings and point you to the original posting. We do not verify or endorse employers. Always check the employer's official website and confirm the vacancy there.</p>
+<p><strong>How do I spot a job scam?</strong> Never pay to apply, and never share your BVN or bank details with a "recruiter". See our guide to spotting job scams.</p>
+<p><strong>How often does FJ refresh?</strong> Listings are recollected automatically throughout the day; publishers can add or remove roles at any time.</p>
+<p><strong>Why do I see fewer non-English jobs?</strong> The default feed is English-first for Nigerian users. Turn on Worldwide in the More filter to see every language.</p>
+<p><strong>How do I save jobs and track applications?</strong> Tap the bookmark on any job. When you apply through the original listing, mark the role as applied — your Progress dashboard counts what you confirm each month.</p>`,
+    '/scams': `<p>Real employers do not charge you to apply or to get hired. Watch for these warning signs:</p>
+<ul>
+<li>Anyone asking for a registration fee, training fee, "processing" fee or deposit.</li>
+<li>"Pay small token", "send your details to" a personal WhatsApp, or "refundable deposit".</li>
+<li>Requests for your BVN, bank details or ID documents before a real interview.</li>
+<li>Offers made only over WhatsApp or SMS, with no verifiable company website.</li>
+<li>"Urgent", "immediate", "no experience needed", "earn daily", "daily payment".</li>
+<li>Salary that is far above the market for the role.</li>
+</ul>
+<p>If a listing asks you for money, stop and report it from the job page — no account needed. Check the employer on their official website and confirm the vacancy there before you share anything.</p>`,
+    '/contact': `<p>Questions, feedback or a listing to report? Reach the FJ team through the contact options in the app.</p>
+<p>Report suspicious listings any time from the job page — no account needed.</p>`,
+    '/pricing': `<p>Finding opportunities is free, always. Job alerts are free too. Pay only when you want more help applying.</p>
+<p>Desk (free): search and browse opportunities, shortlist and application tracking, job alerts. Desk+ Graduate: everything in Desk plus a weekly digest and verified source badges, at a lower monthly price for recent graduates. Desk+: ₦10,000 per month. Desk+ Annual: ₦100,000 per year.</p>
+<p>Payments are not open yet — join the waitlist on the pricing page and we will email you when paid plans open. When billing opens you will pay through our payment partner; we never see or store your card details. You can cancel at any time from your account page.</p>
+<p>FJ is not an employer. We do not own, verify or endorse any listing, and we never guarantee employment. Never pay anyone for a job or an application.</p>`,
+    '/employers': `<p>FJ collects real vacancies from employer career pages and established job boards, cleans them up, and puts them in front of people who are actively looking across Nigeria and beyond.</p>
+<p>At launch, employers will get direct job posting, a verified employer profile with a verified badge, protection against impersonators misusing your company name, and reach in search by profession, country, work type and experience level.</p>
+<p>Today, automatic collection from your public listings is free and stays free: if your vacancies are on your public careers page or an established board, FJ collects them and links applicants to your original posting. Direct posting and verified profiles will be paid plans priced in naira, confirmed before launch. Join the employer waitlist on this page to hear first.</p>
+<p>FJ never charges job seekers and never asks applicants for money on your behalf.</p>`,
+  }
+  return bodies[pathname] ?? `<p>${esc(pageMeta(pathname).description)}</p>`
+}
+
 /** Hard Google Jobs rules live here; breaking them risks delisting. */
 export function jobPostingJsonLd(job: Job, origin: string, nonce: string): string | null {
   const ageDays = (Date.now() - Date.parse(job.postedAt || '')) / 86_400_000

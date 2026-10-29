@@ -10,6 +10,7 @@ import {
   isCrawler,
   jobMeta,
   jobPostingJsonLd,
+  pageBody,
   pageMeta,
   render404,
   renderJobSitemap,
@@ -131,9 +132,9 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       job && jobMatch ? jobMeta(job, origin) : { ...pageMeta(path), canonical: `${origin}${path}` }
     const bodyHtml = job
       ? `<p>${escLite(job.company || 'Employer not stated')} · ${escLite(job.locationLabel || 'Location not stated')}</p>
-<p>${escLite((job.description || '').slice(0, 700))}</p>
+<p>${escLite((job.description || '').slice(0, 4000))}</p>
 <p><a href="${job.applyUrl || job.sourceUrl}">Apply on the original listing</a> — always free.</p>`
-      : `<p>${escLite(pageMeta(path).description)}</p>`
+      : pageBody(path)
     const html = renderShell({
       title: meta.title,
       description: meta.description,
@@ -147,8 +148,12 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     return new Response(html, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'public, max-age=300',
-        'X-Robots-Tag': job ? '' : path === '/' || path === '/jobs' ? '' : 'noindex',
+        // Job pages may be cached for 6h; static content for 1h. Vary on the
+        // agent so an edge cache can never serve crawler HTML to a human.
+        'Cache-Control': job ? 'public, max-age=21600' : 'public, max-age=3600',
+        Vary: 'User-Agent',
+        // Sitemap-listed public pages are indexable; account pages are not.
+        'X-Robots-Tag': job ? '' : /^\/(dashboard|profile|auth|admin)/.test(path) ? 'noindex' : '',
         'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; frame-ancestors 'none'; base-uri 'self'`,
       },
     })

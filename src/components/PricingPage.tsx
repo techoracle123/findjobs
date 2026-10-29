@@ -6,6 +6,8 @@ interface PlanRow {
   label: string
   entitlements: string[]
   price: { amount: number; currency: string }
+  interval: 'free' | 'month' | 'year' | 'waitlist'
+  audience: 'seeker' | 'employer'
 }
 
 interface PlansPayload {
@@ -17,21 +19,28 @@ interface PlansPayload {
 const ENTITLEMENT_LABELS: Record<string, string> = {
   search: 'Search and browse opportunities',
   shortlist: 'Shortlist and application tracking',
-  alerts: 'Free email alerts',
+  alerts: 'Job alerts',
   weekly_digest: 'Weekly digest',
   verified_source_badges: 'Verified source badges',
   cv_suggestions: 'CV tailoring suggestions',
   fast_apply: 'Fast Apply credits',
 }
 
+/** Free for every job seeker on every plan; shown so the table tells the truth. */
+const BASE_ROWS = ['search', 'shortlist']
+
 const FAQ = [
   {
     q: 'Do I need a paid plan to find opportunities?',
-    a: 'No. Search, shortlists and free alerts are free. Paid plans add CV tailoring and Fast Apply credits.',
+    a: 'No. Search, shortlists and job alerts are free for everyone. Paid plans add a weekly digest and verified source badges.',
+  },
+  {
+    q: 'Who is the Graduate plan for?',
+    a: 'Recent graduates and NYSC members. Same Desk+ features at a lower monthly price.',
   },
   {
     q: 'How do I pay?',
-    a: 'When billing opens, you pay through our payment partner, Bachs. We never see or store your card details.',
+    a: 'When billing opens, you pay through our payment partner. We never see or store your card details.',
   },
   {
     q: 'Can I cancel?',
@@ -43,16 +52,23 @@ const FAQ = [
   },
 ]
 
+function priceLine(plan: PlanRow): string {
+  if (plan.interval === 'free' || plan.price.amount === 0) return 'Free'
+  const amount = `₦${plan.price.amount.toLocaleString('en-NG')}`
+  return plan.interval === 'year' ? `${amount} / year` : `${amount} / month`
+}
+
 /**
- * Pricing page (Prompt 17). The table is generated from the server's
- * entitlement configuration — no price is hardcoded in the bundle. When
- * billing is not configured the page takes waitlist signups instead of
- * showing a checkout that cannot work.
+ * Pricing page (Prompt 17). The table is generated from the server's plan
+ * catalogue — no price is hardcoded in the bundle. When billing is not
+ * configured the page takes waitlist signups instead of showing a checkout
+ * that cannot work.
  */
 export function PricingPage() {
   const [plans, setPlans] = useState<PlansPayload | null>(null)
   const [waitlist, setWaitlist] = useState<'idle' | 'done' | 'error'>('idle')
   const [email, setEmail] = useState('')
+  const [annual, setAnnual] = useState(false)
 
   useEffect(() => {
     document.title = 'Pricing — FJ - Find Jobs'
@@ -68,41 +84,73 @@ export function PricingPage() {
       .catch(() => {})
   }, [])
 
-  const entitlementIds = Array.from(
-    new Set((plans?.plans ?? []).flatMap((plan) => plan.entitlements)),
+  const seekerPlans = (plans?.plans ?? []).filter((plan) => plan.audience === 'seeker')
+  const columns = seekerPlans.filter((plan) =>
+    annual
+      ? plan.interval === 'free' || plan.interval === 'year'
+      : plan.interval === 'free' || plan.interval === 'month',
   )
+  const entitlementIds = Array.from(
+    new Set(seekerPlans.flatMap((plan) => plan.entitlements)),
+  ).filter((id) => id !== 'employer_waitlist')
+  const hasAnnual = seekerPlans.some((plan) => plan.interval === 'year')
 
   return (
     <>
       <main className="wrap" id="main">
         <h1>Simple pricing</h1>
         <p className="lede">
-          Finding opportunities is free, always. Pay only when you want more help applying.
+          Finding opportunities is free, always. Job alerts are free too. Pay only when you want
+          more help applying.
         </p>
+        {plans && hasAnnual && (
+          <div className="pricing-toggle" role="group" aria-label="Billing period">
+            <button
+              type="button"
+              className="btn"
+              aria-pressed={!annual}
+              onClick={() => setAnnual(false)}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              className="btn"
+              aria-pressed={annual}
+              onClick={() => setAnnual(true)}
+            >
+              Annual
+            </button>
+          </div>
+        )}
         {plans && (
           <div className="table-wrap">
             <table className="table pricing-table">
               <thead>
                 <tr>
                   <th scope="col">What you get</th>
-                  {plans.plans.map((plan) => (
+                  {columns.map((plan) => (
                     <th scope="col" key={plan.id}>
                       {plan.label}
                       <br />
-                      <span className="price-line">
-                        {plan.price.amount === 0
-                          ? 'Free'
-                          : `₦${plan.price.amount.toLocaleString('en-NG')} / month`}
-                      </span>
+                      <span className="price-line">{priceLine(plan)}</span>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
+                {BASE_ROWS.map((id) => (
+                  <tr key={id}>
+                    <th scope="row">{ENTITLEMENT_LABELS[id] ?? id}</th>
+                    {columns.map((plan) => (
+                      <td key={plan.id}>Yes</td>
+                    ))}
+                  </tr>
+                ))}
                 {entitlementIds.map((id) => (
                   <tr key={id}>
                     <th scope="row">{ENTITLEMENT_LABELS[id] ?? id}</th>
-                    {plans.plans.map((plan) => (
+                    {columns.map((plan) => (
                       <td key={plan.id}>{plan.entitlements.includes(id) ? 'Yes' : '—'}</td>
                     ))}
                   </tr>
@@ -158,10 +206,21 @@ export function PricingPage() {
         )}
         {plans && plans.billingEnabled && (
           <p>
-            Paid plans are handled by our payment partner, Bachs. You can cancel any time. Your
-            shortlist and alerts stay free.
+            Paid plans are handled by our payment partner. You can cancel any time. Your shortlist
+            and alerts stay free.
           </p>
         )}
+        <section aria-label="For employers">
+          <h2>Hiring?</h2>
+          <p>
+            Employer profiles and direct posting are coming to FJ. Join the employer waitlist and we
+            will contact you before launch. Until then, vacancies on your public careers page or an
+            established job board are collected automatically at no cost.
+          </p>
+          <p>
+            <a href="/employers">See the employer offer and join the waitlist</a>
+          </p>
+        </section>
         <section aria-label="Pricing questions">
           <h2>Common questions</h2>
           {FAQ.map((item) => (

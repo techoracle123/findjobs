@@ -28,6 +28,8 @@ billingRoutes.get('/billing/plans', (c) => {
       label: plan.label,
       entitlements: [...plan.entitlements],
       price: plan.price,
+      interval: plan.interval,
+      audience: plan.audience,
     })),
     provider: provider.id,
     currency: config.billing.currency,
@@ -309,17 +311,25 @@ billingRoutes.post('/billing/waitlist', async (c) => {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ error: 'bad_request' }, 400)
   const db = c.env?.DB
   if (!db) return c.json({ error: 'storage_unavailable' }, 503)
+  const company = typeof body?.company === 'string' ? body.company.trim().slice(0, 120) : ''
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS pricing_waitlist (
         email TEXT PRIMARY KEY,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        company TEXT
       )`,
     )
     .run()
+  // Older deployments created the table without the company column.
+  try {
+    await db.prepare('ALTER TABLE pricing_waitlist ADD COLUMN company TEXT').run()
+  } catch {
+    /* Column already present. */
+  }
   await db
-    .prepare('INSERT OR IGNORE INTO pricing_waitlist (email, created_at) VALUES (?, ?)')
-    .bind(email, Date.now())
+    .prepare('INSERT OR IGNORE INTO pricing_waitlist (email, created_at, company) VALUES (?, ?, ?)')
+    .bind(email, Date.now(), company || null)
     .run()
   return c.json({ ok: true })
 })
