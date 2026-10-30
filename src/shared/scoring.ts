@@ -217,12 +217,34 @@ export function scoreJob(job: Job, profile: Profile): ScoredJob {
  * score, then recency. A restricted role is never promoted above an eligible
  * one no matter how well it scores.
  */
+/** In-market for FJ's audience: in Nigeria, or remote (open to Nigeria by default). */
+export function isInMarket(job: Job): boolean {
+  return job.locationCountry === 'NG' || job.workMode === 'remote'
+}
+
+/**
+ * Default-feed ordering rank: Nigeria first, then remote roles open to
+ * Nigeria, then everything else. (Remote alone would bury Nigerian jobs
+ * under fresher US-remote listings.)
+ */
+export function marketRank(job: Job): number {
+  if (job.locationCountry === 'NG') return 2
+  if (job.workMode === 'remote') return 1
+  return 0
+}
+
 export function compareScoredJobs(a: ScoredJob, b: ScoredJob): number {
   const tierDelta = ELIGIBILITY_ORDER[a.tier] - ELIGIBILITY_ORDER[b.tier]
   if (tierDelta !== 0) return tierDelta
 
   const scoreDelta = b.score - a.score
   if (scoreDelta !== 0) return scoreDelta
+
+  // At equal match, Nigeria and remote roles come first — a Nigeria-first
+  // audience should not need a filter to see Nigerian jobs. Personalised
+  // scores still outrank this; nothing is hidden, only ordered.
+  const marketDelta = marketRank(b.job) - marketRank(a.job)
+  if (marketDelta !== 0) return marketDelta
 
   return Date.parse(b.job.postedAt) - Date.parse(a.job.postedAt)
 }

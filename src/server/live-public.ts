@@ -1,4 +1,5 @@
 import { roleFamilyLabel } from '../shared/taxonomy'
+import { marketRank } from '../shared/scoring'
 import type { Job } from '../shared/types'
 import type { JobSearch, JobSearchResult } from './jobs'
 import { SEED_SOURCES } from './sources/seed'
@@ -103,6 +104,11 @@ export async function fetchPublicSource(
           verificationReason: 'A public opportunity; verify with the employer.',
           sourceKind: parser.kind,
           sourcePlatform: parser.platform,
+          // Nigerian boards/feeds (MyJobMag NG, Hot Nigerian Jobs) stamp NG:
+          // the board itself is the evidence. Aggregators with a home
+          // country (e.g. a German board listing worldwide remote roles)
+          // and company ATS boards must never stamp a country.
+          sourceCountry: parser.kind !== 'ats' && source.country === 'NG' ? 'NG' : undefined,
         })
         return {
           ...job,
@@ -173,8 +179,14 @@ export async function livePublicJobs(origin: string): Promise<Job[]> {
 }
 
 export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResult {
+  // Nigeria-first ordering for unfiltered browsing: in-market roles (NG or
+  // remote) lead, newest first inside each group. Explicit country/search
+  // filters already narrowed the set, so this only shapes the default feed.
   const filtered = matchingPublicJobs(jobs, search).sort(
-    (a, b) => b.postedAt.localeCompare(a.postedAt) || a.id.localeCompare(b.id),
+    (a, b) =>
+      marketRank(b) - marketRank(a) ||
+      b.postedAt.localeCompare(a.postedAt) ||
+      a.id.localeCompare(b.id),
   )
   const limit = Math.min(200, Math.max(1, search.limit ?? 50)),
     offset = Math.max(0, search.offset ?? 0)

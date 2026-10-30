@@ -314,7 +314,12 @@ app.get('/api/jobs', async (c) => {
       updatedAt: published.refreshedAt,
       refreshHours: published.refreshHours,
       sourceCount: published.sourceCount,
-      ...(published.olderSources ? { warning: 'stale' } : {}),
+      // Stale means the snapshot itself is old — computed from its age at
+      // request time, never from whether some source index is ageing (that
+      // pinned this warning on permanently while data was an hour old).
+      ...(Date.now() - Date.parse(published.refreshedAt) > 12 * 3600_000
+        ? { warning: 'stale' }
+        : {}),
     })
   }
 
@@ -398,6 +403,11 @@ app.get('/api/jobs/stats', async (c) => {
     available: true,
     total,
     english: count((job) => job.quality?.isEnglish !== false),
+    // In-market reporting (Stage 2.7): Nigeria and remote-open roles are
+    // the headline numbers, reported separately from the global total.
+    nigeria: count((job) => job.locationCountry === 'NG'),
+    remoteOpen: count((job) => job.workMode === 'remote'),
+    inMarket: count((job) => job.locationCountry === 'NG' || job.workMode === 'remote'),
     sourceCount: snapshot.sourceCount,
     attemptedSources: snapshot.attemptedSources,
     updatedAt: snapshot.refreshedAt,

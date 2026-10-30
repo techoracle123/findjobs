@@ -3,6 +3,7 @@ import type { AppEnv } from '../env'
 import { readConfig } from '../config'
 import { ensureSources, runDueSources, runIngestion } from '../ingest'
 import { getSchedulerHeartbeat, getSourceRuns } from '../public-feed'
+import { cadenceHours } from '../public-schedule'
 import { listParsers } from '../sources/registry'
 import { requireUser, unauthorized } from '../http'
 import type { AppContext } from '../http'
@@ -80,6 +81,13 @@ sourceRoutes.get('/sources', async (c) => {
   return c.json({
     sources: (rows.results ?? []).map((row) => {
       const run = runBySource.get(row.id)
+      // A count from a run older than 3× the source's own refresh tier is
+      // history, not inventory — report zero rather than a stale total
+      // (ashby-openai once showed 1,206 "live" jobs from a 2-day-old run).
+      const lastRunAt = run?.lastRunAt ?? row.last_run_at
+      const countsStale =
+        !lastRunAt ||
+        Date.now() - Date.parse(lastRunAt) > 3 * cadenceHours(row.refresh_tier) * 3600_000
       return {
         id: row.id,
         name: row.name,
@@ -101,7 +109,7 @@ sourceRoutes.get('/sources', async (c) => {
         itemCount: run?.itemCount ?? null,
         consecutiveFailures: run?.consecutiveFailures ?? row.consecutive_failures,
         disabledReason: row.disabled_reason,
-        liveJobs: row.live_jobs ?? 0,
+        liveJobs: countsStale ? 0 : (run?.itemCount ?? row.live_jobs ?? 0),
         closedJobs: row.closed_jobs ?? 0,
       }
     }),

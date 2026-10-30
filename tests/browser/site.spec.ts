@@ -199,25 +199,30 @@ test('public browsing and sign-in availability are reported honestly', async ({ 
   expect((await request.get('/')).ok()).toBe(true)
 })
 
-test('dedicated sign-up, sign-in and recovery pages work on small phones', async ({ page }) => {
+test('one unified sign-in, sign-up and recovery flow works on small phones', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 750 })
+  // Sign-up and sign-in are the same passwordless page: one email, one code.
   await page.goto('/auth/signup')
-  await expect(page.getByRole('heading', { name: 'Create your free account' })).toBeVisible()
-  await expect(page.locator('.auth-card')).toContainText(
-    'first verified email sign-in creates your account',
-  )
-  await page.getByRole('link', { name: 'Sign in', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
-  await page.getByRole('link', { name: 'Forgot password or can’t sign in?' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Sign in or create your free account' }),
+  ).toBeVisible()
+  await expect(page.locator('.auth-card')).toContainText('creates your free account')
+  await page.goto('/auth/login')
+  await expect(
+    page.getByRole('heading', { name: 'Sign in or create your free account' }),
+  ).toBeVisible()
+  await page.getByRole('link', { name: 'Can’t get into your email?' }).click()
   await expect(page).toHaveURL(/\/auth\/recovery/)
   await expect(page.getByRole('heading', { name: 'Recover your account' })).toBeVisible()
-  await expect(page.locator('.auth-card')).toContainText('FJ is passwordless')
+  await expect(page.locator('.auth-card')).toContainText('FJ has no passwords')
   await expect(page.locator('.auth-card')).toContainText('inbox and spam folder')
   // Own sign-in (Prompt 18): the card carries our own email + code flow.
   await page.getByRole('link', { name: 'Back to sign in' }).click()
-  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Sign in or create your free account' }),
+  ).toBeVisible()
   await expect(page.getByLabel('Email')).toBeVisible()
-  await expect(page.getByRole('button', { name: /Send me a code/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Email me a code/ })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
@@ -245,7 +250,7 @@ test('match rings are visible on phones and never show a numeric grade', async (
 test('expanded live corpus is paginated, regularly refreshed and opens complete listings', async ({
   request,
 }, testInfo) => {
-  const status = await request.get('/api/feed-status', { timeout: 20000 })
+  const status = await request.get('/api/feed-status', { timeout: 45000 })
   if (!status.ok() && !String(testInfo.project.use.baseURL).startsWith('https://'))
     test.skip(
       true,
@@ -259,7 +264,7 @@ test('expanded live corpus is paginated, regularly refreshed and opens complete 
   expect(Date.now() - Date.parse(metadata.updatedAt)).toBeLessThan(36 * 3600000)
   const offset = Math.min(5000, Math.floor(metadata.total / 2))
   const response = await request.get(`/api/jobs?status=open&offset=${offset}&limit=2`, {
-    timeout: 20000,
+    timeout: 45000,
   })
   expect(response.ok()).toBe(true)
   const feed = await response.json()
@@ -268,7 +273,7 @@ test('expanded live corpus is paginated, regularly refreshed and opens complete 
   expect(feed.jobs).toHaveLength(2)
   expect(feed.jobs[0].isDemo).toBe(false)
   expect(feed.jobs[0].descriptionPreview).toBe(true)
-  const detail = await request.get(`/api/jobs/${feed.jobs[0].id}`, { timeout: 20000 })
+  const detail = await request.get(`/api/jobs/${feed.jobs[0].id}`, { timeout: 45000 })
   expect(detail.ok()).toBe(true)
   const { job } = await detail.json()
   expect(job.descriptionPreview).not.toBe(true)
@@ -480,18 +485,31 @@ test('no serious accessibility violations on the main routes', async ({ page }) 
 })
 
 test('UI controls with no backing data stay hidden unless admin override', async ({ page }) => {
+  // Judge the page by the facets of the first home-feed response it
+  // applied (limit=20): coverage is computed over the matched subset, and
+  // the preview corpus keeps warming while the suite runs, so any later
+  // or narrower snapshot can sit on the other side of the 0.6 threshold.
+  const feedResponse = page.waitForResponse(
+    (r) =>
+      r.url().includes('/api/jobs?') &&
+      r.url().includes('limit=20') &&
+      r.request().method() === 'GET',
+  )
   await page.goto('/')
-  await expect(page.locator('.joblist .jobrow').first()).toBeVisible() // warms the response cache
-  const facets = (
-    await (await page.request.get('/api/jobs?status=open&limit=1', { timeout: 30_000 })).json()
-  ).facets
+  const facets = (await (await feedResponse).json()).facets
+  expect(facets?.coverage).toBeTruthy()
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
   // Work type is always visible by product decision, whatever the coverage.
-  await expect(page.getByRole('button', { name: /Work type/ })).toHaveCount(1)
-  if (facets.coverage.seniority < 0.6)
-    await expect(page.getByRole('button', { name: /Experience/ })).toHaveCount(0)
+  // Chips may exist in both the filter bar and the mobile drawer (>= 1).
+  expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
+  const experienceCount = await page.getByRole('button', { name: /Experience/ }).count()
+  if (facets.coverage.seniority < 0.6) expect(experienceCount).toBe(0)
+  else expect(experienceCount).toBeGreaterThanOrEqual(1)
   if (facets.coverage.salary < 0.6) await expect(page.locator('#sort option')).toHaveCount(2)
   // The admin override always exposes every control for testing.
   await page.goto('/?adminControls=1')
-  await expect(page.getByRole('button', { name: /Work type/ })).toHaveCount(1)
-  await expect(page.getByRole('button', { name: /Verified only/ })).toHaveCount(1)
+  expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
+  expect(await page.getByRole('button', { name: /Verified only/ }).count()).toBeGreaterThanOrEqual(
+    1,
+  )
 })

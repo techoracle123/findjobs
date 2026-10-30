@@ -211,6 +211,13 @@ export interface NormaliseContext {
   sourceKind: string
   sourcePlatform?: string
   now: number
+  /**
+   * The country of a country-specific board/feed (e.g. a Nigerian jobs
+   * feed). Used only when the listing's own location carries no country
+   * signal — the board itself is confident evidence. Never set for
+   * company ATS boards, which list roles worldwide.
+   */
+  sourceCountry?: string
 }
 
 export interface NormalisedPosting extends Omit<
@@ -230,7 +237,8 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
   const text = `${raw.title}\n${raw.description}`
   const required = skillsFromTags(raw.tags)
   const useful = skillsFromText(text, required)
-  const salary = raw.salary ?? extractSalary(raw.description, inferCountry(raw.location))
+  const countryHint = inferCountry(raw.location) || (context.sourceCountry ?? '')
+  const salary = raw.salary ?? extractSalary(raw.description, countryHint)
 
   const nowIso = new Date(context.now).toISOString()
 
@@ -251,7 +259,7 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
     sourceUrl: raw.url,
     tags: raw.tags,
     locationLabel: raw.location,
-    locationCountry: inferCountry(raw.location),
+    locationCountry: countryHint,
     workMode: inferWorkMode(raw.remote, `${raw.title} ${raw.location}`),
     seniority: inferSeniority(raw.title, raw.description),
     salaryMin: salary?.min ?? 0,
@@ -265,7 +273,7 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
   return {
     ...patch,
     roleFamily: specialistRole(raw.title) || inferRoleFamily(raw.title, raw.tags, raw.description),
-    locationCountry: patch.quality.location.country || inferCountry(raw.location),
+    locationCountry: patch.quality.location.country || countryHint,
     locationLabel: raw.location.trim(),
     description: cleanJobText(raw.description).slice(0, 16000),
     // The quality pass owns the required/useful split (it merges these same
