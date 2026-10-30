@@ -124,20 +124,41 @@ export async function noteSourceHealth(
   extra: { durationMs?: number; itemCount?: number } = {},
 ): Promise<void> {
   const key = `source:health:${sourceId}`
-  const previous = (await kv.get<{ fails: number }>(key, 'json')) ?? { fails: 0 }
+  const previous = (await kv.get<{
+    fails: number
+    at?: number
+    status?: string
+    itemCount?: number | null
+  }>(key, 'json')) ?? { fails: 0 }
   const fails = ok ? 0 : previous.fails + 1
-  await kv.put(
-    key,
-    JSON.stringify({
-      fails,
-      at: Date.now(),
-      status: ok ? 'ok' : 'error',
-      error: error.slice(0, 300),
-      durationMs: extra.durationMs ?? null,
-      itemCount: extra.itemCount ?? null,
-    }),
-  )
-  if (ok) {
+  // KV writes are quota'd on the free plan (1,000/day; exhausted once by
+  // repeated full harvests — CF error 10048). A success that changes
+  // nothing material does not rewrite the record: most refreshes are
+  // unchanged successes, and this was ~800 writes/day of pure churn.
+  // The timestamp still advances at least every six hours.
+  const unchangedSuccess =
+    ok &&
+    previous.status === 'ok' &&
+    previous.fails === 0 &&
+    (previous.itemCount ?? null) === (extra.itemCount ?? null) &&
+    typeof previous.at === 'number' &&
+    Date.now() - previous.at < 6 * 3_600_000
+  if (!unchangedSuccess)
+    await kv.put(
+      key,
+      JSON.stringify({
+        fails,
+        at: Date.now(),
+        status: ok ? 'ok' : 'error',
+        error: error.slice(0, 300),
+        durationMs: extra.durationMs ?? null,
+        itemCount: extra.itemCount ?? null,
+      }),
+    )
+  // A previous 'ok' record means a disable cannot be outstanding (disables
+  // are only written on the failure path, which also writes health=error),
+  // so the delete is skipped for unchanged successes too.
+  if (ok && !unchangedSuccess) {
     // A success clears any disable outright; the cooldown is only the
     // backstop for sources nobody has retried yet.
     try {
