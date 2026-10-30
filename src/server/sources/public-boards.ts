@@ -79,7 +79,12 @@ export const remoteok = jsonBoard('remoteok', 'remoteok', (body) =>
     ),
 )
 
-/** Himalayas returns { jobs: [...] } and paginates with limit/offset. */
+/**
+ * Himalayas returns { jobs: [...] } with cursor pagination (offset is
+ * deprecated by the publisher). Items key on `guid` (the canonical job URL);
+ * an earlier version of this adapter read `id`/`url` fields the API does not
+ * send, so every item was skipped and the source silently yielded nothing.
+ */
 export const himalayas: SourceParser = {
   id: 'himalayas',
   name: 'Himalayas',
@@ -91,36 +96,72 @@ export const himalayas: SourceParser = {
   verificationReason: 'A public opportunity; verify with the employer.',
   async fetchPostings(source: SourceRef, fetchImpl: typeof fetch = fetch) {
     const pageSize = 100
+    const maxPages = 30
     const seen = new Set<string>()
     const postings: RawPosting[] = []
-    for (let page = 0; page < 10; page += 1) {
-      const url = `${source.listingUrl}?limit=${pageSize}&offset=${page * pageSize}`
+    let cursor: string | null = null
+    for (let page = 0; page < maxPages; page += 1) {
+      const url = cursor
+        ? `${source.listingUrl}?limit=${pageSize}&cursor=${encodeURIComponent(cursor)}`
+        : `${source.listingUrl}?limit=${pageSize}`
       const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
       if (!response.ok) {
         if (page === 0) throw new Error(`himalayas returned ${response.status}`)
         break
       }
-      const body = (await response.json()) as { jobs?: Record<string, unknown>[] }
+      const body = (await response.json()) as {
+        jobs?: Record<string, unknown>[]
+        nextCursor?: string | null
+      }
       const jobs = body.jobs ?? []
       let fresh = 0
       for (const item of jobs) {
-        const id = String(item.id ?? item.url ?? '')
+        const guid = String(item.guid ?? item.applicationLink ?? '')
+        const id = guid || String(item.id ?? item.slug ?? '')
         if (!id || seen.has(id)) continue
         seen.add(id)
         fresh += 1
+        const restrictions = Array.isArray(item.locationRestrictions)
+          ? item.locationRestrictions.map(String).filter(Boolean)
+          : []
+        const location = restrictions.length > 0 ? restrictions.join(', ') : 'Remote'
+        const min = typeof item.minSalary === 'number' ? item.minSalary : null
+        const max = typeof item.maxSalary === 'number' ? item.maxSalary : null
+        const epoch = (value: unknown): string | null =>
+          typeof value === 'number' && value > 0 ? new Date(value * 1000).toISOString() : null
         postings.push(
           posting(
             id,
             String(item.title ?? ''),
             String(item.companyName ?? item.company ?? 'Employer not stated'),
-            `https://himalayas.app/jobs/${String(item.slug ?? item.id ?? '')}`,
-            [item.location, item.countries].flat().filter(Boolean).join(', ') || 'Remote',
+            guid || `https://himalayas.app/jobs/${String(item.slug ?? '')}`,
+            location,
             String(item.description ?? ''),
-            { remote: true },
+            {
+              remote: true,
+              applyUrl: typeof item.applicationLink === 'string' ? item.applicationLink : undefined,
+              publishedAt: epoch(item.pubDate),
+              validThrough: epoch(item.expiryDate),
+              jobType: String(item.employmentType ?? ''),
+              tags: [
+                ...(Array.isArray(item.categories) ? item.categories.map(String) : []),
+                ...(Array.isArray(item.seniority) ? item.seniority.map(String) : []),
+              ],
+              salary:
+                (min ?? max) !== null && typeof item.currency === 'string' && item.currency
+                  ? {
+                      min,
+                      max,
+                      currency: item.currency,
+                      period: item.salaryPeriod === 'monthly' ? 'month' : 'year',
+                    }
+                  : null,
+            },
           ),
         )
       }
-      if (jobs.length < pageSize || fresh === 0) break
+      cursor = typeof body.nextCursor === 'string' && body.nextCursor ? body.nextCursor : null
+      if (!cursor || jobs.length < pageSize || fresh === 0) break
     }
     return postings
   },
@@ -226,21 +267,33 @@ export const jobicy = jsonBoard('jobicy', 'jobicy', (body) =>
 )
 
 /** Workable: { jobs: [{ shortcode, title, company, url, location, description }] }. */
-export const workable = jsonBoard('workable', 'workable', (body) =>
-  ((body as { jobs?: Record<string, unknown>[] }).jobs ?? []).map((item) =>
-    posting(
+export const workable = jsonBoard('workable', 'workable', (body) => {
+  // The widget payload is { name: <employer>, jobs: [...] }; each job carries
+  // a `locations` array plus flat city/state/country fields — there is no
+  // per-job `company` or `location` object, which an earlier mapping assumed.
+  const employer = String((body as { name?: unknown }).name ?? '')
+  return ((body as { jobs?: Record<string, unknown>[] }).jobs ?? []).map((item) => {
+    const first = Array.isArray(item.locations)
+      ? (item.locations[0] as { city?: string; region?: string; country?: string } | undefined)
+      : undefined
+    const location = [first?.city, first?.region, first?.country].filter(Boolean).join(', ')
+    const flat = [item.city, item.state, item.country].filter(Boolean).join(', ')
+    return posting(
       String(item.shortcode ?? item.id ?? item.url),
       String(item.title ?? ''),
-      String(item.company ?? (item.department as string) ?? 'Employer not stated'),
+      String(item.company ?? '') || employer || 'Employer not stated',
       String(item.url ?? `https://apply.workable.com/jobs/${String(item.shortcode ?? '')}`),
-      typeof item.location === 'object' && item.location !== null
-        ? String((item.location as { city?: string; country?: string }).city ?? '') ||
-            String((item.location as { country?: string }).country ?? '')
-        : String(item.location ?? ''),
+      location || flat,
       String(item.description ?? ''),
-    ),
-  ),
-)
+      {
+        remote: item.telecommuting === true,
+        applyUrl: typeof item.application_url === 'string' ? item.application_url : undefined,
+        publishedAt: typeof item.published_on === 'string' ? item.published_on : null,
+        jobType: String(item.employment_type ?? ''),
+      },
+    )
+  })
+})
 
 /**
  * Hacker News "Who is hiring": top-level comments follow the community

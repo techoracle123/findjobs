@@ -316,46 +316,56 @@ export const smartrecruiters: SourceParser = {
 
   async fetchPostings(source, fetchImpl = fetch) {
     const company = slugOf(source)
-    const url = `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(company)}/postings?limit=100`
-    const payload = (await readJson(url, source.id, fetchImpl)) as {
-      content?: SmartRecruitersPosting[]
+    // The listing endpoint paginates with limit/offset and reports
+    // totalFound. Walk it (bounded) instead of reading one page.
+    const listings: SmartRecruitersPosting[] = []
+    for (let offset = 0; offset < 500; offset += 100) {
+      const url = `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(company)}/postings?limit=100&offset=${offset}`
+      const payload = (await readJson(url, source.id, fetchImpl)) as {
+        content?: SmartRecruitersPosting[]
+        totalFound?: number
+      }
+      const page = (payload.content ?? []).filter((posting) => posting.id && posting.name)
+      listings.push(...page)
+      if (page.length < 100) break
+      if (typeof payload.totalFound === 'number' && listings.length >= payload.totalFound) break
     }
 
-    const listings = (payload.content ?? []).filter((posting) => posting.id && posting.name)
-
-    // The listing has no description, so the detail is fetched for the first
-    // handful only. Running the source again picks up the next batch.
+    // The listing has no description, so detail is fetched for the first
+    // handful only — but every listing is returned. An earlier version
+    // sliced to those 20 and discarded the rest of the board.
     const withDetail = await Promise.all(
-      listings.slice(0, 20).map(async (posting) => {
+      listings.map(async (posting, index) => {
         const detailUrl = `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(company)}/postings/${posting.id}`
         let description = ''
         let applicationUrl =
           posting.external_url ||
           `https://jobs.smartrecruiters.com/${encodeURIComponent(company)}/${posting.id}`
-        try {
-          const detail = (await readJson(detailUrl, source.id, fetchImpl)) as {
-            applyUrl?: string
-            postingUrl?: string
-            jobAd?: {
-              sections?: {
-                jobDescription?: string | { text?: string }
-                qualifications?: string | { text?: string }
-                additionalInformation?: string | { text?: string }
+        if (index < 20)
+          try {
+            const detail = (await readJson(detailUrl, source.id, fetchImpl)) as {
+              applyUrl?: string
+              postingUrl?: string
+              jobAd?: {
+                sections?: {
+                  jobDescription?: string | { text?: string }
+                  qualifications?: string | { text?: string }
+                  additionalInformation?: string | { text?: string }
+                }
               }
             }
+            applicationUrl = detail.applyUrl || detail.postingUrl || applicationUrl
+            description = [
+              detail.jobAd?.sections?.jobDescription ?? '',
+              detail.jobAd?.sections?.qualifications ?? '',
+              detail.jobAd?.sections?.additionalInformation ?? '',
+            ]
+              .map((part) => stripHtml(typeof part === 'string' ? part : part.text || ''))
+              .filter(Boolean)
+              .join('\n\n')
+          } catch {
+            // A posting with no description is still worth listing.
           }
-          applicationUrl = detail.applyUrl || detail.postingUrl || applicationUrl
-          description = [
-            detail.jobAd?.sections?.jobDescription ?? '',
-            detail.jobAd?.sections?.qualifications ?? '',
-            detail.jobAd?.sections?.additionalInformation ?? '',
-          ]
-            .map((part) => stripHtml(typeof part === 'string' ? part : part.text || ''))
-            .filter(Boolean)
-            .join('\n\n')
-        } catch {
-          // A posting with no description is still worth listing.
-        }
 
         const location = [
           posting.location?.city,
