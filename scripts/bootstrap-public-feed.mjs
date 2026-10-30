@@ -120,9 +120,15 @@ export async function bootstrapPublicFeed(api, auth) {
   console.log(
     `::notice title=Expanded public feed::${snapshot.jobs.length} distinct real listings; ${healthy} publishers fetched, ${failed} unavailable/disallowed. Refresh interval 12 hours. No D1 dependency.`,
   )
-  if (snapshot.jobs.length < 2000)
+  // The floor protects a healthy site from a bad harvest — it must never
+  // block recovery of a collapsed one. Require 2,000 when the live feed is
+  // healthy, but only "clearly alive" (>=200 and >= what is live now) when
+  // the live feed has already fallen below that.
+  const previousCount = current?.ids?.length ?? current?.jobs?.length ?? 0
+  const floor = Math.max(200, Math.min(2000, previousCount))
+  if (snapshot.jobs.length < floor)
     throw new Error(
-      'Expanded feed did not reach 2,000 genuine listings; existing site kept unchanged',
+      `Expanded feed reached ${snapshot.jobs.length} genuine listings (floor ${floor}, live ${previousCount}); existing site kept unchanged`,
     )
   return { id: ns.id, count: snapshot.jobs.length }
 }
