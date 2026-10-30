@@ -23,20 +23,31 @@ export async function bootstrapPublicFeed(api, auth) {
       if (!response.ok) throw new Error(`Public snapshot read failed (HTTP ${response.status})`)
       return response.json()
     },
-    async put(key, value, options) {
-      const response = await fetch(
-        `${base}${encodeURIComponent(key)}?expiration_ttl=${options.expirationTtl}`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${auth.token}`,
-            'Content-Type': 'application/octet-stream',
-          },
-          body: value,
-          signal: AbortSignal.timeout(60000),
+    async put(key, value, options = {}) {
+      // The feed code writes health/heartbeat records without a TTL; an
+      // earlier version of this wrapper dereferenced options.expirationTtl
+      // unconditionally, so every source refresh threw AFTER a successful
+      // fetch and the harvest collapsed to near zero.
+      const ttl = options.expirationTtl ? `?expiration_ttl=${options.expirationTtl}` : ''
+      const response = await fetch(`${base}${encodeURIComponent(key)}${ttl}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${auth.token}`,
+          'Content-Type': 'application/octet-stream',
         },
-      )
+        body: value,
+        signal: AbortSignal.timeout(60000),
+      })
       if (!response.ok) throw new Error(`Public snapshot write failed (HTTP ${response.status})`)
+    },
+    async delete(key) {
+      const response = await fetch(base + encodeURIComponent(key), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${auth.token}` },
+        signal: AbortSignal.timeout(60000),
+      })
+      if (!response.ok && response.status !== 404)
+        throw new Error(`Public snapshot delete failed (HTTP ${response.status})`)
     },
   }
   await mkdir('diagnostics', { recursive: true })
@@ -109,9 +120,11 @@ export async function bootstrapPublicFeed(api, auth) {
           const count = await refreshPublicSource(kv, source.id, run)
           healthy++
           console.log(`Public publisher: ${source.id}, ${count} open listings`)
-        } catch {
+        } catch (error) {
           failed++
-          console.log(`Public publisher unavailable/disallowed: ${source.id}`)
+          console.log(
+            `Public publisher unavailable/disallowed: ${source.id}: ${error instanceof Error ? error.message : 'unknown'}`,
+          )
         }
       }
     }),

@@ -485,18 +485,24 @@ test('no serious accessibility violations on the main routes', async ({ page }) 
 })
 
 test('UI controls with no backing data stay hidden unless admin override', async ({ page }) => {
+  // Judge the page by the exact facets it loaded (the page requests the
+  // English subset; a bare limit=1 fetch covers all languages and its
+  // coverage can sit on the other side of the 0.6 threshold).
+  const jobsResponse = page.waitForResponse((r) => r.url().includes('/api/jobs?'))
   await page.goto('/')
-  await expect(page.locator('.joblist .jobrow').first()).toBeVisible() // warms the response cache
-  const facets = (
-    await (await page.request.get('/api/jobs?status=open&limit=1', { timeout: 30_000 })).json()
-  ).facets
+  const facets = (await (await jobsResponse).json()).facets
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
   // Work type is always visible by product decision, whatever the coverage.
-  await expect(page.getByRole('button', { name: /Work type/ })).toHaveCount(1)
-  if (facets.coverage.seniority < 0.6)
-    await expect(page.getByRole('button', { name: /Experience/ })).toHaveCount(0)
+  // Chips may exist in both the filter bar and the mobile drawer (>= 1).
+  expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
+  const experienceCount = await page.getByRole('button', { name: /Experience/ }).count()
+  if (facets.coverage.seniority < 0.6) expect(experienceCount).toBe(0)
+  else expect(experienceCount).toBeGreaterThanOrEqual(1)
   if (facets.coverage.salary < 0.6) await expect(page.locator('#sort option')).toHaveCount(2)
   // The admin override always exposes every control for testing.
   await page.goto('/?adminControls=1')
-  await expect(page.getByRole('button', { name: /Work type/ })).toHaveCount(1)
-  await expect(page.getByRole('button', { name: /Verified only/ })).toHaveCount(1)
+  expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
+  expect(await page.getByRole('button', { name: /Verified only/ }).count()).toBeGreaterThanOrEqual(
+    1,
+  )
 })
