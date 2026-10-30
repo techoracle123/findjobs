@@ -485,26 +485,20 @@ test('no serious accessibility violations on the main routes', async ({ page }) 
 })
 
 test('UI controls with no backing data stay hidden unless admin override', async ({ page }) => {
-  // Judge the page by the facets of the LAST jobs response it applied:
-  // the app can load twice on mount (URL sync, stored preferences), and a
-  // separately fetched snapshot can sit on the other side of the 0.6
-  // threshold (different language/filter subset, different coverage).
-  const facetPayloads: Promise<{ coverage: Record<string, number> }>[] = []
-  page.on('response', (r) => {
-    // Only the home feed's own query (limit=20): coverage is computed over
-    // the matched subset, so other components' narrower queries disagree.
-    if (
+  // Judge the page by the facets of the first home-feed response it
+  // applied (limit=20): coverage is computed over the matched subset, and
+  // the preview corpus keeps warming while the suite runs, so any later
+  // or narrower snapshot can sit on the other side of the 0.6 threshold.
+  const feedResponse = page.waitForResponse(
+    (r) =>
       r.url().includes('/api/jobs?') &&
       r.url().includes('limit=20') &&
-      r.request().method() === 'GET'
-    )
-      facetPayloads.push(r.json().then((body) => body.facets))
-  })
+      r.request().method() === 'GET',
+  )
   await page.goto('/')
-  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
-  await page.waitForLoadState('networkidle')
-  const facets = (await Promise.all(facetPayloads)).at(-1)!
+  const facets = (await (await feedResponse).json()).facets
   expect(facets?.coverage).toBeTruthy()
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
   // Work type is always visible by product decision, whatever the coverage.
   // Chips may exist in both the filter bar and the mobile drawer (>= 1).
   expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
