@@ -433,6 +433,8 @@ export async function runIngestion(
         verificationReason: sourceRef.verificationReason,
         sourceKind: row.kind ?? parser.kind,
         sourcePlatform: row.platform ?? parser.platform,
+        sourceCountry:
+          parser.kind !== 'ats' && sourceRef.options.country === 'NG' ? 'NG' : undefined,
         now,
       })
 

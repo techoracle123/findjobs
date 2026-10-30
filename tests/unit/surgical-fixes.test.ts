@@ -210,6 +210,74 @@ describe('disabled-source cooldown (stage 2 follow-through)', () => {
   })
 })
 
+describe('Nigeria visibility end to end', () => {
+  const raw = {
+    externalId: 'x1',
+    title: 'Account Officer',
+    company: 'Lagos Ventures',
+    description: 'We are hiring an account officer for our Ikeja office. Apply today.',
+    url: 'https://example.ng/job/1',
+    location: 'Ikeja',
+    remote: false,
+    tags: [],
+    jobType: 'full-time',
+    publishedAt: null,
+    validThrough: null,
+    closed: false,
+    salary: null,
+  }
+
+  it('a Nigerian board stamps NG when the listing only names a city', async () => {
+    const { normalizePosting } = await import('../../src/server/sources/normalize')
+    const job = normalizePosting(raw, {
+      verification: 'unverified',
+      verificationReason: 'test',
+      sourceKind: 'rss',
+      sourceCountry: 'NG',
+      now: Date.now(),
+    })
+    expect(job.locationCountry).toBe('NG')
+  })
+
+  it('without a board country, no country is invented', async () => {
+    const { normalizePosting } = await import('../../src/server/sources/normalize')
+    const job = normalizePosting(
+      { ...raw, location: 'Springfield' },
+      {
+        verification: 'unverified',
+        verificationReason: 'test',
+        sourceKind: 'ats',
+        now: Date.now(),
+      },
+    )
+    expect(job.locationCountry).toBe('')
+  })
+
+  it('in-market roles win the default ordering at equal score', async () => {
+    const { compareScoredJobs, isInMarket } = await import('../../src/shared/scoring')
+    const base = {
+      score: 0,
+      tier: 'unknown' as const,
+      breakdown: { skills: 0, role: 0, location: 0, seniority: 0, freshness: 0 },
+      reasons: [],
+      matchedSkills: [],
+      missingSkills: [],
+    }
+    const us = {
+      ...base,
+      job: { locationCountry: 'US', workMode: 'onsite', postedAt: '2026-10-30T00:00:00Z' },
+    } as never
+    const ng = {
+      ...base,
+      job: { locationCountry: 'NG', workMode: 'onsite', postedAt: '2026-10-29T00:00:00Z' },
+    } as never
+    expect(compareScoredJobs(us, ng)).toBeGreaterThan(0)
+    expect(isInMarket({ locationCountry: 'NG', workMode: 'onsite' } as never)).toBe(true)
+    expect(isInMarket({ locationCountry: 'US', workMode: 'remote' } as never)).toBe(true)
+    expect(isInMarket({ locationCountry: 'US', workMode: 'onsite' } as never)).toBe(false)
+  })
+})
+
 describe('crawler bodies (3.1) and email (1)', () => {
   it('serves real content, not a meta-description stub', () => {
     expect(pageBody('/privacy').length).toBeGreaterThan(1200)

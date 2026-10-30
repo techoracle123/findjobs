@@ -403,6 +403,11 @@ app.get('/api/jobs/stats', async (c) => {
     available: true,
     total,
     english: count((job) => job.quality?.isEnglish !== false),
+    // In-market reporting (Stage 2.7): Nigeria and remote-open roles are
+    // the headline numbers, reported separately from the global total.
+    nigeria: count((job) => job.locationCountry === 'NG'),
+    remoteOpen: count((job) => job.workMode === 'remote'),
+    inMarket: count((job) => job.locationCountry === 'NG' || job.workMode === 'remote'),
     sourceCount: snapshot.sourceCount,
     attemptedSources: snapshot.attemptedSources,
     updatedAt: snapshot.refreshedAt,

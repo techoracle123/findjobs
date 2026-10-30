@@ -36,7 +36,10 @@ export const PUBLIC_SOURCES = SEED_SOURCES.filter(
 // Sources confirm aliveness by rewriting only when content changes (plus a
 // periodic freshness touch), so the confirmation window is 8 days, not 36h.
 const MAX_AGE = 8 * 86_400_000
-const EXPIRY = 3 * 86400
+// KV lifetime must comfortably exceed MAX_AGE: at 3 days it did not, so when
+// sources stopped refreshing (the robots-era auto-disables) their indexes
+// expired wholesale and the corpus collapsed 3,450 -> 56 jobs overnight.
+const EXPIRY = 10 * 86400
 export interface IndexedJob extends Job {
   detailKey: string
 }
