@@ -491,7 +491,13 @@ test('UI controls with no backing data stay hidden unless admin override', async
   // threshold (different language/filter subset, different coverage).
   const facetPayloads: Promise<{ coverage: Record<string, number> }>[] = []
   page.on('response', (r) => {
-    if (r.url().includes('/api/jobs?') && r.request().method() === 'GET')
+    // Only the home feed's own query (limit=20): coverage is computed over
+    // the matched subset, so other components' narrower queries disagree.
+    if (
+      r.url().includes('/api/jobs?') &&
+      r.url().includes('limit=20') &&
+      r.request().method() === 'GET'
+    )
       facetPayloads.push(r.json().then((body) => body.facets))
   })
   await page.goto('/')
