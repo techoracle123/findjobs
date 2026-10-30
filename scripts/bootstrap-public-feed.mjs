@@ -98,6 +98,7 @@ export async function bootstrapPublicFeed(api, auth) {
   let cursor = 0,
     healthy = 0,
     failed = 0
+  const zeroYield = []
   await Promise.all(
     Array.from({ length: 4 }, async () => {
       while (cursor < PUBLIC_SOURCES.length) {
@@ -119,15 +120,20 @@ export async function bootstrapPublicFeed(api, auth) {
           }
           const count = await refreshPublicSource(kv, source.id, run)
           healthy++
+          if (count === 0) zeroYield.push(source.id)
           console.log(`Public publisher: ${source.id}, ${count} open listings`)
         } catch (error) {
           failed++
+          zeroYield.push(source.id)
           console.log(
             `Public publisher unavailable/disallowed: ${source.id}: ${error instanceof Error ? error.message : 'unknown'}`,
           )
         }
       }
     }),
+  )
+  console.log(
+    `::notice title=Zero-yield publishers (${zeroYield.length})::${zeroYield.slice(0, 60).join(', ') || 'none'}`,
   )
   const snapshot = await publishPublicSnapshot(kv)
   console.log(

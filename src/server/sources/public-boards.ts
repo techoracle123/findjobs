@@ -95,8 +95,12 @@ export const himalayas: SourceParser = {
   verification: 'unverified',
   verificationReason: 'A public opportunity; verify with the employer.',
   async fetchPostings(source: SourceRef, fetchImpl: typeof fetch = fetch) {
-    const pageSize = 100
-    const maxPages = 30
+    // Small pages: each item carries a full description, so a 100-item page
+    // is a multi-MB response that risks fetch timeouts; 25-item pages stay
+    // light. 40 pages bounds one refresh at 1,000 postings (each also costs
+    // a detail write downstream).
+    const pageSize = 25
+    const maxPages = 40
     const seen = new Set<string>()
     const postings: RawPosting[] = []
     let cursor: string | null = null

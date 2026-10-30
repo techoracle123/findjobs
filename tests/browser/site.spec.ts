@@ -11,7 +11,9 @@ for (const width of [320, 390, 414, 768, 1024, 1280, 1600, 1920]) {
     await expect(page.getByRole('heading', { level: 1 })).toContainText(
       'Find work that fits your skills',
     )
-    await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+    // The live corpus is large and a cold edge isolate assembles it on the
+    // first request; allow for that rather than the 5s default.
+    await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
