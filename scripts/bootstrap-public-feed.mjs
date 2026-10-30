@@ -20,7 +20,7 @@ export async function bootstrapPublicFeed(api, auth) {
   const pace = async () => {
     const now = Date.now()
     const wait = Math.max(0, nextSlot - now)
-    nextSlot = Math.max(now, nextSlot) + 120
+    nextSlot = Math.max(now, nextSlot) + 300
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
   }
   const kv = {
