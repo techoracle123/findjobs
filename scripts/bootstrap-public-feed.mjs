@@ -29,8 +29,10 @@ export async function bootstrapPublicFeed(api, auth) {
       // unconditionally, so every source refresh threw AFTER a successful
       // fetch and the harvest collapsed to near zero.
       const ttl = options.expirationTtl ? `?expiration_ttl=${options.expirationTtl}` : ''
-      // The KV API rate-limits bursts (observed: a whole deploy failed on a
-      // single 429 during publish). Retry transient statuses with backoff.
+      // The KV API rate-limits bursts (observed: whole deploys failed on a
+      // single 429 during publish, and a 13s backoff was not enough to
+      // outlive the window). Retry transient statuses across ~2 minutes.
+      const backoffs = [2000, 5000, 15000, 30000, 60000]
       for (let attempt = 0; ; attempt += 1) {
         const response = await fetch(`${base}${encodeURIComponent(key)}${ttl}`, {
           method: 'PUT',
@@ -43,9 +45,9 @@ export async function bootstrapPublicFeed(api, auth) {
         })
         if (response.ok) return
         const transient = response.status === 429 || response.status >= 500
-        if (!transient || attempt >= 3)
+        if (!transient || attempt >= backoffs.length)
           throw new Error(`Public snapshot write failed (HTTP ${response.status})`)
-        await new Promise((resolve) => setTimeout(resolve, 1000 * 3 ** attempt))
+        await new Promise((resolve) => setTimeout(resolve, backoffs[attempt]))
       }
     },
     async delete(key) {
