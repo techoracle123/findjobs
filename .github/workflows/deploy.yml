@@ -81,6 +81,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # One-off full re-harvest for the Himalayas pagination fix; remove after it lands.
+          FJ_FORCE_PUBLIC_REFRESH: 'true'
         run: node scripts/deploy-cloudflare.mjs
       - name: Install Chromium for live browser checks
         run: npx playwright install --with-deps chromium

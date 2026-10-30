@@ -165,7 +165,10 @@ export const himalayas: SourceParser = {
         )
       }
       cursor = typeof body.nextCursor === 'string' && body.nextCursor ? body.nextCursor : null
-      if (!cursor || jobs.length < pageSize || fresh === 0) break
+      // Follow the cursor, not the requested size: the publisher may serve
+      // fewer items per page than asked (it caps at 20), and treating that
+      // as the last page once cut this source to a single page of 20.
+      if (!cursor || jobs.length === 0 || fresh === 0) break
     }
     return postings
   },

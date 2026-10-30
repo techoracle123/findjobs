@@ -103,6 +103,31 @@ describe('himalayas pagination', () => {
     expect(postings[0].salary).toEqual({ min: 90000, max: 120000, currency: 'USD', period: 'year' })
     expect(postings[0].publishedAt).toBe(new Date(1793351475 * 1000).toISOString())
   })
+
+  it('keeps following the cursor when the API caps pages below the request', async () => {
+    // The live API echoes limit:20 even when asked for more; stopping on a
+    // "short" page once cut this source to 20 postings total.
+    const mk = (from: number, nextCursor: string | null) => ({
+      nextCursor,
+      jobs: Array.from({ length: 20 }, (_, i) => ({
+        guid: `https://himalayas.app/companies/remoteco/jobs/role-${from + i}`,
+        title: `Role ${from + i}`,
+        companyName: 'RemoteCo',
+        description: 'Desc',
+      })),
+    })
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('cursor=c2')) return json(mk(40, null))
+      if (url.includes('cursor=c1')) return json(mk(20, 'c2'))
+      return json(mk(0, 'c1'))
+    }) as typeof fetch
+    const postings = await himalayas.fetchPostings(
+      ref('himalayas', 'https://himalayas.app/jobs/api'),
+      fetchImpl,
+    )
+    expect(postings).toHaveLength(60)
+  })
 })
 
 describe('themuse parser', () => {
