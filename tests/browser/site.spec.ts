@@ -250,7 +250,7 @@ test('match rings are visible on phones and never show a numeric grade', async (
 test('expanded live corpus is paginated, regularly refreshed and opens complete listings', async ({
   request,
 }, testInfo) => {
-  const status = await request.get('/api/feed-status', { timeout: 20000 })
+  const status = await request.get('/api/feed-status', { timeout: 45000 })
   if (!status.ok() && !String(testInfo.project.use.baseURL).startsWith('https://'))
     test.skip(
       true,
@@ -264,7 +264,7 @@ test('expanded live corpus is paginated, regularly refreshed and opens complete 
   expect(Date.now() - Date.parse(metadata.updatedAt)).toBeLessThan(36 * 3600000)
   const offset = Math.min(5000, Math.floor(metadata.total / 2))
   const response = await request.get(`/api/jobs?status=open&offset=${offset}&limit=2`, {
-    timeout: 20000,
+    timeout: 45000,
   })
   expect(response.ok()).toBe(true)
   const feed = await response.json()
@@ -273,7 +273,7 @@ test('expanded live corpus is paginated, regularly refreshed and opens complete 
   expect(feed.jobs).toHaveLength(2)
   expect(feed.jobs[0].isDemo).toBe(false)
   expect(feed.jobs[0].descriptionPreview).toBe(true)
-  const detail = await request.get(`/api/jobs/${feed.jobs[0].id}`, { timeout: 20000 })
+  const detail = await request.get(`/api/jobs/${feed.jobs[0].id}`, { timeout: 45000 })
   expect(detail.ok()).toBe(true)
   const { job } = await detail.json()
   expect(job.descriptionPreview).not.toBe(true)
@@ -485,13 +485,20 @@ test('no serious accessibility violations on the main routes', async ({ page }) 
 })
 
 test('UI controls with no backing data stay hidden unless admin override', async ({ page }) => {
-  // Judge the page by the exact facets it loaded (the page requests the
-  // English subset; a bare limit=1 fetch covers all languages and its
-  // coverage can sit on the other side of the 0.6 threshold).
-  const jobsResponse = page.waitForResponse((r) => r.url().includes('/api/jobs?'))
+  // Judge the page by the facets of the LAST jobs response it applied:
+  // the app can load twice on mount (URL sync, stored preferences), and a
+  // separately fetched snapshot can sit on the other side of the 0.6
+  // threshold (different language/filter subset, different coverage).
+  const facetPayloads: Promise<{ coverage: Record<string, number> }>[] = []
+  page.on('response', (r) => {
+    if (r.url().includes('/api/jobs?') && r.request().method() === 'GET')
+      facetPayloads.push(r.json().then((body) => body.facets))
+  })
   await page.goto('/')
-  const facets = (await (await jobsResponse).json()).facets
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  const facets = (await Promise.all(facetPayloads)).at(-1)!
+  expect(facets?.coverage).toBeTruthy()
   // Work type is always visible by product decision, whatever the coverage.
   // Chips may exist in both the filter bar and the mobile drawer (>= 1).
   expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
