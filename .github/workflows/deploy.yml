@@ -9,6 +9,7 @@ on:
         arena/29d1e244-findjobs,
         arena/98ac7a65-findjobs,
         arena/ff9585d3-findjobs,
+        arena/c00da234-findjobs,
       ]
     paths:
       - .github/workflows/deploy.yml
