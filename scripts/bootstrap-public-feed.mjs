@@ -58,7 +58,9 @@ export async function bootstrapPublicFeed(api, auth) {
         if (response.ok) return
         const transient = response.status === 429 || response.status >= 500
         if (!transient || attempt >= backoffs.length)
-          throw new Error(`Public snapshot write failed (HTTP ${response.status}) for key ${key}`)
+          throw new Error(
+            `Public snapshot write failed (HTTP ${response.status}) for key ${key}: ${(await response.text().catch(() => '')).slice(0, 240)}`,
+          )
         await new Promise((resolve) => setTimeout(resolve, backoffs[attempt]))
       }
     },
