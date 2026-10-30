@@ -58,7 +58,7 @@ export async function bootstrapPublicFeed(api, auth) {
         if (response.ok) return
         const transient = response.status === 429 || response.status >= 500
         if (!transient || attempt >= backoffs.length)
-          throw new Error(`Public snapshot write failed (HTTP ${response.status})`)
+          throw new Error(`Public snapshot write failed (HTTP ${response.status}) for key ${key}`)
         await new Promise((resolve) => setTimeout(resolve, backoffs[attempt]))
       }
     },
@@ -87,6 +87,9 @@ export async function bootstrapPublicFeed(api, auth) {
     pathToFileURL(outfile).href
   )
   const current = await kv.get('published')
+  console.log(
+    `::notice title=Bootstrap path::attempted=${current?.attemptedSources ?? '?'}/${PUBLIC_SOURCES.length} ids=${current?.ids?.length ?? '?'} parts=${current?.parts?.length ?? '?'} ageMin=${current?.refreshedAt ? Math.round((Date.now() - Date.parse(current.refreshedAt)) / 60000) : '?'} forced=${process.env.FJ_FORCE_PUBLIC_REFRESH === 'true'}`,
+  )
   if (
     current?.version === 1 &&
     current.ids?.length >= 2000 &&
