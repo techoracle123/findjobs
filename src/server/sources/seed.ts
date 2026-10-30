@@ -97,6 +97,26 @@ export const SEED_SOURCES: SeedSource[] = [
     ],
     ['hotnigerianjobs', 'Hot Nigerian Jobs', 'https://www.hotnigerianjobs.com/feed/rss.xml', 'NG'],
     ['weworkremotely', 'We Work Remotely', 'https://weworkremotely.com/remote-jobs.rss', 'WW'],
+    // MyJobMag's main Nigeria feed complements the by-category XML above;
+    // the union (deduped downstream) is larger than either alone.
+    [
+      'myjobmag-ng-latest',
+      'MyJobMag Latest',
+      'https://www.myjobmag.com/feeds/ng/jobsxml.xml',
+      'NG',
+    ],
+    [
+      'weworkremotely-programming',
+      'We Work Remotely — Programming',
+      'https://weworkremotely.com/categories/remote-programming-jobs.rss',
+      'WW',
+    ],
+    [
+      'weworkremotely-design',
+      'We Work Remotely — Design',
+      'https://weworkremotely.com/categories/remote-design-jobs.rss',
+      'WW',
+    ],
   ].map(([id, name, listingUrl, country]) => ({
     id,
     name,
@@ -245,6 +265,16 @@ export const SEED_SOURCES: SeedSource[] = [
       ['lululemon', 'lululemon', 'CA'],
       ['gcp', 'Google Careers', 'US'],
       ['spotify-ee', 'Spotify EE', 'EE'],
+      // Verified live on boards-api 2026-10-30.
+      ['coinbase', 'Coinbase', 'US'],
+      ['pinterest', 'Pinterest', 'US'],
+      ['brex', 'Brex', 'US'],
+      ['gusto', 'Gusto', 'US'],
+      ['airtable', 'Airtable', 'US'],
+      ['asana', 'Asana', 'US'],
+      ['twilio', 'Twilio', 'US'],
+      ['lyft', 'Lyft', 'US'],
+      ['block', 'Block', 'US'],
     ] as const
   ).map(([slug, label, country]) => ({
     id: `greenhouse-${slug}`,
@@ -300,6 +330,7 @@ export const SEED_SOURCES: SeedSource[] = [
       ['superside', 'Superside', 'WW'],
       ['gocardless', 'GoCardless', 'GB'],
       ['oxford', 'Oxford', 'GB'],
+      ['palantir', 'Palantir', 'US'],
     ] as const
   ).map(([slug, label, country]) => ({
     id: `lever-${slug}`,
@@ -402,6 +433,22 @@ export const SEED_SOURCES: SeedSource[] = [
     kind: 'api' as const,
     enabled: true,
   },
+
+  // --- Workable boards: apply.workable.com widget API -------------------
+  ...([['blueground', 'Blueground', 'WW']] as const).map(([slug, label, country]) => ({
+    id: `workable-${slug}`,
+    parser: 'workable',
+    name: `${label} — Workable`,
+    listingUrl: `https://apply.workable.com/api/v1/widget/accounts/${slug}?details=true`,
+    company: slug,
+    companyLabel: label,
+    country,
+    tags: ['ats', 'workable'],
+    tier: 'daily' as const,
+    rateLimitPerHour: 12,
+    kind: 'api' as const,
+    enabled: true,
+  })),
 
   // --- Ashby boards: jobs.ashbyhq.com/<slug> --------------------------
   ...(

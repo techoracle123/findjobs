@@ -13,8 +13,19 @@ export async function bootstrapPublicFeed(api, auth) {
     ).result
   if (!ns?.id) throw new Error('Public storage provisioning failed')
   const base = `https://api.cloudflare.com/client/v4/accounts/${auth.account}/storage/kv/namespaces/${ns.id}/values/`
+  // Pace every KV API call: a publish reads ~500 keys and writes ~35 in
+  // seconds, on top of the deploy's own provisioning calls — enough to
+  // trip the API's per-window limit and fail deploys with HTTP 429.
+  let nextSlot = 0
+  const pace = async () => {
+    const now = Date.now()
+    const wait = Math.max(0, nextSlot - now)
+    nextSlot = Math.max(now, nextSlot) + 300
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+  }
   const kv = {
     async get(key) {
+      await pace()
       const response = await fetch(base + encodeURIComponent(key), {
         headers: { Authorization: `Bearer ${auth.token}` },
         signal: AbortSignal.timeout(60000),
@@ -29,18 +40,32 @@ export async function bootstrapPublicFeed(api, auth) {
       // unconditionally, so every source refresh threw AFTER a successful
       // fetch and the harvest collapsed to near zero.
       const ttl = options.expirationTtl ? `?expiration_ttl=${options.expirationTtl}` : ''
-      const response = await fetch(`${base}${encodeURIComponent(key)}${ttl}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${auth.token}`,
-          'Content-Type': 'application/octet-stream',
-        },
-        body: value,
-        signal: AbortSignal.timeout(60000),
-      })
-      if (!response.ok) throw new Error(`Public snapshot write failed (HTTP ${response.status})`)
+      // The KV API rate-limits bursts (observed: whole deploys failed on a
+      // single 429 during publish, and a 13s backoff was not enough to
+      // outlive the window). Retry transient statuses across ~2 minutes.
+      const backoffs = [2000, 5000, 15000, 30000, 60000]
+      for (let attempt = 0; ; attempt += 1) {
+        await pace()
+        const response = await fetch(`${base}${encodeURIComponent(key)}${ttl}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${auth.token}`,
+            'Content-Type': 'application/octet-stream',
+          },
+          body: value,
+          signal: AbortSignal.timeout(60000),
+        })
+        if (response.ok) return
+        const transient = response.status === 429 || response.status >= 500
+        if (!transient || attempt >= backoffs.length)
+          throw new Error(
+            `Public snapshot write failed (HTTP ${response.status}) for key ${key}: ${(await response.text().catch(() => '')).slice(0, 240)}`,
+          )
+        await new Promise((resolve) => setTimeout(resolve, backoffs[attempt]))
+      }
     },
     async delete(key) {
+      await pace()
       const response = await fetch(base + encodeURIComponent(key), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${auth.token}` },
@@ -64,6 +89,9 @@ export async function bootstrapPublicFeed(api, auth) {
     pathToFileURL(outfile).href
   )
   const current = await kv.get('published')
+  console.log(
+    `::notice title=Bootstrap path::attempted=${current?.attemptedSources ?? '?'}/${PUBLIC_SOURCES.length} ids=${current?.ids?.length ?? '?'} parts=${current?.parts?.length ?? '?'} ageMin=${current?.refreshedAt ? Math.round((Date.now() - Date.parse(current.refreshedAt)) / 60000) : '?'} forced=${process.env.FJ_FORCE_PUBLIC_REFRESH === 'true'}`,
+  )
   if (
     current?.version === 1 &&
     current.ids?.length >= 2000 &&
@@ -98,6 +126,7 @@ export async function bootstrapPublicFeed(api, auth) {
   let cursor = 0,
     healthy = 0,
     failed = 0
+  const zeroYield = []
   await Promise.all(
     Array.from({ length: 4 }, async () => {
       while (cursor < PUBLIC_SOURCES.length) {
@@ -119,15 +148,20 @@ export async function bootstrapPublicFeed(api, auth) {
           }
           const count = await refreshPublicSource(kv, source.id, run)
           healthy++
+          if (count === 0) zeroYield.push(source.id)
           console.log(`Public publisher: ${source.id}, ${count} open listings`)
         } catch (error) {
           failed++
+          zeroYield.push(source.id)
           console.log(
             `Public publisher unavailable/disallowed: ${source.id}: ${error instanceof Error ? error.message : 'unknown'}`,
           )
         }
       }
     }),
+  )
+  console.log(
+    `::notice title=Zero-yield publishers (${zeroYield.length})::${zeroYield.slice(0, 60).join(', ') || 'none'}`,
   )
   const snapshot = await publishPublicSnapshot(kv)
   console.log(

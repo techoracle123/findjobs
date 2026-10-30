@@ -208,6 +208,39 @@ describe('disabled-source cooldown (stage 2 follow-through)', () => {
     await noteSourceHealth(kv, 's1', true, '', { durationMs: 5, itemCount: 3 })
     expect(await isSourceDisabled(kv, 's1')).toBe(false)
   })
+
+  it('unchanged successes do not burn KV writes (free daily quota)', async () => {
+    const { noteSourceHealth } = await import('../../src/server/public-feed')
+    let puts = 0
+    let deletes = 0
+    const store = new Map<string, string>()
+    const kv = {
+      get: async (key: string, type?: string) => {
+        const raw = store.get(key)
+        if (raw === undefined) return null
+        return type === 'json' ? JSON.parse(raw) : raw
+      },
+      put: async (key: string, value: string) => {
+        puts += 1
+        store.set(key, value)
+      },
+      delete: async (key: string) => {
+        deletes += 1
+        store.delete(key)
+      },
+    } as unknown as KVNamespace
+    await noteSourceHealth(kv, 's2', true, '', { durationMs: 5, itemCount: 7 })
+    await noteSourceHealth(kv, 's2', true, '', { durationMs: 9, itemCount: 7 })
+    await noteSourceHealth(kv, 's2', true, '', { durationMs: 4, itemCount: 7 })
+    expect(puts).toBe(1)
+    expect(deletes).toBe(1)
+    // A changed item count is material and is written.
+    await noteSourceHealth(kv, 's2', true, '', { durationMs: 4, itemCount: 8 })
+    expect(puts).toBe(2)
+    // Failures are always written.
+    await noteSourceHealth(kv, 's2', false, 'boom')
+    expect(puts).toBe(3)
+  })
 })
 
 describe('Nigeria visibility end to end', () => {

@@ -11,7 +11,9 @@ for (const width of [320, 390, 414, 768, 1024, 1280, 1600, 1920]) {
     await expect(page.getByRole('heading', { level: 1 })).toContainText(
       'Find work that fits your skills',
     )
-    await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+    // The live corpus is large and a cold edge isolate assembles it on the
+    // first request; allow for that rather than the 5s default.
+    await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
@@ -177,7 +179,7 @@ test('Nigeria and general professions are selectable without repetitive badges',
   await page.getByRole('button', { name: /^Location/ }).click()
   await page.getByRole('combobox', { name: 'Job location' }).fill('Nigeria')
   await page.getByRole('option', { name: /^Nigeria/ }).click()
-  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
   await page.getByRole('button', { name: /^Profession/ }).click()
   await expect(page.getByRole('button', { name: /^Healthcare/ })).toHaveCount(1)
   await expect(page.getByText('Unverified', { exact: true })).toHaveCount(0)
@@ -442,13 +444,13 @@ test('filter combinations are shareable and survive reload', async ({ page }) =>
     .click()
   await expect(page).toHaveURL(/role=/)
   const url = page.url()
-  await expect(page.locator('.jobrow__title').first()).toBeVisible()
+  await expect(page.locator('.jobrow__title').first()).toBeVisible({ timeout: 20_000 })
   const firstTitle = await page.locator('.jobrow__title').first().innerText()
   await page.reload()
   await expect(page).toHaveURL(/role=/)
-  await expect(page.locator('.jobrow__title').first()).toHaveText(firstTitle)
+  await expect(page.locator('.jobrow__title').first()).toHaveText(firstTitle, { timeout: 20_000 })
   await page.goto(url)
-  await expect(page.locator('.jobrow__title').first()).toHaveText(firstTitle)
+  await expect(page.locator('.jobrow__title').first()).toHaveText(firstTitle, { timeout: 20_000 })
 })
 
 test('pagination moves through 20-result pages and keeps the page in the URL', async ({ page }) => {
