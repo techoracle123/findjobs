@@ -13,8 +13,19 @@ export async function bootstrapPublicFeed(api, auth) {
     ).result
   if (!ns?.id) throw new Error('Public storage provisioning failed')
   const base = `https://api.cloudflare.com/client/v4/accounts/${auth.account}/storage/kv/namespaces/${ns.id}/values/`
+  // Pace every KV API call: a publish reads ~500 keys and writes ~35 in
+  // seconds, on top of the deploy's own provisioning calls — enough to
+  // trip the API's per-window limit and fail deploys with HTTP 429.
+  let nextSlot = 0
+  const pace = async () => {
+    const now = Date.now()
+    const wait = Math.max(0, nextSlot - now)
+    nextSlot = Math.max(now, nextSlot) + 120
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+  }
   const kv = {
     async get(key) {
+      await pace()
       const response = await fetch(base + encodeURIComponent(key), {
         headers: { Authorization: `Bearer ${auth.token}` },
         signal: AbortSignal.timeout(60000),
@@ -34,6 +45,7 @@ export async function bootstrapPublicFeed(api, auth) {
       // outlive the window). Retry transient statuses across ~2 minutes.
       const backoffs = [2000, 5000, 15000, 30000, 60000]
       for (let attempt = 0; ; attempt += 1) {
+        await pace()
         const response = await fetch(`${base}${encodeURIComponent(key)}${ttl}`, {
           method: 'PUT',
           headers: {
@@ -51,6 +63,7 @@ export async function bootstrapPublicFeed(api, auth) {
       }
     },
     async delete(key) {
+      await pace()
       const response = await fetch(base + encodeURIComponent(key), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${auth.token}` },

@@ -306,6 +306,12 @@ export function assemblePublicSnapshot(
     return {
       ...job,
       ...patch,
+      // List shards stay slim: per-skill evidence lives in the detail
+      // payloads, not in every list response. Without this, each publish
+      // regenerated evidence into the shards, the deploy bootstrap's
+      // fat-shard check fired on every deploy, and the resulting
+      // republish burst rate-limited the KV API (HTTP 429 deploys).
+      quality: { ...patch.quality, skillEvidence: [] },
       roleFamily: specialistRole(job.title) || job.roleFamily,
       locationCountry: patch.quality.location.country || job.locationCountry,
     }

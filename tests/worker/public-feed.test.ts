@@ -68,6 +68,9 @@ describe('durable broad public feed', () => {
     )
     expect(snapshot.jobs).toHaveLength(1)
     expect(snapshot.refreshHours).toBe(12)
+    // List shards never carry per-skill evidence (it lives in detail
+    // payloads); carrying it once made every deploy republish the corpus.
+    expect(snapshot.jobs[0].quality?.skillEvidence ?? []).toHaveLength(0)
     expect(snapshot.jobs[0].id).toBe(original.id)
   })
   it('drops publishers that have not confirmed content within the freshness window', async () => {
