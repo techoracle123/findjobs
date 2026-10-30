@@ -274,6 +274,8 @@ export const SEED_SOURCES: SeedSource[] = [
       ['asana', 'Asana', 'US'],
       ['twilio', 'Twilio', 'US'],
       ['lyft', 'Lyft', 'US'],
+      ['samsara', 'Samsara', 'US'],
+      ['block', 'Block', 'US'],
     ] as const
   ).map(([slug, label, country]) => ({
     id: `greenhouse-${slug}`,
