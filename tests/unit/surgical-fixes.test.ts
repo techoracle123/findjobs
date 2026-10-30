@@ -272,6 +272,13 @@ describe('Nigeria visibility end to end', () => {
       job: { locationCountry: 'NG', workMode: 'onsite', postedAt: '2026-10-29T00:00:00Z' },
     } as never
     expect(compareScoredJobs(us, ng)).toBeGreaterThan(0)
+    // Nigeria outranks foreign remote, which outranks foreign on-site.
+    const remoteUs = {
+      ...base,
+      job: { locationCountry: 'US', workMode: 'remote', postedAt: '2026-10-30T00:00:00Z' },
+    } as never
+    expect(compareScoredJobs(remoteUs, ng)).toBeGreaterThan(0)
+    expect(compareScoredJobs(us, remoteUs)).toBeGreaterThan(0)
     expect(isInMarket({ locationCountry: 'NG', workMode: 'onsite' } as never)).toBe(true)
     expect(isInMarket({ locationCountry: 'US', workMode: 'remote' } as never)).toBe(true)
     expect(isInMarket({ locationCountry: 'US', workMode: 'onsite' } as never)).toBe(false)

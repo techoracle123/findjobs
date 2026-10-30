@@ -1,5 +1,5 @@
 import { roleFamilyLabel } from '../shared/taxonomy'
-import { isInMarket } from '../shared/scoring'
+import { marketRank } from '../shared/scoring'
 import type { Job } from '../shared/types'
 import type { JobSearch, JobSearchResult } from './jobs'
 import { SEED_SOURCES } from './sources/seed'
@@ -184,7 +184,7 @@ export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResul
   // filters already narrowed the set, so this only shapes the default feed.
   const filtered = matchingPublicJobs(jobs, search).sort(
     (a, b) =>
-      Number(isInMarket(b)) - Number(isInMarket(a)) ||
+      marketRank(b) - marketRank(a) ||
       b.postedAt.localeCompare(a.postedAt) ||
       a.id.localeCompare(b.id),
   )
