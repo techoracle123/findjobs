@@ -24,13 +24,16 @@ function setup() {
   return { request, count: () => reads }
 }
 describe('public response caching', () => {
-  it('shares public feed results across tracking parameters, but not country filters', async () => {
+  it('never caches job data now that jobs need an account, but still caches rates', async () => {
     const { request, count } = setup()
     await request('/api/jobs?country=NG&utm_source=one')
     await request('/api/jobs?utm_source=two&country=NG')
-    expect(count()).toBe(1)
-    await request('/api/jobs?country=GB')
+    // Both reach the handler: a shared-cached jobs response would hand job
+    // data to a visitor with no account.
     expect(count()).toBe(2)
+    await request('/api/rates')
+    await request('/api/rates')
+    expect(count()).toBe(3)
   })
   it('never caches account data, translation, advice or writes', async () => {
     const { request, count } = setup()
@@ -61,7 +64,7 @@ it('reports an exhausted database honestly without exposing internals', async ()
   } as unknown as D1Database
   const response = await app.request(
     'https://fj-find-jobs.pages.dev/api/jobs',
-    {},
+    { headers: { 'x-dev-user-email': 'tester@example.com' } },
     { APP_MODE: 'test', DB: db },
   )
   // The unpaged reader intentionally has its own honest empty warning fallback.

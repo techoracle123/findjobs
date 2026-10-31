@@ -30,7 +30,7 @@ async function requestCode(email: string): Promise<string> {
 }
 
 beforeAll(async () => {
-  const response = await get('/api/jobs')
+  const response = await get('/api/jobs', DEV)
   expect(response.status).toBe(200)
 })
 

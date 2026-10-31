@@ -74,7 +74,7 @@ try {
   // Local-only bootstrap port: this is NOT the production database or an auth
   // bypass in the app under test. The second worker uses hosted/staging rules.
   worker(8789, 'local-preview', 9230)
-  await ready('http://127.0.0.1:8789/api/jobs?status=open&limit=1')
+  await ready('http://127.0.0.1:8789/api/health')
   let added = 0
   for (const id of ['greenhouse-oneacrefund', 'myjobmag-ng']) {
     const response = await fetch(`http://127.0.0.1:8789/api/sources/${id}/ingest`, {
@@ -89,8 +89,24 @@ try {
   if (!added)
     throw new Error('No real jobs could be retrieved. Synthetic data will not be substituted.')
   worker(8787, 'staging', 9231)
-  await ready('http://127.0.0.1:8787/api/jobs?status=open&limit=1')
-  const feed = await (await fetch('http://127.0.0.1:8787/api/jobs?status=open&limit=200')).json()
+  await ready('http://127.0.0.1:8787/api/health')
+  // Jobs sit behind a free account even under staging rules; sign up first.
+  const signup = await fetch('http://127.0.0.1:8787/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Preview Check',
+      email: `preview-check-${Date.now()}@example.com`,
+      password: 'preview check password',
+    }),
+  })
+  if (!signup.ok) throw new Error(`Preview sign-up failed: ${signup.status}`)
+  const cookie = (signup.headers.get('set-cookie') ?? '').split(';')[0]
+  const feed = await (
+    await fetch('http://127.0.0.1:8787/api/jobs?status=open&limit=200', {
+      headers: { Cookie: cookie },
+    })
+  ).json()
   if (!feed.total || feed.jobs.some((job) => job.isDemo))
     throw new Error('Real public-feed validation failed')
   await mkdir('diagnostics', { recursive: true })

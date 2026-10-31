@@ -154,8 +154,11 @@ it('serves the broad index without D1 and returns full descriptions on individua
   data.set('details:test', JSON.stringify(complete))
   data.set('published', JSON.stringify(snapshot))
   const { default: app } = await import('../../src/server/app')
+  // Test mode + dev identity: jobs need an account now, and the point of
+  // this test is that job data itself comes from the snapshot, never D1.
+  const auth = { headers: { 'x-dev-user-email': 'feed@example.com' } }
   const env = {
-    APP_MODE: 'production',
+    APP_MODE: 'test',
     PUBLIC_JOBS: kv,
     DB: {
       prepare: () => {
@@ -165,7 +168,7 @@ it('serves the broad index without D1 and returns full descriptions on individua
   }
   const feed = await app.request(
     'https://public-feed-tests.example/api/jobs?status=open&limit=1&ww=1',
-    {},
+    auth,
     env,
   )
   expect(feed.status).toBe(200)
@@ -182,7 +185,7 @@ it('serves the broad index without D1 and returns full descriptions on individua
   // unless Worldwide is requested.
   const englishOnly = await app.request(
     'https://public-feed-tests.example/api/jobs?status=open&limit=5',
-    {},
+    auth,
     env,
   )
   const englishBody = (await englishOnly.json()) as {
@@ -193,7 +196,7 @@ it('serves the broad index without D1 and returns full descriptions on individua
   expect(englishBody.jobs.every((job) => job.quality?.isEnglish !== false)).toBe(true)
   const detail = await app.request(
     `https://public-feed-tests.example/api/jobs/${body.jobs[0].id}`,
-    {},
+    auth,
     env,
   )
   expect(detail.status).toBe(200)

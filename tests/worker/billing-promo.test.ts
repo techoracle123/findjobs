@@ -23,7 +23,7 @@ async function get(path: string, headers: Record<string, string> = {}): Promise<
 }
 
 beforeAll(async () => {
-  expect((await get('/api/jobs')).status).toBe(200)
+  expect((await get('/api/jobs', ADMIN)).status).toBe(200)
 })
 
 describe('promo codes (Prompt 5)', () => {

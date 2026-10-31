@@ -29,7 +29,7 @@ import { JobRow } from './components/JobRow'
 import { JobDetail } from './components/JobDetail'
 import { SavedPanel } from './components/SavedPanel'
 import { AlertsPanel } from './components/AlertsPanel'
-import { useAccount } from './hooks/useAccount'
+import { useAccount, type AccountMode } from './hooks/useAccount'
 import { ProgressPanel } from './components/ProgressPanel'
 import { ReportDialog } from './components/ReportDialog'
 import { deviceActivity } from './shared/activity'
@@ -279,7 +279,7 @@ export default function App() {
       window.history.back()
       return
     }
-    window.history.replaceState(null, '', '/')
+    window.history.replaceState(null, '', '/jobs')
     setJobPage(false)
     setSelectedId(null)
     window.requestAnimationFrame(() => window.scrollTo(0, resultsScroll.current))
@@ -482,6 +482,29 @@ export default function App() {
       ) as Profile['preferredWorkModes'],
     }))
     setToast('Profile updated from CV suggestions')
+  }
+
+  // The whole app sits behind a free account. A visitor without one is sent
+  // to sign in and brought back to the page they asked for afterwards.
+  useEffect(() => {
+    if (account.mode !== 'anonymous') return
+    const here = window.location.pathname
+    const target = /^\/(?:dashboard|profile|jobs(?:\/[A-Za-z0-9_-]+)?)$/.test(here) ? here : '/jobs'
+    window.location.replace('/auth/login?returnTo=' + encodeURIComponent(target))
+  }, [account.mode])
+
+  const accountMode: AccountMode = account.mode
+  if (accountMode !== 'signed-in') {
+    return (
+      <main className="content">
+        <div className="empty" role="status">
+          <span className="spinner" />
+          <p>
+            {accountMode === 'loading' ? 'Checking your account...' : 'Taking you to sign in...'}
+          </p>
+        </div>
+      </main>
+    )
   }
 
   return (

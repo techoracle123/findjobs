@@ -30,7 +30,7 @@ const APP_ROUTES = new Set([
 
 export function isAppRoute(pathname: string): boolean {
   if (APP_ROUTES.has(pathname)) return true
-  return /^\/(?:auth\/(?:signup|login|recovery)|admin\/data-quality|jobs\/[A-Za-z0-9_-]+)$/.test(
+  return /^\/(?:auth\/(?:signup|login|recovery|reset)|admin\/data-quality|jobs\/[A-Za-z0-9_-]+)$/.test(
     pathname,
   )
 }
@@ -68,12 +68,12 @@ export function pageMeta(pathname: string): { title: string; description: string
     '/': {
       title: 'FJ - Find Jobs: work in Nigeria and worldwide',
       description:
-        'Search thousands of real job listings across Nigeria and worldwide, by profession and country. Free to explore — never pay to apply.',
+        'Thousands of real job listings from Nigeria and abroad in one place. Create a free account to see them. Never pay to apply.',
     },
     '/jobs': {
       title: 'Search jobs by skill, country and profession | FJ',
       description:
-        'Browse current openings by role, country, work mode and experience. Real listings, cleaned up and linked to the original source.',
+        'Browse current openings by role, country, work mode and experience. A free account is needed to see the jobs.',
     },
     '/dashboard': {
       title: 'Your dashboard: progress, saved jobs and alerts | FJ',
@@ -86,7 +86,7 @@ export function pageMeta(pathname: string): { title: string; description: string
     },
     '/pricing': {
       title: 'Pricing | FJ - Find Jobs',
-      description: 'Free browsing and applying for everyone. Pro tools for active job seekers.',
+      description: 'A free account for browsing and applying. Paid tools for active job seekers.',
     },
     '/about': {
       title: 'About FJ - Find Jobs',
@@ -118,7 +118,7 @@ export function pageMeta(pathname: string): { title: string; description: string
     },
     '/auth/login': {
       title: 'Sign in to FJ',
-      description: 'Sign in to FJ - Find Jobs with a secure email code.',
+      description: 'Sign in to FJ - Find Jobs with your email and password.',
     },
     '/auth/signup': {
       title: 'Create your FJ account',
@@ -126,7 +126,11 @@ export function pageMeta(pathname: string): { title: string; description: string
     },
     '/auth/recovery': {
       title: 'Recover access to FJ',
-      description: 'Get back into your FJ account with a fresh email code.',
+      description: 'Get back into your FJ account with an emailed password reset link.',
+    },
+    '/auth/reset': {
+      title: 'Choose a new password | FJ',
+      description: 'Set a new password for your FJ account.',
     },
     '/admin/data-quality': {
       title: 'Data quality | FJ admin',
@@ -143,17 +147,17 @@ export function pageMeta(pathname: string): { title: string; description: string
  */
 export function pageBody(pathname: string): string {
   const bodies: Record<string, string> = {
-    '/': `<p>FJ — Find Jobs helps people in Nigeria and around the world discover real job opportunities across professions. We collect public listings from employer career pages and job boards, clean them up, and link you to the original posting.</p>
-<p>Search thousands of current openings by profession, country, work type (remote, hybrid, on-site) and experience level. Finding opportunities and applying on the employer's own site is always free — never pay anyone for a job or an application.</p>
-<p>FJ is not an employer or recruiter. We do not verify or endorse listings. Always verify the employer and the original listing before applying.</p>`,
-    '/jobs': `<p>Browse current job openings collected from employer career pages and established job boards. Filter by profession, country, work type — remote, hybrid or on-site — and experience level.</p>
+    '/': `<p>FJ - Find Jobs brings thousands of job opportunities into one place. Instead of checking many different websites, you come here. We collect real job adverts from companies in Nigeria and from companies abroad that hire people who work from home, and we link you to the original posting.</p>
+<p>You need a free account to see the jobs. Some jobs pay in naira and some remote jobs pay in dollars, pounds or euros; the advert shows the salary when the company published it. Your chances depend mostly on your skills and how well you present them, so keep learning, show proof of your work, and apply early and often.</p>
+<p>Applying on the employer's own site is always free. A real employer will never ask you to pay money to get a job. FJ is not an employer or recruiter and does not verify or endorse listings. Always check the company and the original listing before you apply.</p>`,
+    '/jobs': `<p>Browse current job openings collected from employer career pages and established job boards. A free account is needed to see them. Filter by profession, country, work type (remote, hybrid or on-site) and experience level.</p>
 <p>Every listing links to the original posting, where applying is always free. FJ does not verify or endorse employers; always check the employer's official website and confirm the vacancy there.</p>`,
     '/about': `<p>FJ — Find Jobs helps people in Nigeria and around the world discover real job opportunities across professions. We collect public listings from employer career pages and job boards, clean them up, and link you to the original posting.</p>
 <p>FJ is an information broker, not an employer or recruiter. We do not verify or endorse listings, and we never charge job seekers. Always verify the employer and the original listing before applying. Never pay to apply.</p>
 <p>Our job is to make it easy to find opportunities — applying well is yours.</p>`,
-    '/privacy': `<p><strong>What we collect.</strong> Your account email, the profile you build (skills, preferences), saved jobs, your confirmed application history, and job alerts. Anonymous browsing needs no account and stores only device-local preferences.</p>
+    '/privacy': `<p><strong>What we collect.</strong> Your account email, the profile you build (skills, preferences), saved jobs, your confirmed application history, and job alerts. The homepage and information pages need no account. Seeing the jobs needs the free account, so your saved jobs and alerts follow you on any device.</p>
 <p><strong>Your CV stays on your device.</strong> When you upload a CV to improve your matches, the text is read and matched against skills in your own browser. Your CV file is not uploaded to FJ or to any third party.</p>
-<p><strong>Sign-in codes.</strong> When you sign in, we send a one-time code to your email through our email delivery partner, which processes your email address only to deliver that message.</p>
+<p><strong>Your password.</strong> You sign in with your email and password. We store only a scrambled form of your password that cannot be turned back into the password itself. If you forget it, we email you a one time reset link through our email delivery partner, which processes your email address only to deliver that message.</p>
 <p><strong>Payments.</strong> Paid plans are not open yet. When they launch, card payments will be handled by our payment partner; we will never see or store your card details.</p>
 <p><strong>Retention.</strong> Account data is kept until you delete your account. Aggregated application history is retained so your monthly progress works. Operational logs are kept for up to 30 days.</p>
 <p><strong>Your rights (NDPA and similar laws).</strong> You may access, correct, export or erase your personal data, object to processing, and withdraw consent at any time. Use the account export/delete controls, or contact us. We respond within the periods the law requires.</p>`,
@@ -166,6 +170,7 @@ export function pageBody(pathname: string): string {
 <p><strong>How do I spot a job scam?</strong> Never pay to apply, and never share your BVN or bank details with a "recruiter". See our guide to spotting job scams.</p>
 <p><strong>How often does FJ refresh?</strong> Listings are recollected automatically throughout the day; publishers can add or remove roles at any time.</p>
 <p><strong>Why do I see fewer non-English jobs?</strong> The default feed is English-first for Nigerian users. Turn on Worldwide in the More filter to see every language.</p>
+<p><strong>Why do I need an account to see jobs?</strong> So we can save your jobs, alerts and applications and show them to you on any device. The account is free, and applying on the employer's site is always free.</p>
 <p><strong>How do I save jobs and track applications?</strong> Tap the bookmark on any job. When you apply through the original listing, mark the role as applied — your Progress dashboard counts what you confirm each month.</p>`,
     '/scams': `<p>Real employers do not charge you to apply or to get hired. Watch for these warning signs:</p>
 <ul>

@@ -10,7 +10,7 @@ describe('jobs stats route', () => {
   it('answers 503 available:false (not a job lookup) when no snapshot is published', async () => {
     const response = await app.request(
       'https://fj-find-jobs.pages.dev/api/jobs/stats',
-      {},
+      { headers: { 'x-dev-user-email': 'stats@example.com' } },
       { APP_MODE: 'test' },
     )
     expect(response.status).toBe(503)
@@ -20,7 +20,7 @@ describe('jobs stats route', () => {
   it('does not shadow a real job id lookup', async () => {
     const response = await app.request(
       'https://fj-find-jobs.pages.dev/api/jobs/job_doesnotexist',
-      {},
+      { headers: { 'x-dev-user-email': 'stats@example.com' } },
       { APP_MODE: 'test' },
     )
     expect(response.status).toBe(404)

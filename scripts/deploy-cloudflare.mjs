@@ -128,12 +128,12 @@ function wrangler(args) {
     throw new Error(`Wrangler ${args[0]} failed; deployment stopped. ${safeOutput.slice(-5000)}`)
 }
 
-async function publicJson(url, attempts = 1) {
+async function publicJson(url, attempts = 1, cookie = '') {
   let status = 'unknown'
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       const response = await fetch(url, {
-        headers: { 'Cache-Control': 'no-cache' },
+        headers: { 'Cache-Control': 'no-cache', ...(cookie ? { Cookie: cookie } : {}) },
         signal: AbortSignal.timeout(30_000),
       })
       status = `${response.status} ${response.headers.get('content-type') ?? ''}`
@@ -145,6 +145,25 @@ async function publicJson(url, attempts = 1) {
     if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 10_000))
   }
   throw new Error(`Public API check failed at ${url} (${status}).`)
+}
+
+/**
+ * Job data sits behind a free account, so deploy checks sign up a throwaway
+ * account first and read with its session cookie. This also proves the real
+ * sign-up path works on every deployment.
+ */
+async function deployCheckCookie(baseUrl) {
+  const email = `deploy-check-${Date.now()}@example.com`
+  const response = await fetch(`${baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Deploy Check', email, password: 'deploy check password' }),
+    signal: AbortSignal.timeout(30_000),
+  })
+  if (!response.ok) throw new Error(`Deploy check sign-up failed (${response.status}).`)
+  const cookie = (response.headers.get('set-cookie') ?? '').split(';')[0]
+  if (!cookie.startsWith('fj_session=')) throw new Error('Deploy check sign-up set no session.')
+  return cookie
 }
 
 export function sourceRegistrySql(sources) {
@@ -369,7 +388,8 @@ export async function main() {
       'Cloudflare cron queues independent publisher refreshes at 00:00 and 12:00 UTC. No workspace timer or D1 quota required.',
     )
     if (quotaBlocked) {
-      const recovered = await publicJson(`${url}/api/jobs?status=open&limit=5`, 18)
+      const checkCookie = await deployCheckCookie(url)
+      const recovered = await publicJson(`${url}/api/jobs?status=open&limit=5`, 18, checkCookie)
       if (
         !recovered.total ||
         recovered.jobs.some(
@@ -380,6 +400,7 @@ export async function main() {
       const detail = await publicJson(
         `${url}/api/jobs/${encodeURIComponent(recovered.jobs[0].id)}`,
         3,
+        checkCookie,
       )
       if (!detail.job?.id) throw new Error('Live public job pages did not recover.')
       annotation(
@@ -436,12 +457,14 @@ export async function main() {
       'Private storage protected',
       'The durable public collector handles discovery; legacy full-corpus D1 ingestion is not queued on deployment.',
     )
+    const checkCookie = await deployCheckCookie(url)
     let feed
     for (let attempt = 0; attempt < 18; attempt++) {
       const response = await fetch(`${url}/api/jobs?status=open&limit=20`, {
+        headers: { Cookie: checkCookie },
         signal: AbortSignal.timeout(30_000),
       })
-      if (!response.ok) throw new Error('Public job feed check failed.')
+      if (!response.ok) throw new Error('Job feed check failed.')
       feed = await response.json()
       if (feed.total > 0) break
       await new Promise((resolve) => setTimeout(resolve, 10_000))

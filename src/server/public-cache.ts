@@ -18,14 +18,10 @@ const ALLOWED_QUERY = new Set([
 export function publicDataCache(override?: Cache): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const path = new URL(c.req.url).pathname
+    // Job data is account-only now, so it is never shared-cache material:
+    // a cached 200 here would hand jobs to a visitor with no account.
     const ttl =
-      path === '/api/health' || path === '/api/sources'
-        ? 300
-        : path === '/api/rates'
-          ? 3600
-          : /^\/api\/jobs(?:\/[^/]+)?$/.test(path)
-            ? 120
-            : 0
+      path === '/api/health' || path === '/api/sources' ? 300 : path === '/api/rates' ? 3600 : 0
     if (
       !ttl ||
       c.req.method !== 'GET' ||

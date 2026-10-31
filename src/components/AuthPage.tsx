@@ -1,79 +1,119 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, Mail, ShieldCheck } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, Check, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { Footer } from './Footer'
-import { copy } from '../shared/copy'
 
-/** Six-box one-time-code entry with paste, auto-advance and mobile autofill. */
-function CodeBoxes({
+const LAST_EMAIL_KEY = 'fj-last-email'
+
+type Mode = 'signup' | 'login' | 'recovery' | 'reset'
+
+function modeFromPath(): Mode {
+  const path = window.location.pathname.replace(/\/+$/, '')
+  if (path === '/auth/signup') return 'signup'
+  if (path === '/auth/recovery') return 'recovery'
+  if (path === '/auth/reset') return 'reset'
+  return 'login'
+}
+
+/** Only plain in-app destinations may be returned to after sign-in. */
+function safeReturnTo(): string {
+  const raw = new URLSearchParams(window.location.search).get('returnTo') || '/jobs'
+  return /^\/(?:dashboard|profile|jobs(?:\/[A-Za-z0-9_-]+)?)?$/.test(raw) ? raw : '/jobs'
+}
+
+async function postJson(
+  path: string,
+  body: Record<string, string>,
+): Promise<{ ok: boolean; status: number; error?: string; message?: string }> {
+  try {
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+    })
+    const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string }
+    return { ok: response.ok, status: response.status, error: data.error, message: data.message }
+  } catch {
+    return { ok: false, status: 0 }
+  }
+}
+
+/** Turns a server answer into one plain sentence a person can act on. */
+function explain(result: { status: number; error?: string; message?: string }): string {
+  if (result.status === 429 || result.error === 'rate_limited')
+    return 'Too many tries in a short time. Please wait a few minutes, then try again.'
+  switch (result.error) {
+    case 'account_exists':
+      return 'That email already has an account. Please sign in. If you have forgotten the password, use Forgot password below.'
+    case 'invalid_credentials':
+      return 'That email and password do not match. Check them and try again. If you joined earlier with an email code and never set a password, use Forgot password to set one now.'
+    case 'weak_password':
+      return result.message ?? 'Please choose a longer password.'
+    case 'bad_email':
+      return 'That email address does not look complete. Check it and try again.'
+    case 'reset_invalid':
+      return 'That reset link is no longer valid. Links work once and expire after one hour. Please request a new one.'
+    default:
+      return 'Something went wrong on our side. Please try again in a few minutes.'
+  }
+}
+
+function PasswordField({
+  id,
+  label,
   value,
   onChange,
-  onDone,
+  autoComplete,
+  hint,
 }: {
+  id: string
+  label: string
   value: string
-  onChange: (v: string) => void
-  /** Receives the completed code directly — never reads stale state. */
-  onDone: (code: string) => void
+  onChange: (value: string) => void
+  autoComplete: string
+  hint?: string
 }) {
-  const refs = useRef<Array<HTMLInputElement | null>>([])
-  const digits = value.padEnd(6, ' ').slice(0, 6).split('')
-
-  useEffect(() => {
-    refs.current[0]?.focus()
-  }, [])
-
+  const [visible, setVisible] = useState(false)
   return (
-    <div className="code-boxes" role="group" aria-label="6-digit sign-in code">
-      {digits.map((digit, index) => (
+    <div className="field">
+      <label className="field__label" htmlFor={id}>
+        {label}
+      </label>
+      <div className="password-field">
         <input
-          key={index}
-          ref={(element) => {
-            refs.current[index] = element
-          }}
-          className="code-box"
-          inputMode="numeric"
-          autoComplete={index === 0 ? 'one-time-code' : 'off'}
-          aria-label={`Digit ${index + 1}`}
-          maxLength={1}
-          value={digit.trim()}
-          onChange={(event) => {
-            const next = value.padEnd(6, ' ').split('')
-            next[index] = event.target.value.replace(/\D/g, '').slice(-1)
-            const joined = next.join('').replace(/\s/g, '')
-            onChange(joined)
-            if (event.target.value && index < 5) refs.current[index + 1]?.focus()
-            if (joined.length === 6) onDone(joined)
-          }}
-          onPaste={(event) => {
-            const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
-            if (!pasted) return
-            event.preventDefault()
-            onChange(pasted)
-            refs.current[Math.min(pasted.length, 5)]?.focus()
-            if (pasted.length === 6) onDone(pasted)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Backspace' && !digit.trim() && index > 0)
-              refs.current[index - 1]?.focus()
-          }}
+          id={id}
+          className="input"
+          type={visible ? 'text' : 'password'}
+          required
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          autoComplete={autoComplete}
+          placeholder="Your password"
         />
-      ))}
+        <button
+          type="button"
+          className="password-toggle"
+          onClick={() => setVisible((current) => !current)}
+          aria-label={visible ? 'Hide password' : 'Show password'}
+        >
+          {visible ? <EyeOff size={17} /> : <Eye size={17} />}
+          {visible ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      {hint && <span className="field__hint">{hint}</span>}
     </div>
   )
 }
 
-const RESEND_COOLDOWN_SECONDS = 30
-const LAST_EMAIL_KEY = 'fj-last-email'
-
 /**
- * One page for sign-in, sign-up and recovery. FJ is passwordless: the same
- * email code creates the account on first use and signs you in after that,
- * so there is nothing to choose and nothing to remember.
+ * Sign up, sign in, forgot password and reset password. One page, plain
+ * email and password, built and run by FJ itself.
  */
 export function AuthPage() {
-  const path = window.location.pathname.replace(/\/+$/, '')
-  const recovery = path === '/auth/recovery'
-  const raw = new URLSearchParams(window.location.search).get('returnTo') || '/dashboard'
-  const returnTo = /^\/(?:dashboard|jobs\/[A-Za-z0-9_-]+)?$/.test(raw) ? raw : '/dashboard'
+  const mode = modeFromPath()
+  const returnTo = safeReturnTo()
+  const resetToken = new URLSearchParams(window.location.search).get('token') ?? ''
+  const [name, setName] = useState('')
   const [email, setEmail] = useState(() => {
     try {
       return window.localStorage.getItem(LAST_EMAIL_KEY) ?? ''
@@ -81,146 +121,149 @@ export function AuthPage() {
       return ''
     }
   })
-  const [stage, setStage] = useState<'email' | 'code' | 'done'>('email')
-  const [code, setCode] = useState('')
-  const [attempt, setAttempt] = useState(0)
+  const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  const [cooldown, setCooldown] = useState(0)
+  const [sent, setSent] = useState(false)
   const [signedIn, setSignedIn] = useState<string | null>(null)
+  const [checking, setChecking] = useState(true)
   const [devices, setDevices] = useState<Array<{ id: string; agent: string; lastSeenAt: number }>>(
     [],
   )
 
   useEffect(() => {
-    document.title = `${recovery ? 'Recover access' : 'Sign in or create your account'} — FJ - Find Jobs`
+    document.title =
+      mode === 'signup'
+        ? 'Create your free account. FJ - Find Jobs'
+        : mode === 'recovery'
+          ? 'Forgot password. FJ - Find Jobs'
+          : mode === 'reset'
+            ? 'Choose a new password. FJ - Find Jobs'
+            : 'Sign in. FJ - Find Jobs'
     void (async () => {
-      const response = await fetch('/api/auth/session', {
-        credentials: 'same-origin',
-        cache: 'no-store',
-      })
-      if (!response.ok) return
-      const body = (await response.json()) as { user?: { email: string } | null }
-      if (!body.user) return
-      setSignedIn(body.user.email)
-      setStage('done')
-      const devicesResponse = await fetch('/api/auth/devices', {
-        credentials: 'same-origin',
-        cache: 'no-store',
-      })
-      if (!devicesResponse.ok) return
-      const devicesBody = (await devicesResponse.json()) as {
-        devices?: Array<{ id: string; agent: string; lastSeenAt: number }>
+      try {
+        const response = await fetch('/api/auth/session', {
+          credentials: 'same-origin',
+          cache: 'no-store',
+        })
+        if (response.ok) {
+          const body = (await response.json()) as { user?: { email: string } | null }
+          if (body.user) {
+            setSignedIn(body.user.email)
+            const devicesResponse = await fetch('/api/auth/devices', {
+              credentials: 'same-origin',
+              cache: 'no-store',
+            })
+            if (devicesResponse.ok) {
+              const devicesBody = (await devicesResponse.json()) as {
+                devices?: Array<{ id: string; agent: string; lastSeenAt: number }>
+              }
+              if (devicesBody.devices) setDevices(devicesBody.devices)
+            }
+          }
+        }
+      } catch {
+        /* The form below still works when this check cannot run. */
+      } finally {
+        setChecking(false)
       }
-      if (devicesBody.devices) setDevices(devicesBody.devices)
-    })().catch(() => {})
-  }, [recovery])
+    })()
+  }, [mode])
 
-  useEffect(() => {
-    if (cooldown <= 0) return
-    const timer = window.setTimeout(() => setCooldown((value) => value - 1), 1000)
-    return () => window.clearTimeout(timer)
-  }, [cooldown])
+  const rememberEmail = () => {
+    try {
+      window.localStorage.setItem(LAST_EMAIL_KEY, email)
+    } catch {
+      /* Prefill next time is a nicety, never a blocker. */
+    }
+  }
 
-  const requestCode = async () => {
+  const finish = () => {
+    rememberEmail()
+    setSignedIn(email)
+    window.setTimeout(() => {
+      window.location.href = returnTo
+    }, 500)
+  }
+
+  const submitSignup = async () => {
     if (busy) return
     setBusy(true)
     setNotice(null)
-    try {
-      const response = await fetch('/api/auth/otp/request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null
-        if (body?.error === 'email_not_configured') {
-          setNotice(copy('auth.unavailable'))
-          return
-        }
-        if (response.status === 429 || body?.error === 'rate_limited') {
-          setNotice(copy('auth.rateLimited'))
-          return
-        }
-        throw new Error('send-failed')
-      }
-      try {
-        window.localStorage.setItem(LAST_EMAIL_KEY, email)
-      } catch {
-        /* Prefill is a nicety, never a blocker. */
-      }
-      setCode('')
-      setStage('code')
-      setCooldown(RESEND_COOLDOWN_SECONDS)
-    } catch {
-      setNotice(copy('auth.sendFailed'))
-    } finally {
-      setBusy(false)
-    }
+    const result = await postJson('/api/auth/signup', { name, email, password })
+    setBusy(false)
+    if (result.ok) finish()
+    else setNotice(explain(result))
   }
 
-  const verifyCode = async (candidate: string) => {
-    if (candidate.length !== 6 || busy) return
+  const submitLogin = async () => {
+    if (busy) return
     setBusy(true)
     setNotice(null)
-    try {
-      const response = await fetch('/api/auth/otp/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code: candidate }),
-      })
-      const body = (await response.json().catch(() => ({}))) as { error?: string }
-      if (!response.ok) {
-        if (response.status === 429 || body.error === 'rate_limited')
-          setNotice(copy('auth.rateLimited'))
-        else if (body.error === 'code_expired') setNotice(copy('auth.codeExpired'))
-        else if (body.error === 'code_used') setNotice(copy('auth.codeUsed'))
-        else setNotice(copy('auth.codeInvalid'))
-        // Clear the boxes and put the cursor back at the start.
-        setCode('')
-        setAttempt((value) => value + 1)
-        return
-      }
-      setStage('done')
-      setSignedIn(email)
-      window.setTimeout(() => {
-        window.location.href = returnTo
-      }, 600)
-    } catch {
-      setNotice(copy('auth.codeInvalid'))
-      setCode('')
-      setAttempt((value) => value + 1)
-    } finally {
-      setBusy(false)
-    }
+    const result = await postJson('/api/auth/login', { email, password })
+    setBusy(false)
+    if (result.ok) finish()
+    else setNotice(explain(result))
   }
+
+  const submitForgot = async () => {
+    if (busy) return
+    setBusy(true)
+    setNotice(null)
+    const result = await postJson('/api/auth/password/forgot', { email })
+    setBusy(false)
+    if (result.ok) {
+      rememberEmail()
+      setSent(true)
+    } else setNotice(explain(result))
+  }
+
+  const submitReset = async () => {
+    if (busy) return
+    setBusy(true)
+    setNotice(null)
+    const result = await postJson('/api/auth/password/reset', { token: resetToken, password })
+    setBusy(false)
+    if (result.ok) {
+      window.location.href = '/jobs'
+    } else setNotice(explain(result))
+  }
+
+  const heading =
+    mode === 'signup'
+      ? 'Create your free account'
+      : mode === 'recovery'
+        ? 'Forgot your password?'
+        : mode === 'reset'
+          ? 'Choose a new password'
+          : 'Welcome back. Sign in.'
 
   return (
     <>
       <main className="auth-page">
         <a className="auth-back" href="/">
-          <ArrowLeft size={16} /> Back to opportunities
+          <ArrowLeft size={16} /> Back to home
         </a>
         <div className="auth-layout">
           <section className="auth-story">
             <a className="brand" href="/" aria-label="FJ - Find Jobs">
-              <img src="/favicon.svg" width="40" height="40" alt="" /> FJ — Find Jobs
+              <img src="/favicon.svg" width="40" height="40" alt="" /> FJ. Find Jobs
             </a>
-            <span className="eyebrow">Your next chapter starts here</span>
             <p className="auth-story__headline">
-              Good opportunities.
+              Thousands of jobs.
               <br />
-              Your own way forward.
+              One place to find them.
             </p>
             <p>
-              A calmer place to explore work, keep your shortlist and build a consistent application
-              habit.
+              We gather real job adverts from many companies in Nigeria and abroad, so you can stop
+              checking many websites and start applying.
             </p>
             <ul>
               {[
-                'Save opportunities and track every application.',
-                'Get free alerts that match your skills.',
-                'No password — one email code and you are in.',
+                'See jobs in Nigeria and remote jobs open to Nigerians.',
+                'Save the jobs you like and keep track of where you applied.',
+                'Get free alerts when new jobs that fit you arrive.',
+                'Your account is free. No card is needed.',
               ].map((line) => (
                 <li key={line}>
                   <ShieldCheck size={16} /> {line}
@@ -229,12 +272,19 @@ export function AuthPage() {
             </ul>
           </section>
           <section className="auth-card" aria-label="Account">
-            {signedIn ? (
+            {checking ? (
+              <p role="status">
+                <span className="spinner" /> Checking your account...
+              </p>
+            ) : signedIn && mode !== 'reset' ? (
               <>
-                <h1>Signed in</h1>
+                <h1 className="auth-card__title">You are signed in</h1>
                 <p>
                   <Check size={16} /> {signedIn}
                 </p>
+                <a className="btn btn--primary auth-continue" href={returnTo}>
+                  Continue to jobs
+                </a>
                 {devices.length > 0 && (
                   <div className="device-list">
                     <h2>Your devices</h2>
@@ -255,24 +305,18 @@ export function AuthPage() {
                               )
                             }}
                           >
-                            Revoke
+                            Remove
                           </button>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
-                <a className="btn btn--primary" href={returnTo}>
-                  Continue
-                </a>
                 <button
                   type="button"
-                  className="btn"
+                  className="btn auth-continue"
                   onClick={() => {
-                    void fetch('/api/auth/logout', { method: 'POST' }).then(() => {
-                      setSignedIn(null)
-                      setStage('email')
-                    })
+                    void fetch('/api/auth/logout', { method: 'POST' }).then(() => setSignedIn(null))
                   }}
                 >
                   Sign out
@@ -280,39 +324,69 @@ export function AuthPage() {
               </>
             ) : (
               <>
-                <h1 className="auth-card__title">
-                  {recovery ? 'Recover your account' : 'Sign in or create your free account'}
-                </h1>
-                <p>
-                  {recovery
-                    ? 'FJ has no passwords. Request a fresh one-time code using the same email as your account.'
-                    : 'Enter your email and we will send you a 6-digit code. New here? The same code creates your free account — no password, no card, nothing else to fill in.'}
-                </p>
-                {recovery && (
-                  <div className="recovery-steps">
-                    <h3>Get back in, safely</h3>
-                    <ol>
-                      <li>Enter the email you used for FJ.</li>
-                      <li>
-                        Check your inbox and spam folder. Use the newest code before it expires.
-                      </li>
-                      <li>
-                        If you no longer control that inbox, recover it with your email provider
-                        first.
-                      </li>
-                    </ol>
-                  </div>
+                <h1 className="auth-card__title">{heading}</h1>
+                {mode === 'signup' && (
+                  <p>
+                    You need a free account to see the jobs. It takes less than a minute. We will
+                    never ask you to pay before you can look at jobs or apply.
+                  </p>
                 )}
-                {stage === 'email' && (
+                {mode === 'login' && <p>Sign in with the email and password for your account.</p>}
+                {mode === 'recovery' && !sent && (
+                  <p>
+                    Type the email for your account. We will email you a link to choose a new
+                    password. The link works once and expires after one hour.
+                  </p>
+                )}
+                {mode === 'reset' && (
+                  <p>Choose a new password for your account. After this, we will sign you in.</p>
+                )}
+
+                {mode === 'recovery' && sent ? (
+                  <>
+                    <p className="banner banner--info" role="status">
+                      If that email has an FJ account, we have sent a reset link to it. Please check
+                      your inbox and your spam folder. The link expires in one hour.
+                    </p>
+                    <a className="btn btn--primary auth-continue" href="/auth/login">
+                      Back to sign in
+                    </a>
+                  </>
+                ) : mode === 'reset' ? (
                   <form
+                    className="auth-form"
                     onSubmit={(event) => {
                       event.preventDefault()
-                      void requestCode()
+                      void submitReset()
                     }}
                   >
-                    <label className="field">
-                      Email
+                    <PasswordField
+                      id="auth-new-password"
+                      label="New password"
+                      value={password}
+                      onChange={setPassword}
+                      autoComplete="new-password"
+                      hint="Use at least 8 characters. A short sentence you can remember works well."
+                    />
+                    <button className="btn btn--primary auth-continue" disabled={busy}>
+                      {busy ? 'Saving...' : 'Save new password'}
+                    </button>
+                  </form>
+                ) : mode === 'recovery' ? (
+                  <form
+                    className="auth-form"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      void submitForgot()
+                    }}
+                  >
+                    <div className="field">
+                      <label className="field__label" htmlFor="auth-email">
+                        Email
+                      </label>
                       <input
+                        id="auth-email"
+                        className="input"
                         type="email"
                         inputMode="email"
                         required
@@ -322,75 +396,111 @@ export function AuthPage() {
                         autoComplete="email"
                         placeholder="you@example.com"
                       />
-                    </label>
+                    </div>
                     <button className="btn btn--primary auth-continue" disabled={busy || !email}>
-                      <Mail size={17} />
-                      {busy ? 'Sending…' : 'Email me a code'}
-                      <ArrowRight size={17} />
+                      {busy ? 'Sending...' : 'Send reset link'}
                     </button>
                   </form>
-                )}
-                {stage === 'code' && (
+                ) : (
                   <form
+                    className="auth-form"
                     onSubmit={(event) => {
                       event.preventDefault()
-                      void verifyCode(code)
+                      void (mode === 'signup' ? submitSignup() : submitLogin())
                     }}
                   >
-                    <p className="field__hint">
-                      We sent a 6-digit code to <strong>{email}</strong>. It expires in 10 minutes.
-                      Not there? Check your spam folder.
-                    </p>
-                    <CodeBoxes
-                      key={attempt}
-                      value={code}
-                      onChange={setCode}
-                      onDone={(completed) => void verifyCode(completed)}
+                    {mode === 'signup' && (
+                      <div className="field">
+                        <label className="field__label" htmlFor="auth-name">
+                          Your name
+                        </label>
+                        <input
+                          id="auth-name"
+                          className="input"
+                          type="text"
+                          value={name}
+                          onChange={(event) => setName(event.target.value)}
+                          autoComplete="name"
+                          placeholder="For example, Adaeze Okafor"
+                        />
+                      </div>
+                    )}
+                    <div className="field">
+                      <label className="field__label" htmlFor="auth-email">
+                        Email
+                      </label>
+                      <input
+                        id="auth-email"
+                        className="input"
+                        type="email"
+                        inputMode="email"
+                        required
+                        autoFocus={mode === 'login'}
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                      />
+                    </div>
+                    <PasswordField
+                      id="auth-password"
+                      label="Password"
+                      value={password}
+                      onChange={setPassword}
+                      autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                      hint={
+                        mode === 'signup'
+                          ? 'Use at least 8 characters. A short sentence you can remember works well.'
+                          : undefined
+                      }
                     />
                     <button
                       className="btn btn--primary auth-continue"
-                      disabled={busy || code.length !== 6}
+                      disabled={busy || !email || !password}
                     >
-                      {busy ? 'Checking…' : 'Continue'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={busy || cooldown > 0}
-                      onClick={() => {
-                        setCode('')
-                        void requestCode()
-                      }}
-                    >
-                      {cooldown > 0 ? `Send a new code (${cooldown}s)` : 'Send a new code'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => {
-                        setStage('email')
-                        setCode('')
-                        setNotice(null)
-                      }}
-                    >
-                      Use a different email
+                      {busy
+                        ? mode === 'signup'
+                          ? 'Creating your account...'
+                          : 'Signing you in...'
+                        : mode === 'signup'
+                          ? 'Create free account'
+                          : 'Sign in'}
                     </button>
                   </form>
                 )}
+
                 {notice && (
-                  <p className="banner banner--demo" role="status">
+                  <p className="banner banner--demo" role="alert">
                     {notice}
                   </p>
                 )}
+
+                <div className="auth-links">
+                  {mode === 'login' && <a href="/auth/recovery">Forgot password?</a>}
+                  {mode === 'signup' && (
+                    <span>
+                      Already have an account?{' '}
+                      <a href={`/auth/login?returnTo=${encodeURIComponent(returnTo)}`}>Sign in</a>
+                    </span>
+                  )}
+                  {mode === 'login' && (
+                    <span>
+                      New here?{' '}
+                      <a href={`/auth/signup?returnTo=${encodeURIComponent(returnTo)}`}>
+                        Create a free account
+                      </a>
+                    </span>
+                  )}
+                  {(mode === 'reset' || (mode === 'recovery' && !sent)) && (
+                    <a href="/auth/login">Back to sign in</a>
+                  )}
+                </div>
                 <p className="field__hint">
-                  Never share a code with anyone. FJ staff will never ask for it.
+                  Never share your password with anybody. FJ will never ask you for it.
                 </p>
-                <a className="auth-recovery" href={recovery ? '/auth/login' : '/auth/recovery'}>
-                  {recovery ? 'Back to sign in' : 'Can’t get into your email?'}
-                </a>
               </>
             )}
-            <p className="auth-free">Free to explore. No card required.</p>
+            <p className="auth-free">Free to join. No card required.</p>
           </section>
         </div>
       </main>

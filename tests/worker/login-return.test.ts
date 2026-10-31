@@ -10,12 +10,14 @@ describe('forwarding to FJ sign-in', () => {
   it.each([
     ['/jobs/job_123', '/auth/login?returnTo=%2Fjobs%2Fjob_123'],
     ['/', '/auth/login?returnTo=%2F'],
+    ['/jobs', '/auth/login?returnTo=%2Fjobs'],
+    ['/profile', '/auth/login?returnTo=%2Fprofile'],
     ['/dashboard', '/auth/login?returnTo=%2Fdashboard'],
-    ['https://attacker.example', '/auth/login?returnTo=%2Fdashboard'],
-    ['//attacker.example', '/auth/login?returnTo=%2Fdashboard'],
-    ['/\\attacker.example', '/auth/login?returnTo=%2Fdashboard'],
-    ['/api/account', '/auth/login?returnTo=%2Fdashboard'],
-    ['/jobs/job_123?next=https://attacker.example', '/auth/login?returnTo=%2Fdashboard'],
+    ['https://attacker.example', '/auth/login?returnTo=%2Fjobs'],
+    ['//attacker.example', '/auth/login?returnTo=%2Fjobs'],
+    ['/\\attacker.example', '/auth/login?returnTo=%2Fjobs'],
+    ['/api/account', '/auth/login?returnTo=%2Fjobs'],
+    ['/jobs/job_123?next=https://attacker.example', '/auth/login?returnTo=%2Fjobs'],
   ])('validates the return destination %s', async (returnTo, expected) => {
     const response = await app.request(
       'https://fj-find-jobs.pages.dev/api/auth/login?returnTo=' + encodeURIComponent(returnTo),
