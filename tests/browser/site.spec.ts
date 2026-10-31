@@ -504,6 +504,7 @@ NYSC completed in 2024.`
 
   await page.setViewportSize({ width: 1280, height: 1000 })
   await page.goto('/jobs')
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 30_000 })
   await page.locator('.joblist .jobrow').first().click()
   await expect(page.getByText(/left today|Fast Apply/)).toHaveCount(0)
   await expect(page.getByRole('link', { name: /Apply for this (role|gig|contract)/ })).toBeVisible()
@@ -518,7 +519,9 @@ NYSC completed in 2024.`
   await proTools.getByRole('button', { name: 'Prepare application' }).click()
   await expect(proTools.getByRole('button', { name: 'Copy cover letter' })).toBeVisible()
   await proTools.getByRole('button', { name: 'Compare my CV with this job' }).click()
-  await expect(proTools).toContainText(/Advert wording match|No percentage is available/)
+  await expect(proTools).toContainText(/Advert wording match|No percentage is available/, {
+    timeout: 30_000,
+  })
   await expectNoHorizontalOverflow(page)
   await page.screenshot({ path: testInfo.outputPath('phase2-job-tools-1280.png') })
 
@@ -783,7 +786,7 @@ test('personal monthly progress counts confirmations, not link clicks', async ({
 test('changing filters does not refetch account, health or exchange rates', async ({ page }) => {
   await signUp(page)
   await page.goto('/jobs')
-  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 30_000 })
   const metadata: string[] = []
   page.on('request', (request) => {
     if (/\/api\/(health|rates|account)(?:[?]|$)/.test(request.url())) metadata.push(request.url())

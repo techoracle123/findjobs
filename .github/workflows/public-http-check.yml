@@ -1,4 +1,5 @@
 name: Live jobs and gigs HTTP diagnostics
+# Re-run after the preclassified snapshot and public summary repair.
 on:
   push:
     branches: [arena/6acbf55c-findjobs]
