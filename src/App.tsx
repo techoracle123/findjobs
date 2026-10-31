@@ -544,7 +544,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="FJ homepage">
+        <a className="brand" href="/" aria-label="FJ Find Jobs home">
           <img className="brand__logo" src="/favicon.svg" alt="" width="36" height="36" />
           <span className="brand__word">
             <strong>FJ</strong> Find Jobs

@@ -2952,6 +2952,10 @@ summary:focus-visible {
   background: var(--accent-soft);
 }
 
+.home-stat.home-stat--users span {
+  color: var(--ink-soft);
+}
+
 .home-stat strong {
   font-size: clamp(24px, 3vw, 34px);
   letter-spacing: -0.5px;
