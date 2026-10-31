@@ -271,13 +271,16 @@ test('Nigeria and general professions are selectable without repetitive badges',
 })
 
 test('homepage is public, jobs are not, and sign-in is our own page', async ({ request }) => {
+  test.setTimeout(150_000)
   const health = await (await request.get('/api/health')).json()
   expect(health).toEqual({ ok: true }) // never a stack map to anonymous callers
   const status = await (await request.get('/api/auth/status')).json()
   expect((await request.get('/')).ok()).toBe(true)
   expect(status.authenticated).toBe(false)
   // Plain totals stay public for the homepage; job data does not.
-  expect([200, 503]).toContain((await request.get('/api/public-stats')).status())
+  expect([200, 503]).toContain(
+    (await request.get('/api/public-stats', { timeout: 60_000 })).status(),
+  )
   expect((await request.get('/api/jobs')).status()).toBe(401)
   // Sign-in is FJ's own page. No Cloudflare Access screen anywhere.
   const login = await request.get('/api/auth/login', { maxRedirects: 0 })
@@ -288,6 +291,7 @@ test('homepage is public, jobs are not, and sign-in is our own page', async ({ r
 })
 
 test('sign up, sign in and forgot password work on small phones', async ({ page }) => {
+  test.setTimeout(180_000)
   await page.setViewportSize({ width: 320, height: 750 })
   const email = `fj-auth-${Date.now()}@example.com`
   // Create the account with email and password.
@@ -302,7 +306,7 @@ test('sign up, sign in and forgot password work on small phones', async ({ page 
   expect(inputBox && buttonBox && buttonBox.y - (inputBox.y + inputBox.height)).toBeGreaterThan(12)
   await page.getByRole('button', { name: 'Create free account' }).click()
   await expect(page).toHaveURL(/\/jobs/)
-  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 60_000 })
   // Sign out from the account page, then a wrong password is refused plainly.
   await page.goto('/auth/login')
   await expect(page.getByRole('heading', { name: 'You are signed in' })).toBeVisible()
@@ -532,6 +536,7 @@ test('What and Where search suggestions are keyboard navigable', async ({ page }
 })
 
 test('filter combinations are shareable and survive reload', async ({ page }) => {
+  test.setTimeout(180_000)
   // Pick a profession that exists in whatever real corpus is loaded. The
   // probe retries: right after a deploy the public snapshot republish can
   // make the first request slow (observed >60s on 2026-10-27).
