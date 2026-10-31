@@ -197,8 +197,9 @@ const entries: CopyEntry[] = [
     where: 'Admin pages',
   },
   // ── Legally mandated disclosures: the only named-party copy. ──
-  // (Empty today: CV matching runs on-device and no user text leaves the
-  // browser, so there is no third-party processor left to disclose.)
+  // (Empty today. Free CV matching runs on-device; optional saved-CV
+  // analysis is handled inside FJ after explicit consent, so no additional
+  // third-party processor is named here.)
 ]
 
 export const COPY: Record<string, CopyEntry> = Object.fromEntries(

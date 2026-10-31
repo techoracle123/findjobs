@@ -13,8 +13,9 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
         </p>
         <p>
           FJ is an information broker, not an employer or recruiter. We do not verify or endorse
-          listings, and we never charge job seekers. Always verify the employer and the original
-          listing before applying. Never pay to apply.
+          listings. Finding jobs and applying on the employer's own site are always free. Optional
+          Pro tools help you check adverts and your CV, prepare applications and follow through.
+          Always verify the employer and the original listing before applying. Never pay to apply.
         </p>
         <p>Our job is to make it easy to find opportunities — applying well is yours.</p>
       </>
@@ -26,14 +27,36 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
       <>
         <p>
           <strong>What we collect.</strong> Your account email, the profile you build (skills,
-          preferences), saved jobs, your confirmed application history, and job alerts. The homepage
-          and information pages need no account. Seeing the jobs needs the free account, so your
-          saved jobs and alerts follow you on any device.
+          preferences), saved jobs and stages, your confirmed application history, job alerts, saved
+          application answers and prepared application packs, trial usage, and graduate-price
+          answers if you use that check. The homepage and information pages need no account. Seeing
+          the jobs needs the free account, so your saved jobs and alerts follow you on any device.
         </p>
         <p>
-          <strong>Your CV stays on your device.</strong> When you upload a CV to improve your
-          matches, the text is read and matched against skills in your own browser. Your CV file is
-          not uploaded to FJ or to any third party.
+          <strong>Free CV import stays on your device.</strong> When you use basic CV import to
+          improve your matches, the file is read in your browser for skill suggestions. It is not
+          saved as your master CV in that step.
+        </p>
+        <p>
+          <strong>Optional saved master CV (Pro or free trial).</strong> Detailed CV analysis is a
+          separate choice. Only when you tick the permission box does FJ save the readable text
+          extracted from your CV, a fingerprint of that text, and the analysis report in your
+          account. The original PDF or DOCX file is not retained. The saved text is used only to
+          provide your CV analysis, job comparisons, application packs and interview preparation. FJ
+          does not send it to an employer for you. You can view it, download it, replace it or
+          delete it from your profile and Pro tools. It is included in account export and removed
+          when you delete it or delete your account.
+        </p>
+        <p>
+          <strong>One-off checks.</strong> CV text pasted into a single job check is not saved as
+          your master CV by that tool. A job advert pasted into the before-you-apply checker is used
+          for that check and is not saved.
+        </p>
+        <p>
+          <strong>Graduate-price check.</strong> If you check the graduate price, FJ stores your
+          status, month-and-year answers, work-experience band, declaration and the result so the
+          correct price can be offered and reviewed. We do not ask for your age, BVN or NIN. A
+          flagged check may be reviewed by an authorised FJ administrator.
         </p>
         <p>
           <strong>Your password.</strong> You sign in with your email and password. We store only a
@@ -42,13 +65,15 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           email delivery partner, which processes your email address only to deliver that message.
         </p>
         <p>
-          <strong>Payments.</strong> Paid plans are not open yet. When they launch, card payments
-          will be handled by our payment partner; we will never see or store your card details.
+          <strong>Payments.</strong> Paid plans are not open yet. Card and bank-transfer payments
+          are the next stage and will be handled by our payment partner; we will never see or store
+          your card details.
         </p>
         <p>
-          <strong>Retention.</strong> Account data is kept until you delete your account. Aggregated
-          application history is retained so your monthly progress works. Operational logs are kept
-          for up to 30 days.
+          <strong>Retention.</strong> Account data is kept until you delete the relevant item or
+          your account. Saved CV text is kept until you delete or replace it, or delete your
+          account. Aggregated application history is retained so your monthly progress works.
+          Operational logs are kept for up to 30 days.
         </p>
         <p>
           <strong>Your rights (NDPA and similar laws).</strong> You may access, correct, export or
@@ -77,12 +102,22 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           respond. No employment relationship exists between you and FJ.
         </p>
         <p>
-          <strong>Job seekers never pay.</strong> We do not charge job seekers to browse, save or
-          apply. Anyone asking you for money to get a job found through FJ should be reported.
+          <strong>Finding and applying are free.</strong> We do not charge to browse, save, receive
+          basic alerts or apply on an employer's own site. Optional Pro tools may be paid when
+          payments open, but Pro is never a fee for a job or for submitting an application. Anyone
+          asking you for money to get a job found through FJ should be reported.
         </p>
         <p>
           <strong>Your use of FJ.</strong> Use the service lawfully, do not scrape or abuse it, and
           verify listings independently before sharing personal information.
+        </p>
+        <p>
+          <strong>Pro tools and the free trial.</strong> The 3-day trial includes one full CV
+          analysis and three complete application packs and ends automatically; no card is taken. CV
+          suggestions and prepared applications are drafts. You must check that every statement is
+          true before sending it. FJ does not submit applications for you and does not guarantee a
+          reply, interview, offer or job. The advert checker shows evidence and warning signs; it is
+          not employer verification.
         </p>
         <p>
           <strong>Liability.</strong> FJ is provided “as is”. To the extent permitted by law, we are
@@ -124,6 +159,33 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           the employer's site is always free.
         </p>
         <p>
+          <strong>What is Pro?</strong> Pro adds a saved master CV with detailed analysis, CV-to-job
+          comparison, complete application packs, before-you-apply advert checks, best matches,
+          smart Telegram alerts, application stages and follow-ups, a repeated skill-gap plan,
+          interview preparation and salary evidence. See <a href="/pricing">Pricing</a> for the full
+          comparison.
+        </p>
+        <p>
+          <strong>How does the free trial work?</strong> After creating a free account, you can
+          start one 3-day Pro trial without card details. It includes one full CV analysis and three
+          application packs. It ends by itself, and reports or packs already created remain in your
+          account.
+        </p>
+        <p>
+          <strong>Who gets Pro for Graduates?</strong> Final-year students, recent graduates and
+          current or recent NYSC members with under two years of full-time paid work. The pricing
+          page has the checker and exact time windows.
+        </p>
+        <p>
+          <strong>Does FJ save my CV?</strong> Only if you choose detailed Pro analysis and tick the
+          permission box. FJ then saves readable text and the report, not the original file. Basic
+          CV import remains on your device. You can download or delete saved text.
+        </p>
+        <p>
+          <strong>Does FJ apply for me?</strong> No. FJ can prepare the words, but you review and
+          submit every application yourself on the employer's site.
+        </p>
+        <p>
           <strong>How do I save jobs and track applications?</strong> Tap the bookmark on any job.
           When you apply through the original listing, mark the role as applied. Your Progress
           dashboard counts what you confirm each month.
@@ -148,6 +210,12 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           <li>“Urgent”, “immediate”, “no experience needed”, “earn daily”, “daily payment”.</li>
           <li>Salary that is far above the market for the role.</li>
         </ul>
+        <p>
+          Pro and the free trial include a before-you-apply check for FJ jobs and adverts pasted
+          from WhatsApp, Telegram, email or another site. It highlights evidence such as fees, ID
+          requests, messaging-only contact and Nigeria eligibility wording. It cannot verify an
+          employer, so still check the official company website independently.
+        </p>
         <p>
           If a listing asks you for money, stop and report it from the job page — no account needed.
           Check the employer on their official website and confirm the vacancy there before you

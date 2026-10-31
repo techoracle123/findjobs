@@ -79,13 +79,16 @@ export interface PaymentProvider {
 
 const PRO_ENTITLEMENTS = [
   'alerts',
-  'weekly_digest',
-  'verified_source_badges',
-  'unlimited_fast_apply',
   'prepared_applications',
   'cv_check',
+  'cv_analysis',
   'interview_prep',
   'salary_guide',
+  'advert_check',
+  'smart_shortlist',
+  'smart_alerts',
+  'application_pipeline',
+  'skill_plan',
 ]
 
 export const PLANS = {

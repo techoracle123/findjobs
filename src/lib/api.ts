@@ -1,18 +1,25 @@
 import type {
   AlertPreference,
   ApiHealth,
+  AdvertCheckResult,
   ApplicationAnswers,
+  BestMatch,
   CvCheckResult,
   CvSuggestion,
+  GraduateEligibilityInput,
+  GraduateEligibilityState,
   InterviewPrep,
   Job,
   JobAdvice,
   JobTranslation,
+  MasterCv,
   PreparedApplication,
+  ProTrialState,
   Profile,
   RatesPayload,
   SalaryGuideResult,
   SavedApplication,
+  SkillPlanResult,
 } from '../shared/types'
 import { monthPeriod, type ApplicationActivity } from '../shared/activity'
 import type { JobFacets } from '../server/job-stats'
@@ -87,6 +94,8 @@ export interface AccountSnapshot {
   alerts: AlertPreference[]
   subscription: Subscription | null
   entitlements: string[]
+  proTrial: ProTrialState
+  graduateEligibility: GraduateEligibilityState | null
 }
 
 export function fetchHealth(): Promise<ApiHealth> {
@@ -148,6 +157,104 @@ export function suggestFromCv(text: string): Promise<CvSuggestion> {
   })
 }
 
+/* ---------- Phase 2 Pro access ---------- */
+
+export interface ProAccess {
+  paid: boolean
+  trial: ProTrialState
+  graduate: GraduateEligibilityState | null
+  features: string[]
+}
+
+export function fetchProAccess(): Promise<ProAccess> {
+  return request<ProAccess>('/api/pro/access', { cache: 'no-store' })
+}
+
+export function startProTrial(): Promise<{
+  trial: ProTrialState
+  paid: boolean
+  alreadyUsed: boolean
+}> {
+  return request('/api/pro/trial/start', { method: 'POST' })
+}
+
+export function fetchGraduateEligibility(): Promise<{ graduate: GraduateEligibilityState | null }> {
+  return request('/api/pro/graduate-eligibility', { cache: 'no-store' })
+}
+
+export function submitGraduateEligibility(
+  graduate: GraduateEligibilityInput,
+  cvText = '',
+): Promise<{ graduate: GraduateEligibilityState }> {
+  return request('/api/pro/graduate-eligibility', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ graduate, cvText }),
+  })
+}
+
+export function fetchMasterCv(includeText = false): Promise<{
+  cv: MasterCv | null
+  locked: boolean
+  trial: ProTrialState
+  paid: boolean
+}> {
+  return request(`/api/pro/cv${includeText ? '?includeText=1' : ''}`, { cache: 'no-store' })
+}
+
+export function saveMasterCv(input: {
+  fileName: string
+  fileType: string
+  text: string
+  consent: boolean
+}): Promise<{ cv: MasterCv; trial: ProTrialState; paid: boolean }> {
+  return request('/api/pro/cv', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+}
+
+export function deleteMasterCv(): Promise<{ ok: true }> {
+  return request('/api/pro/cv', { method: 'DELETE' })
+}
+
+export function runAdvertCheck(input: {
+  title?: string
+  company?: string
+  location?: string
+  url?: string
+  text: string
+}): Promise<{ check: AdvertCheckResult }> {
+  return request('/api/pro/advert-check', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+}
+
+export function runJobAdvertCheck(jobId: string): Promise<{ check: AdvertCheckResult }> {
+  return request(`/api/jobs/${encodeURIComponent(jobId)}/before-you-apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+}
+
+export function fetchBestMatches(limit = 12): Promise<{
+  available: boolean
+  message: string
+  totalJobs: number
+  updatedAt: string | null
+  matches: BestMatch[]
+}> {
+  return request(`/api/pro/best-matches?limit=${limit}`, { cache: 'no-store' })
+}
+
+export function fetchSkillPlan(): Promise<{ plan: SkillPlanResult }> {
+  return request('/api/pro/skill-plan', { cache: 'no-store' })
+}
+
 /* ---------- Pro tools ---------- */
 
 export function fetchApplicationAnswers(): Promise<{ answers: ApplicationAnswers }> {
@@ -175,8 +282,8 @@ export function fetchPreparedApplication(
 export function createPreparedApplication(
   jobId: string,
   answers?: ApplicationAnswers,
-): Promise<{ prepared: PreparedApplication }> {
-  return request<{ prepared: PreparedApplication }>(
+): Promise<{ prepared: PreparedApplication; trial?: ProTrialState; paid?: boolean }> {
+  return request<{ prepared: PreparedApplication; trial?: ProTrialState; paid?: boolean }>(
     `/api/jobs/${encodeURIComponent(jobId)}/prepared-application`,
     {
       method: 'POST',
@@ -186,12 +293,18 @@ export function createPreparedApplication(
   )
 }
 
-export function checkCvForJob(jobId: string, cvText: string): Promise<{ check: CvCheckResult }> {
-  return request<{ check: CvCheckResult }>(`/api/jobs/${encodeURIComponent(jobId)}/cv-check`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ cvText }),
-  })
+export function checkCvForJob(
+  jobId: string,
+  cvText: string,
+): Promise<{ check: CvCheckResult; trial?: ProTrialState; paid?: boolean }> {
+  return request<{ check: CvCheckResult; trial?: ProTrialState; paid?: boolean }>(
+    `/api/jobs/${encodeURIComponent(jobId)}/cv-check`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cvText }),
+    },
+  )
 }
 
 export function fetchInterviewPrep(jobId: string): Promise<{ prep: InterviewPrep }> {
@@ -226,38 +339,6 @@ export function putProfile(profile: Profile): Promise<{ profile: Profile }> {
   })
 }
 
-export interface ApplyQuota {
-  unlimited: boolean
-  limit: number
-  used: number
-  remaining: number
-  resetsAt: string
-  weekLimit: number
-  weekUsed: number
-}
-
-export function fetchApplyQuota(): Promise<ApplyQuota> {
-  return request<ApplyQuota>('/api/apply/quota', { cache: 'no-store' })
-}
-
-export interface FastApplyResult {
-  ok: true
-  remaining: number | null
-  resetsAt: string
-}
-
-export function fastApply(
-  jobId: string,
-  coverNote?: string,
-  useProfile = true,
-): Promise<FastApplyResult> {
-  return request<FastApplyResult>(`/api/jobs/${encodeURIComponent(jobId)}/fast-apply`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ coverNote, useProfile }),
-  })
-}
-
 /** Fire-and-forget: the outbound link must never wait on this. */
 export function recordApplyClick(jobId: string): void {
   try {
@@ -269,11 +350,21 @@ export function recordApplyClick(jobId: string): void {
   }
 }
 
-export function postSaved(jobId: string, status: 'saved' | 'applied'): Promise<{ ok: true }> {
+export function postSaved(
+  jobId: string,
+  status: 'saved' | 'applied',
+  extra?: Partial<SavedApplication>,
+): Promise<{ ok: true; proRequired?: boolean }> {
   return request<{ ok: true }>('/api/account/saved', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jobId, status }),
+    body: JSON.stringify({
+      jobId,
+      status,
+      stage: extra?.stage,
+      followUpAt: extra?.followUpAt,
+      note: extra?.note,
+    }),
   })
 }
 
@@ -347,8 +438,15 @@ export interface PlanPrice {
 export interface PlanDefinition {
   id: string
   label: string
+  displayLabel?: string
   entitlements: string[]
   price: PlanPrice
+  interval?: 'free' | 'month' | 'year' | 'waitlist'
+  audience?: 'seeker' | 'employer'
+  monthlyEquivalent?: number
+  founding?: boolean
+  standardAmount?: number
+  trialDays?: number
 }
 
 export interface PlanCatalogue {

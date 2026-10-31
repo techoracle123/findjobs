@@ -246,3 +246,50 @@ adminRoutes.post('/admin/billing/promos', async (c) => {
     .run()
   return c.json({ ok: true })
 })
+
+/** Graduate-price reviews: only flagged/conflicting declarations need a human. */
+adminRoutes.get('/admin/graduate-reviews', async (c) => {
+  const denied = await requireAdmin(c)
+  if (denied) return denied
+  const limited = await enforceRateLimit(c, { bucket: 'admin', limit: 60, windowSeconds: 60 })
+  if (limited) return limited
+  if (!c.env?.DB) return c.json({ error: 'storage_unavailable' }, 503)
+  const rows = await c.env.DB.prepare(
+    `SELECT g.user_id, u.email, g.status, g.education_month, g.nysc_month,
+       g.full_time_experience, g.result, g.flags, g.proof_status, g.checked_at
+     FROM graduate_eligibility g JOIN users u ON u.id = g.user_id
+     WHERE g.result = 'review' ORDER BY g.checked_at ASC LIMIT 200`,
+  ).all()
+  return c.json({ reviews: rows.results })
+})
+
+adminRoutes.post('/admin/graduate-reviews/:userId/resolve', async (c) => {
+  const denied = await requireAdmin(c)
+  if (denied) return denied
+  if (!c.env?.DB) return c.json({ error: 'storage_unavailable' }, 503)
+  const body = await c.req.json().catch(() => null)
+  const decision = body?.decision
+  if (!['approved', 'rejected'].includes(decision)) return c.json({ error: 'bad_request' }, 400)
+  const now = new Date()
+  const eligibleUntil =
+    decision === 'approved'
+      ? new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 12, now.getUTCDate()),
+        ).toISOString()
+      : null
+  const result = await c.env.DB.prepare(
+    `UPDATE graduate_eligibility
+     SET result = ?1, proof_status = ?2, eligible_until = ?3, checked_at = ?4, updated_at = ?4
+     WHERE user_id = ?5`,
+  )
+    .bind(
+      decision === 'approved' ? 'eligible' : 'not_eligible',
+      decision,
+      eligibleUntil,
+      now.toISOString(),
+      c.req.param('userId'),
+    )
+    .run()
+  if (!result.meta?.changes) return c.json({ error: 'not_found' }, 404)
+  return c.json({ ok: true, decision, eligibleUntil })
+})

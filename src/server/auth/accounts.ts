@@ -1,11 +1,16 @@
 import type {
   AlertPreference,
   ApplicationAnswers,
+  ApplicationStage,
+  GraduateEligibilityState,
+  MasterCv,
   PreparedApplication,
+  ProTrialState,
   Profile,
   SavedApplication,
 } from '../../shared/types'
 import { EMPTY_APPLICATION_ANSWERS, normaliseApplicationAnswers } from '../pro-tools'
+import { getGraduateEligibility, getMasterCv, getTrialState } from '../phase2'
 
 export interface AccountUser {
   id: string
@@ -33,6 +38,8 @@ export interface AccountSnapshot {
   alerts: AlertPreference[]
   subscription: Subscription | null
   entitlements: string[]
+  proTrial: ProTrialState
+  graduateEligibility: GraduateEligibilityState | null
 }
 
 const encoder = new TextEncoder()
@@ -155,7 +162,7 @@ export async function saveProfile(db: D1Database, userId: string, profile: Profi
 export async function listSaved(db: D1Database, userId: string): Promise<SavedApplication[]> {
   const result = await db
     .prepare(
-      `SELECT s.job_id, s.status, s.note, s.created_at, h.applied_at FROM saved_jobs s
+      `SELECT s.job_id, s.status, s.stage, s.follow_up_at, s.note, s.created_at, h.applied_at FROM saved_jobs s
        LEFT JOIN application_history h ON h.user_id=s.user_id AND h.job_id=s.job_id
        WHERE s.user_id = ?1 ORDER BY s.created_at DESC`,
     )
@@ -163,6 +170,8 @@ export async function listSaved(db: D1Database, userId: string): Promise<SavedAp
     .all<{
       job_id: string
       status: string
+      stage: string | null
+      follow_up_at: string | null
       note: string | null
       created_at: string
       applied_at: string | null
@@ -173,7 +182,15 @@ export async function listSaved(db: D1Database, userId: string): Promise<SavedAp
     savedAt: row.created_at,
     appliedAt: row.applied_at ?? undefined,
     status: row.status === 'applied' ? 'applied' : 'saved',
+    stage: (['saved', 'preparing', 'applied', 'interview', 'offer', 'closed'].includes(
+      row.stage ?? '',
+    )
+      ? row.stage
+      : row.status === 'applied'
+        ? 'applied'
+        : 'saved') as ApplicationStage,
     note: row.note ?? undefined,
+    followUpAt: row.follow_up_at ?? undefined,
   }))
 }
 
@@ -184,16 +201,28 @@ export async function setSaved(
   status: 'saved' | 'applied',
   note?: string,
   appliedAt?: string | null,
+  extra?: { stage?: ApplicationStage; followUpAt?: string | null },
 ): Promise<void> {
   const now = new Date().toISOString()
+  const current = await db
+    .prepare('SELECT stage, follow_up_at FROM saved_jobs WHERE user_id = ?1 AND job_id = ?2')
+    .bind(userId, jobId)
+    .first<{ stage: string | null; follow_up_at: string | null }>()
+    .catch(() => null)
+  const stage =
+    extra?.stage ??
+    (current?.stage as ApplicationStage | null) ??
+    (status === 'applied' ? 'applied' : 'saved')
+  const followUpAt =
+    extra && 'followUpAt' in extra ? extra.followUpAt : (current?.follow_up_at ?? null)
   const save = db
     .prepare(
-      `INSERT INTO saved_jobs (user_id, job_id, status, note, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?5)
-       ON CONFLICT(user_id, job_id) DO UPDATE SET status = ?3,
-         note = COALESCE(?4, saved_jobs.note), updated_at = ?5`,
+      `INSERT INTO saved_jobs (user_id, job_id, status, stage, follow_up_at, note, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+       ON CONFLICT(user_id, job_id) DO UPDATE SET status = ?3, stage = ?4, follow_up_at = ?5,
+         note = COALESCE(?6, saved_jobs.note), updated_at = ?7`,
     )
-    .bind(userId, jobId, status, note ?? null, now)
+    .bind(userId, jobId, status, stage, followUpAt, note ?? null, now)
 
   const statements = [save]
   if (status === 'applied')
@@ -214,10 +243,59 @@ export async function removeSaved(db: D1Database, userId: string, jobId: string)
     .run()
 }
 
+type AlertSettings = Pick<
+  AlertPreference,
+  | 'kind'
+  | 'minScore'
+  | 'countries'
+  | 'workModes'
+  | 'salaryOnly'
+  | 'currency'
+  | 'exclude'
+  | 'companies'
+>
+
+function alertSettingsOf(alert: Partial<AlertPreference>): AlertSettings {
+  return {
+    ...(alert.kind ? { kind: alert.kind } : {}),
+    ...(typeof alert.minScore === 'number' ? { minScore: alert.minScore } : {}),
+    ...(alert.countries?.length ? { countries: alert.countries } : {}),
+    ...(alert.workModes?.length ? { workModes: alert.workModes } : {}),
+    ...(typeof alert.salaryOnly === 'boolean' ? { salaryOnly: alert.salaryOnly } : {}),
+    ...(alert.currency ? { currency: alert.currency } : {}),
+    ...(alert.exclude ? { exclude: alert.exclude } : {}),
+    ...(alert.companies?.length ? { companies: alert.companies } : {}),
+  }
+}
+
+function parseAlertSettings(raw: string | null): AlertSettings {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as Partial<AlertPreference>
+    return alertSettingsOf({
+      ...parsed,
+      countries: Array.isArray(parsed.countries)
+        ? parsed.countries.filter((item): item is string => typeof item === 'string')
+        : undefined,
+      workModes: Array.isArray(parsed.workModes)
+        ? parsed.workModes.filter(
+            (item): item is NonNullable<AlertPreference['workModes']>[number] =>
+              item === 'remote' || item === 'hybrid' || item === 'onsite',
+          )
+        : undefined,
+      companies: Array.isArray(parsed.companies)
+        ? parsed.companies.filter((item): item is string => typeof item === 'string')
+        : undefined,
+    })
+  } catch {
+    return {}
+  }
+}
+
 export async function listAlerts(db: D1Database, userId: string): Promise<AlertPreference[]> {
   const result = await db
     .prepare(
-      `SELECT id, label, query, channels, enabled, created_at FROM alerts
+      `SELECT id, label, query, channels, enabled, settings, created_at FROM alerts
        WHERE user_id = ?1 ORDER BY created_at DESC`,
     )
     .bind(userId)
@@ -227,6 +305,7 @@ export async function listAlerts(db: D1Database, userId: string): Promise<AlertP
       query: string | null
       channels: string
       enabled: number
+      settings: string | null
       created_at: string
     }>()
 
@@ -236,6 +315,7 @@ export async function listAlerts(db: D1Database, userId: string): Promise<AlertP
     query: row.query ?? '',
     channels: parseList(row.channels),
     enabled: Boolean(row.enabled),
+    ...parseAlertSettings(row.settings),
   }))
 }
 
@@ -246,8 +326,8 @@ export async function createAlert(
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO alerts (id, user_id, label, query, channels, enabled, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)`,
+      `INSERT INTO alerts (id, user_id, label, query, channels, enabled, settings, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)`,
     )
     .bind(
       alert.id,
@@ -256,6 +336,7 @@ export async function createAlert(
       alert.query || null,
       JSON.stringify(alert.channels),
       alert.enabled ? 1 : 0,
+      JSON.stringify(alertSettingsOf(alert)),
       new Date().toISOString(),
     )
     .run()
@@ -269,23 +350,31 @@ export async function updateAlert(
 ): Promise<void> {
   const current = await db
     .prepare(
-      'SELECT id, label, query, channels, enabled FROM alerts WHERE id = ?1 AND user_id = ?2',
+      'SELECT id, label, query, channels, enabled, settings FROM alerts WHERE id = ?1 AND user_id = ?2',
     )
     .bind(id, userId)
-    .first<{ id: string; label: string; query: string | null; channels: string; enabled: number }>()
+    .first<{
+      id: string
+      label: string
+      query: string | null
+      channels: string
+      enabled: number
+      settings: string | null
+    }>()
 
   if (!current) return
 
   await db
     .prepare(
-      `UPDATE alerts SET label = ?1, query = ?2, channels = ?3, enabled = ?4, updated_at = ?5
-       WHERE id = ?6 AND user_id = ?7`,
+      `UPDATE alerts SET label = ?1, query = ?2, channels = ?3, enabled = ?4, settings = ?5, updated_at = ?6
+       WHERE id = ?7 AND user_id = ?8`,
     )
     .bind(
       patch.label ?? current.label,
       patch.query ?? current.query,
       JSON.stringify(patch.channels ?? parseList(current.channels)),
       (patch.enabled ?? Boolean(current.enabled)) ? 1 : 0,
+      JSON.stringify({ ...parseAlertSettings(current.settings), ...alertSettingsOf(patch) }),
       new Date().toISOString(),
       id,
       userId,
@@ -416,7 +505,16 @@ export async function recordAudit(
 }
 
 export async function loadAccount(db: D1Database, userId: string): Promise<AccountSnapshot> {
-  const [userRow, profile, saved, alerts, subscription, entitlements] = await Promise.all([
+  const [
+    userRow,
+    profile,
+    saved,
+    alerts,
+    subscription,
+    entitlements,
+    proTrial,
+    graduateEligibility,
+  ] = await Promise.all([
     db
       .prepare('SELECT id, email, display_name, created_at FROM users WHERE id = ?1')
       .bind(userId)
@@ -426,6 +524,8 @@ export async function loadAccount(db: D1Database, userId: string): Promise<Accou
     listAlerts(db, userId),
     getSubscription(db, userId),
     getEntitlements(db, userId),
+    getTrialState(db, userId),
+    getGraduateEligibility(db, userId),
   ])
 
   if (!userRow) throw new Error('account not found')
@@ -442,6 +542,8 @@ export async function loadAccount(db: D1Database, userId: string): Promise<Accou
     alerts,
     subscription,
     entitlements,
+    proTrial,
+    graduateEligibility,
   }
 }
 
@@ -499,6 +601,9 @@ export interface AccountExport {
   subscription: Subscription | null
   entitlements: string[]
   applicationAnswers: ApplicationAnswers
+  proTrial: ProTrialState
+  graduateEligibility: GraduateEligibilityState | null
+  masterCv: MasterCv | null
   preparedApplications: {
     jobId: string
     content: PreparedApplication | null
@@ -516,7 +621,17 @@ export interface AccountExport {
  * summary of it.
  */
 export async function exportAccount(db: D1Database, userId: string): Promise<AccountExport> {
-  const [userRow, profile, saved, alerts, subscription, entitlements] = await Promise.all([
+  const [
+    userRow,
+    profile,
+    saved,
+    alerts,
+    subscription,
+    entitlements,
+    proTrial,
+    graduateEligibility,
+    masterCv,
+  ] = await Promise.all([
     db
       .prepare('SELECT id, email, display_name, created_at FROM users WHERE id = ?1')
       .bind(userId)
@@ -526,6 +641,9 @@ export async function exportAccount(db: D1Database, userId: string): Promise<Acc
     listAlerts(db, userId),
     getSubscription(db, userId),
     getEntitlements(db, userId),
+    getTrialState(db, userId),
+    getGraduateEligibility(db, userId),
+    getMasterCv(db, userId, true),
   ])
 
   const consentRows = await db
@@ -584,6 +702,9 @@ export async function exportAccount(db: D1Database, userId: string): Promise<Acc
     subscription,
     entitlements,
     applicationAnswers,
+    proTrial,
+    graduateEligibility,
+    masterCv,
     preparedApplications: (preparedRows?.results ?? []).map((row) => {
       let content: PreparedApplication | null = null
       try {
@@ -625,5 +746,12 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     .bind(userId)
     .run()
     .catch(() => undefined)
+  for (const table of ['master_cvs', 'graduate_eligibility', 'pro_trial_usage', 'pro_trials']) {
+    await db
+      .prepare(`DELETE FROM ${table} WHERE user_id = ?1`)
+      .bind(userId)
+      .run()
+      .catch(() => undefined)
+  }
   await db.prepare('DELETE FROM users WHERE id = ?1').bind(userId).run()
 }

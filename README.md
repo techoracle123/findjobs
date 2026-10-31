@@ -43,7 +43,7 @@ English translation, tailored tips, salary conversions and the chosen hostname.
 - Number-free match rings with a plain-language explanation and optional qualitative skill/preference detail. Internal weighted scoring remains deterministic. Components that cannot be compared are excluded from the total rather than counted as failures, so a sparse posting is not penalised for being sparse.
 - Work-eligibility picker covering every ISO 3166-1 alpha-2 region except Antarctica. The list is **generated** from `i18n-iso-countries` (`npm run data:generate`), never hand-maintained.
 - Profile and skill signal with forgiving matching: `node.js`, `NodeJS` and `node` are one skill; `TS` is `TypeScript`.
-- CV import for PDF, DOCX and TXT, parsed in the browser. Only the extracted text is sent for suggestions — the file is never uploaded or stored.
+- Free CV import for PDF, DOCX and TXT is parsed in the browser for profile suggestions. Separately, Pro/trial users can explicitly consent to saving the extracted readable text and detailed analysis report in D1; the original file is not retained, and the saved text can be downloaded, replaced or deleted.
 - Salary conversion into a chosen display currency using dated reference rates, with the rate date shown. Currencies with no rate keep the employer's original currency. Pay periods are never annualised and mixed results say so.
 
 **Accounts (Cloudflare Access)**
@@ -74,6 +74,10 @@ English translation, tailored tips, salary conversions and the chosen hostname.
 - Entitlements are always derived server-side from the subscription row. The client is never trusted to grant itself a feature.
 - Paystack and Stripe webhooks are verified with an HMAC over the raw body (or `timestamp.payload` for Stripe) and checked against a replay window; Flutterwave's static `verif-hash` is verified and the payment is then confirmed with the provider's own API before anything is granted. Retries are deduped.
 - When no provider is configured the app runs with a safe fake provider that never charges and never accepts a webhook. The UI says so plainly.
+- Phase 2 plans are Free, Pro Monthly (founding ₦5,000), Pro Yearly (founding ₦40,000) and Pro for Graduates (₦3,000/month). Monthly, Yearly and Graduate expose the same Pro entitlements. Real-money checkout is deliberately not enabled until Phase 3; `billingEnabled` comes from a real configured provider, not from the presence of a catalogue.
+- A one-time 3-day trial needs no payment details. The server allows one successful distinct general CV analysis and complete packs for three distinct jobs; regenerating the same CV/job does not consume another allowance. Existing prepared packs remain readable after access ends.
+- Graduate eligibility uses final-year/recent-graduate/current-or-recent-NYSC timing plus under two years of full-time work, with profile/CV conflicts routed to review. It does not collect age, BVN or NIN.
+- Fast Apply and its daily meter are retired. FJ preparation tools never claim to submit an application; employer-site applications remain free and unlimited.
 
 **AI with a budget**
 
@@ -168,6 +172,14 @@ curl -H 'x-dev-user-email: person@example.com' http://localhost:8787/api/account
 | `POST /api/billing/portal`                  | Opens the provider's customer portal                       |
 | `POST /api/billing/cancel`                  | Cancels the plan at the end of the paid period             |
 | `POST /api/billing/webhook`                 | The provider's webhook (signature verified)                |
+| `GET /api/pro/access`                       | Paid/trial access and graduate-price state                 |
+| `POST /api/pro/trial/start`                 | Starts the one-time 3-day trial                            |
+| `GET/PUT/DELETE /api/pro/cv`                | Consent-based saved master-CV text and analysis            |
+| `POST /api/pro/advert-check`                | Checks a pasted advert without storing it                  |
+| `POST /api/jobs/:id/before-you-apply`       | Nigeria-eligibility and warning-sign check for a listing   |
+| `GET /api/pro/best-matches`                 | Ranked current matches with reasons                        |
+| `GET /api/pro/skill-plan`                   | Repeated skill gaps from relevant live adverts             |
+| `GET/POST /api/pro/graduate-eligibility`    | Graduate-price check and review state                      |
 | `GET /api/account/export`                   | Everything held about the signed-in account                |
 | `GET /api/telegram/status`                  | Whether this account has linked a chat                     |
 | `POST /api/telegram/link`                   | Returns a signed deep link to link Telegram                |

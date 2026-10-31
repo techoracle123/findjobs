@@ -126,9 +126,9 @@ export function readConfig(env: Env): AppConfig {
     billing: {
       provider: resolveProvider(env),
       currency: (env.BILLING_CURRENCY || 'NGN').trim().toUpperCase().slice(0, 3),
-      pricePro: number(env.BILLING_PRICE_PRO, 10000),
+      pricePro: number(env.BILLING_PRICE_PRO, 5000),
       priceGraduate: number(env.BILLING_PRICE_GRADUATE, 3000),
-      priceAnnual: number(env.BILLING_PRICE_ANNUAL, 100000),
+      priceAnnual: number(env.BILLING_PRICE_ANNUAL, 40000),
       stripe: {
         secretKey: env.STRIPE_SECRET_KEY ?? null,
         webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? null,

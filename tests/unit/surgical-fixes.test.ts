@@ -161,32 +161,46 @@ describe('plan catalogue (3.2, 3.3, 3.4)', () => {
   const plans = planCatalogue(readConfig({}))
   const byId = (id: string) => plans.find((plan) => plan.id === id)
 
-  it('prices pro at 10000, graduate at 3000, annual at 100000', () => {
-    expect(byId('pro')?.price.amount).toBe(10000)
+  it('shows founding prices now and the disclosed standard prices later', () => {
+    expect(byId('pro')?.price.amount).toBe(5000)
+    expect(byId('pro')?.standardAmount).toBe(10000)
+    expect(byId('pro')?.founding).toBe(true)
     expect(byId('pro_graduate')?.price.amount).toBe(3000)
-    expect(byId('pro_annual')?.price.amount).toBe(100000)
+    expect(byId('pro_annual')?.price.amount).toBe(40000)
+    expect(byId('pro_annual')?.standardAmount).toBe(60000)
+    expect(byId('pro_annual')?.monthlyEquivalent).toBe(3333)
     expect(byId('pro_annual')?.interval).toBe('year')
+    expect(byId('pro')?.trialDays).toBe(3)
   })
 
   it('alerts are on the free tier and off the paywall pitch', () => {
     expect(byId('free')?.entitlements).toContain('alerts')
   })
 
-  it('uses plain plan names and gives Pro the four application tools', () => {
-    expect(byId('free')?.label).toBe('Free')
-    expect(byId('pro')?.label).toBe('Pro')
-    expect(byId('pro_annual')?.label).toBe('Pro')
-    expect(byId('pro_graduate')?.label).toBe('Pro for Graduates')
+  it('uses plain plan names and gives every Pro plan the same real tools', () => {
+    expect(byId('free')?.displayLabel).toBe('Free')
+    expect(byId('pro')?.displayLabel).toBe('Pro Monthly')
+    expect(byId('pro_annual')?.displayLabel).toBe('Pro Yearly')
+    expect(byId('pro_graduate')?.displayLabel).toBe('Pro for Graduates')
     for (const feature of [
       'prepared_applications',
       'cv_check',
+      'cv_analysis',
       'interview_prep',
       'salary_guide',
-      'unlimited_fast_apply',
+      'advert_check',
+      'smart_shortlist',
+      'smart_alerts',
+      'application_pipeline',
+      'skill_plan',
     ]) {
       expect(byId('pro')?.entitlements).toContain(feature)
+      expect(byId('pro_annual')?.entitlements).toContain(feature)
       expect(byId('pro_graduate')?.entitlements).toContain(feature)
       expect(byId('free')?.entitlements).not.toContain(feature)
+    }
+    for (const hollow of ['unlimited_fast_apply', 'weekly_digest', 'verified_source_badges']) {
+      expect(byId('pro')?.entitlements).not.toContain(hollow)
     }
   })
 

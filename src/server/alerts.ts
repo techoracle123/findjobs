@@ -1,41 +1,75 @@
-import type { Job } from '../shared/types'
-import { listAlerts, listTelegramSubscribers } from './auth/accounts'
-import { formatAlertMessage, deliverAlert } from './telegram'
+import { scoreJob } from '../shared/scoring'
+import type { AlertPreference, Job, Profile } from '../shared/types'
+import {
+  getEntitlements,
+  getProfile,
+  getSubscription,
+  listAlerts,
+  listTelegramSubscribers,
+} from './auth/accounts'
+import { planEntitlements, subscriptionHasFeature } from './billing/types'
+import { listOpenJobs } from './jobs'
 import { logger } from './logging'
+import { getTrialState } from './phase2'
+import { publishedPublicJobs } from './public-feed'
+import { formatAlertMessage, deliverAlert } from './telegram'
 import type { Env } from './env'
 
 export interface AlertSubscriber {
   userId: string
   chatId: number
-  alerts: { id: string; label: string; query: string; channels: string[]; enabled: boolean }[]
+  alerts: AlertPreference[]
+  profile: Profile
+  smartAllowed: boolean
+}
+
+async function smartAlertsAllowed(db: D1Database, userId: string): Promise<boolean> {
+  const [entitlements, subscription, trial] = await Promise.all([
+    getEntitlements(db, userId),
+    getSubscription(db, userId),
+    getTrialState(db, userId),
+  ])
+  return (
+    trial.status === 'active' ||
+    entitlements.includes('smart_alerts') ||
+    subscriptionHasFeature(
+      subscription,
+      subscription ? planEntitlements(subscription.plan) : [],
+      'smart_alerts',
+    )
+  )
 }
 
 /**
  * Finds the subscribers who should hear about a role.
  *
- * A subscriber needs a linked Telegram chat and an enabled alert. Alerts
- * are free while payments are deferred. No paid entitlement is required.
+ * Basic keyword alerts are free. Smart filters are applied only while the
+ * account has Pro or an active trial; otherwise the alert safely falls back
+ * to its basic keyword query rather than silently stopping.
  */
 export async function subscribersFor(db: D1Database): Promise<AlertSubscriber[]> {
   const subscribers = await listTelegramSubscribers(db)
   const result: AlertSubscriber[] = []
 
   for (const subscriber of subscribers) {
-    const alerts = await listAlerts(db, subscriber.userId)
+    const [alerts, profile, smartAllowed] = await Promise.all([
+      listAlerts(db, subscriber.userId),
+      getProfile(db, subscriber.userId),
+      smartAlertsAllowed(db, subscriber.userId),
+    ])
     const deliverable = alerts.filter(
       (alert) => alert.enabled && alert.channels.includes('telegram'),
     )
     if (deliverable.length === 0) continue
-
-    result.push({ ...subscriber, alerts: deliverable })
+    result.push({ ...subscriber, alerts: deliverable, profile, smartAllowed })
   }
 
   return result
 }
 
 /**
- * Whether a role matches an alert. An alert with no query matches
- * everything, which is what somebody who watches "everything" means.
+ * Whether a role matches a basic keyword alert. An alert with no query
+ * matches everything, which is what somebody who watches “everything” means.
  */
 export function jobMatchesAlert(job: Job, query: string): boolean {
   const terms = query
@@ -43,9 +77,7 @@ export function jobMatchesAlert(job: Job, query: string): boolean {
     .split(/\s+/)
     .map((term) => term.trim())
     .filter(Boolean)
-
   if (terms.length === 0) return true
-
   const haystack = [
     job.title,
     job.company,
@@ -55,15 +87,57 @@ export function jobMatchesAlert(job: Job, query: string): boolean {
   ]
     .join(' ')
     .toLowerCase()
-
   return terms.every((term) => haystack.includes(term))
 }
 
+export function jobMatchesSmartAlert(job: Job, alert: AlertPreference, profile: Profile): boolean {
+  if (!jobMatchesAlert(job, alert.query)) return false
+  if (alert.kind !== 'smart') return true
+
+  const searchable =
+    `${job.title} ${job.company} ${job.locationLabel} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')} ${job.description}`.toLowerCase()
+  const exclusions = (alert.exclude ?? '')
+    .split(/[,\n]/)
+    .map((term) => term.trim().toLowerCase())
+    .filter(Boolean)
+  if (exclusions.some((term) => searchable.includes(term))) return false
+
+  if (alert.companies?.length) {
+    const company = job.company.toLowerCase()
+    if (!alert.companies.some((name) => company.includes(name.trim().toLowerCase()))) return false
+  }
+  if (alert.countries?.length) {
+    const countries = new Set(
+      [job.locationCountry, ...(job.eligibleCountries ?? [])].map((code) => code.toUpperCase()),
+    )
+    if (!alert.countries.some((code) => countries.has(code.toUpperCase()))) return false
+  }
+  if (alert.workModes?.length && !alert.workModes.includes(job.workMode)) return false
+  if (alert.salaryOnly && !(job.salaryMin > 0 || job.salaryMax > 0)) return false
+  if (alert.currency && job.salaryCurrency.toUpperCase() !== alert.currency.toUpperCase())
+    return false
+  if (typeof alert.minScore === 'number' && scoreJob(job, profile).score < alert.minScore)
+    return false
+  return true
+}
+
+async function recentJobs(env: Env, sinceMs: number): Promise<Job[]> {
+  const published = await publishedPublicJobs(env.PUBLIC_JOBS).catch(() => null)
+  const source = published?.jobs ?? (await listOpenJobs(env.DB)).jobs
+  return source
+    .filter((job) => {
+      const seen = Date.parse(job.firstSeenAt ?? job.postedAt ?? '')
+      return job.jobStatus !== 'closed' && !job.isDemo && Number.isFinite(seen) && seen >= sinceMs
+    })
+    .sort(
+      (a, b) => Date.parse(b.firstSeenAt ?? b.postedAt) - Date.parse(a.firstSeenAt ?? a.postedAt),
+    )
+    .slice(0, 200)
+}
+
 /**
- * Delivers alerts for the roles that have appeared since a given time.
- *
- * Each delivery is recorded, so a role is not announced twice, and a role
- * that closed and reopened is announced again because that is news.
+ * Delivers alerts for roles that appeared since a given time. Each delivery
+ * is recorded so a role is not announced twice for the same alert.
  */
 export async function deliverNewAlerts(
   env: Env,
@@ -76,41 +150,17 @@ export async function deliverNewAlerts(
   const subscribers = await subscribersFor(db)
   if (subscribers.length === 0) return { delivered: 0, skipped: 0 }
 
-  const since = new Date(sinceMs).toISOString()
-  const rows = await db
-    .prepare(
-      `SELECT id, title, company, location_label, source_name, source_url, salary_min, salary_max,
-        salary_currency FROM jobs
-       WHERE first_seen_at >= ?1 AND job_status = 'open' AND is_demo = 0
-       ORDER BY first_seen_at DESC LIMIT 200`,
-    )
-    .bind(since)
-    .all<{
-      id: string
-      title: string
-      company: string
-      location_label: string
-      source_name: string
-      source_url: string
-      salary_min: number
-      salary_max: number
-      salary_currency: string
-    }>()
-
-  const jobs = rows.results ?? []
+  const jobs = await recentJobs(env, sinceMs)
   let delivered = 0
   let skipped = 0
 
   for (const subscriber of subscribers) {
     for (const alert of subscriber.alerts) {
       for (const job of jobs) {
-        if (
-          !jobMatchesAlert(
-            { ...job, locationLabel: job.location_label } as unknown as Job,
-            alert.query,
-          )
-        )
-          continue
+        const matches = subscriber.smartAllowed
+          ? jobMatchesSmartAlert(job, alert, subscriber.profile)
+          : jobMatchesAlert(job, alert.query)
+        if (!matches) continue
 
         const already = await db
           .prepare(
@@ -118,7 +168,6 @@ export async function deliverNewAlerts(
           )
           .bind(alert.id, job.id, 'telegram')
           .first<{ sent: number }>()
-
         if (already) {
           skipped += 1
           continue
@@ -127,14 +176,13 @@ export async function deliverNewAlerts(
         const message = formatAlertMessage({
           title: job.title,
           company: job.company,
-          locationLabel: job.location_label,
-          sourceName: job.source_name,
-          sourceUrl: job.source_url,
-          salaryMin: job.salary_min,
-          salaryMax: job.salary_max,
-          salaryCurrency: job.salary_currency,
+          locationLabel: job.locationLabel,
+          sourceName: job.sourceName,
+          sourceUrl: job.sourceUrl,
+          salaryMin: job.salaryMin,
+          salaryMax: job.salaryMax,
+          salaryCurrency: job.salaryCurrency,
         })
-
         const sent = await deliverAlert(botToken, subscriber.chatId, message)
         if (sent) {
           await db

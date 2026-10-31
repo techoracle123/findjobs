@@ -96,8 +96,14 @@ export function buildPreparedApplication(
   answers: ApplicationAnswers,
   accountEmail = '',
   generatedAt = new Date().toISOString(),
+  cvText = '',
 ): PreparedApplication {
-  const scored = scoreJob(job, profile)
+  const detectedSkills = cvText.trim().length >= 40 ? suggestFromKeywords(cvText).skills : []
+  const effectiveProfile: Profile = {
+    ...profile,
+    skills: [...new Set([...profile.skills, ...detectedSkills])],
+  }
+  const scored = scoreJob(job, effectiveProfile)
   const matched = [...new Set(scored.matchedSkills)].slice(0, 6)
   const company = job.company || 'your organisation'
   const missingInfo: string[] = []
@@ -289,6 +295,36 @@ export function buildCvCheck(job: Job, profile: Profile, cvText = ''): CvCheckRe
     .map((component) => `${component.label}: ${component.detail}.`)
   fitNotes.push(scored.tierReason)
 
+  const cvLines = cv
+    .split(/\n+/)
+    .map((line) => line.replace(/^[•\-*·\s]+/, '').trim())
+    .filter((line) => line.length >= 18)
+  const evidence = [...required.matched, ...useful.matched].slice(0, 6).flatMap((skill) => {
+    const candidates = cvLines
+      .filter((candidate) => candidate.toLowerCase().includes(skill.toLowerCase()))
+      .map((candidate) => {
+        const lower = candidate.toLowerCase()
+        let rank = Math.min(candidate.length, 180) / 18
+        if (
+          /\b(built|developed|delivered|created|designed|implemented|improved|led|managed|launched|maintained|reduced|increased|automated|supported|trained|sold|processed|analysed|analyzed)\b/.test(
+            lower,
+          )
+        )
+          rank += 8
+        if (/\d|%|₦|\$|£|€/.test(candidate)) rank += 3
+        if (/^(skills?|tools?|technologies|summary|profile|objective)\b/.test(lower)) rank -= 8
+        if ((candidate.match(/,/g) ?? []).length >= 3 && candidate.length < 90) rank -= 4
+        return { candidate, rank }
+      })
+      .sort((a, b) => b.rank - a.rank)
+    const line = candidates[0]?.candidate
+    return line ? [{ skill, line: line.slice(0, 240) }] : []
+  })
+  const topMatched = [...required.matched, ...useful.matched].slice(0, 4)
+  const tailoredSummary = topMatched.length
+    ? `Experience relevant to ${job.title}, with evidenced work in ${topMatched.join(', ')}. [Add your role, years of experience and one result you can prove.]`
+    : ''
+
   return {
     basis: cv ? 'cv-and-profile' : 'profile',
     requiredMatched: required.matched,
@@ -303,6 +339,8 @@ export function buildCvCheck(job: Job, profile: Profile, cvText = ''): CvCheckRe
       overallPercent === null
         ? 'This advert does not name enough skills for a percentage. Use the fit notes and original advert.'
         : 'This is a wording and evidence check against the advert. It is not a hiring prediction.',
+    evidence,
+    tailoredSummary,
   }
 }
 
@@ -551,3 +589,5 @@ export function buildSalaryGuide(
     updatedAt,
   }
 }
+
+export { buildBestMatches, buildCvAnalysis, buildSkillPlan } from './pro-analysis'

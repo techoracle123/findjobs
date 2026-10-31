@@ -348,7 +348,11 @@ describe('entitlements', () => {
     // Alerts are free for everyone (they were never charged for).
     expect(planEntitlements('free')).toEqual(['alerts'])
     expect(planEntitlements('pro')).toContain('alerts')
-    expect(planEntitlements('pro_graduate')).toContain('weekly_digest')
+    expect(planEntitlements('pro_graduate')).toContain('cv_analysis')
+    expect(planEntitlements('pro_graduate')).toEqual(planEntitlements('pro'))
+    expect(planEntitlements('pro')).not.toContain('weekly_digest')
+    expect(planEntitlements('pro')).not.toContain('unlimited_fast_apply')
+    expect(planEntitlements('pro')).not.toContain('verified_source_badges')
     expect(planEntitlements('unknown-plan')).toEqual([])
   })
 

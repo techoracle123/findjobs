@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ApplicationActivity } from '../shared/activity'
-import type { AlertPreference, Profile, SavedApplication } from '../shared/types'
+import type {
+  AlertPreference,
+  GraduateEligibilityState,
+  ProTrialState,
+  Profile,
+  SavedApplication,
+} from '../shared/types'
 import { readLocal, writeLocal } from '../lib/storage'
 import {
   ApiError,
@@ -24,6 +30,15 @@ export type AccountMode = 'loading' | 'anonymous' | 'signed-in'
 /** Accepts either a value or an updater, like a React state setter. */
 export type Setter<T> = (value: T | ((current: T) => T)) => void
 
+const EMPTY_TRIAL: ProTrialState = {
+  status: 'not_started',
+  startedAt: null,
+  endsAt: null,
+  cvAnalysesUsed: 0,
+  applicationPacksUsed: 0,
+  limits: { days: 3, cvAnalyses: 1, applicationPacks: 3 },
+}
+
 const EMPTY_PROFILE: Profile = {
   skills: [],
   targetRoleFamilies: [],
@@ -37,6 +52,8 @@ export interface UseAccount {
   user: AccountUser | null
   subscription: Subscription | null
   entitlements: string[]
+  proTrial: ProTrialState
+  graduateEligibility: GraduateEligibilityState | null
   profile: Profile
   saved: SavedApplication[]
   alerts: AlertPreference[]
@@ -71,6 +88,10 @@ export function useAccount(): UseAccount {
   const [user, setUser] = useState<AccountUser | null>(null)
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [entitlements, setEntitlements] = useState<string[]>([])
+  const [proTrial, setProTrial] = useState<ProTrialState>(EMPTY_TRIAL)
+  const [graduateEligibility, setGraduateEligibility] = useState<GraduateEligibilityState | null>(
+    null,
+  )
   const [profile, setProfileState] = useState<Profile>(() =>
     readAnonymous<Profile>('profile', EMPTY_PROFILE),
   )
@@ -158,6 +179,8 @@ export function useAccount(): UseAccount {
     setUser(snapshot.user)
     setSubscription(snapshot.subscription)
     setEntitlements(snapshot.entitlements)
+    setProTrial(snapshot.proTrial ?? EMPTY_TRIAL)
+    setGraduateEligibility(snapshot.graduateEligibility ?? null)
     setProfileState(snapshot.profile)
     setSavedState(snapshot.saved)
     setAlertsState(snapshot.alerts)
@@ -181,6 +204,8 @@ export function useAccount(): UseAccount {
       clearTimeout(profileTimer.current)
       setMode('anonymous')
       setUser(null)
+      setProTrial(EMPTY_TRIAL)
+      setGraduateEligibility(null)
       setActivity(null)
       ownerRef.current = null
       const local =
@@ -223,6 +248,8 @@ export function useAccount(): UseAccount {
       clearTimeout(profileTimer.current)
       ownerRef.current = null
       setUser(null)
+      setProTrial(EMPTY_TRIAL)
+      setGraduateEligibility(null)
       setMode('loading')
       setProfileState(EMPTY_PROFILE)
       setSavedState([])
@@ -268,8 +295,14 @@ export function useAccount(): UseAccount {
       }
       for (const entry of next) {
         const before = previous.find((item) => item.jobId === entry.jobId)
-        if (!before || before.status !== entry.status) {
-          runSave(() => postSaved(entry.jobId, entry.status).then(refreshActivity))
+        if (
+          !before ||
+          before.status !== entry.status ||
+          before.stage !== entry.stage ||
+          before.followUpAt !== entry.followUpAt ||
+          before.note !== entry.note
+        ) {
+          runSave(() => postSaved(entry.jobId, entry.status, entry).then(refreshActivity))
         }
       }
       for (const entry of previous) {
@@ -301,7 +334,8 @@ export function useAccount(): UseAccount {
           before.label !== entry.label ||
           before.query !== entry.query ||
           JSON.stringify(before.channels) !== JSON.stringify(entry.channels) ||
-          before.enabled !== entry.enabled
+          before.enabled !== entry.enabled ||
+          JSON.stringify(before) !== JSON.stringify(entry)
         ) {
           runSave(() => patchAlert(entry.id, entry))
         }
@@ -340,6 +374,8 @@ export function useAccount(): UseAccount {
     user,
     subscription,
     entitlements,
+    proTrial,
+    graduateEligibility,
     profile,
     saved,
     alerts,

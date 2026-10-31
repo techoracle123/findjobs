@@ -12,6 +12,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { Footer } from './Footer'
+import { FREE_FEATURES, PRO_FEATURES } from '../lib/pro-features'
 
 interface PublicStats {
   total: number
@@ -206,6 +207,85 @@ export function HomePage() {
           </div>
         </section>
 
+        <section className="home-section" aria-labelledby="home-free-heading">
+          <p className="eyebrow">No card. No application limit.</p>
+          <h2 id="home-free-heading">Everything you need to find and apply is free</h2>
+          <p className="home-lead">
+            A free FJ account is a complete job-search account. You are not given a small sample of
+            jobs and then asked to pay to finish an application.
+          </p>
+          <div className="home-feature-grid">
+            {FREE_FEATURES.map((feature) => (
+              <article className="home-card" key={feature.id}>
+                <Check size={19} aria-hidden="true" />
+                <h3>{feature.title}</h3>
+                <p>{feature.what}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="home-section home-pro" aria-labelledby="home-pro-heading">
+          <p className="eyebrow">When the problem is no longer finding jobs</p>
+          <h2 id="home-pro-heading">Pro helps you choose better and apply stronger</h2>
+          <p className="home-lead">
+            Many people can find one hundred adverts. The hard part is knowing which ones accept
+            Nigeria, which ones look unsafe, whether your CV proves what the advert asks for, and
+            how to write a convincing application without inventing experience. That is the work Pro
+            does.
+          </p>
+          <div className="home-feature-grid">
+            {PRO_FEATURES.map((feature) => (
+              <article className="home-card" key={feature.id}>
+                <h3>{feature.title}</h3>
+                <p>{feature.what}</p>
+                <p className="field__hint">{feature.why}</p>
+              </article>
+            ))}
+          </div>
+          <div className="home-trial-band">
+            <div>
+              <h3>Try it free for 3 days</h3>
+              <p>
+                One full CV analysis and three complete application packs. No card is taken and the
+                trial ends by itself.
+              </p>
+            </div>
+            <a className="btn btn--primary" href="/pricing#trial-heading">
+              See how the trial works <ArrowRight size={17} aria-hidden="true" />
+            </a>
+          </div>
+          <div className="home-price-grid" aria-label="FJ prices">
+            <div>
+              <span>Free</span>
+              <strong>₦0</strong>
+              <p>Find, save, alert and apply on employer sites.</p>
+            </div>
+            <div>
+              <span>Pro Monthly</span>
+              <strong>₦5,000/month</strong>
+              <p>Founding price for the first 500 paying members.</p>
+            </div>
+            <div>
+              <span>Pro Yearly</span>
+              <strong>₦40,000/year</strong>
+              <p>Same tools for about ₦3,333 a month at the founding price.</p>
+            </div>
+            <div>
+              <span>Pro for Graduates</span>
+              <strong>₦3,000/month</strong>
+              <p>
+                Same Pro tools for eligible final-year students, recent graduates and corps members.
+              </p>
+            </div>
+          </div>
+          <p className="field__hint">
+            Payments open in the next stage. Prices are shown now so you can decide with full
+            information. <a href="/pricing">Compare every feature and check graduate eligibility</a>
+            .
+          </p>
+        </section>
+
         <section className="home-section">
           <h2>What kind of jobs are here?</h2>
           <div className="home-two">
@@ -224,7 +304,8 @@ export function HomePage() {
               <p>
                 Work from your home in Nigeria for a company in another country. Many of these
                 companies pay in dollars or other foreign currencies, which can mean much better pay
-                than the same work at home. The advert will say if people in Nigeria can apply.
+                than the same work at home. Always check the advert’s country, work-authorisation
+                and time-zone wording; “remote” does not always mean open from Nigeria.
               </p>
             </div>
           </div>
@@ -293,10 +374,11 @@ export function HomePage() {
             <p>
               A real employer will never ask you to pay money to get a job. Not for a form, not for
               training, not for a uniform, not for anything. If a job asks you to pay, or asks for
-              your bank details before you are employed, stop and report it. Jobs on FJ come from
-              employers and public job boards. We do not employ you ourselves, and the final
-              application always happens with the company. Check every company well before you share
-              personal documents.
+              your bank details before you are employed, stop and report it. Pro’s before-you-apply
+              check can also review an advert pasted from WhatsApp, Telegram or email, but it does
+              not verify an employer. Jobs on FJ come from employers and public job boards. We do
+              not employ you ourselves, and the final application always happens with the company.
+              Check every company well before you share personal documents.
             </p>
           </div>
         </section>
