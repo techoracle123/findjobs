@@ -198,14 +198,15 @@ function advertSkillEvidence(
   lines: AdvertLine[],
   description: string,
   skill: string,
+  includeEvidence = true,
 ): { evidence: string | null; line?: AdvertLine } {
   const pattern = termPattern(skill)
   const line = lines.find((entry) => {
     pattern.lastIndex = 0
     return pattern.test(entry.text)
   })
-  if (line) return { evidence: cleanSnippet(line.text), line }
-  return { evidence: lineEvidence(description, pattern) }
+  if (line) return { evidence: includeEvidence ? cleanSnippet(line.text) : null, line }
+  return { evidence: includeEvidence ? lineEvidence(description, pattern) : null }
 }
 
 function relatedSkillLabel(canonical: string, cvSkills: Map<string, string>): string | null {
@@ -259,12 +260,18 @@ function skillRequirements(
   cvText: string,
   cvSkills: Map<string, string>,
   profileSkillKeys: Map<string, string>,
+  includeEvidence = true,
 ): MatchRequirement[] {
   const lines = advertLines(job.description)
   const requirements: MatchRequirement[] = []
 
   for (const candidate of skillCandidates(job)) {
-    const { evidence, line } = advertSkillEvidence(lines, job.description, candidate.label)
+    const { evidence, line } = advertSkillEvidence(
+      lines,
+      job.description,
+      candidate.label,
+      includeEvidence,
+    )
     const fallback: Importance = candidate.fromRequired
       ? 'essential'
       : candidate.fromUseful
@@ -286,8 +293,9 @@ function skillRequirements(
     let candidateEvidence: string | null = null
 
     if (cvText.trim() && cvSkills.has(candidate.canonical)) {
-      candidateEvidence = lineEvidence(cvText, termPattern(candidate.label))
-      if (candidateEvidence) {
+      const pattern = termPattern(candidate.label)
+      candidateEvidence = includeEvidence ? lineEvidence(cvText, pattern) : null
+      if (includeEvidence ? candidateEvidence : pattern.test(cvText)) {
         status = 'met'
         detail = `Your CV names ${candidate.label} and gives a supporting line.`
       } else {
@@ -303,7 +311,8 @@ function skillRequirements(
     } else {
       const related = relatedSkillLabel(candidate.canonical, cvSkills)
       if (related) {
-        candidateEvidence = cvText.trim() ? lineEvidence(cvText, termPattern(related)) : null
+        candidateEvidence =
+          includeEvidence && cvText.trim() ? lineEvidence(cvText, termPattern(related)) : null
         status = 'partial'
         detail = `Related experience with ${related} is shown, but ${candidate.label} is not named.`
       }
@@ -708,11 +717,12 @@ function quickSummary(
   cvSkills: Map<string, string>,
   profileSkillKeys: Map<string, string>,
   profile: Profile,
+  scoredJob?: { score: number; tier: EligibilityTier },
 ) {
-  const requirements = skillRequirements(job, cvText, cvSkills, profileSkillKeys).filter(
+  const requirements = skillRequirements(job, cvText, cvSkills, profileSkillKeys, false).filter(
     (item) => item.group === 'essential',
   )
-  const scored = scoreJob(job, profile)
+  const scored = scoredJob ?? scoreJob(job, profile)
   return {
     score: scored.score,
     tier: scored.tier,
@@ -736,7 +746,18 @@ function buildAlternatives(
   const currentSkills = new Set(job.requiredSkills.map(canonicalSkill))
   const tierRank = (tier: EligibilityTier) => (tier === 'eligible' ? 2 : tier === 'unknown' ? 1 : 0)
   const ranked: Array<{ alternative: MatchAlternative; rank: number }> = []
+  const preliminary: Array<{
+    candidate: Job
+    sharedSkills: number
+    scored: { score: number; tier: EligibilityTier }
+    rank: number
+  }> = []
 
+  // A broad profession can contain thousands of live listings. Detailed
+  // essential-requirement parsing reads advert wording, so do that only for
+  // the strongest related candidates found by this cheap first pass. Running
+  // it for every related listing made Match Intelligence time out in
+  // production even though only three alternatives can ever be returned.
   for (const candidate of pool) {
     if (
       !candidate ||
@@ -753,7 +774,23 @@ function buildAlternatives(
       (job.roleFamily !== 'unknown' && candidate.roleFamily === job.roleFamily) || sharedSkills >= 2
     if (!related) continue
 
-    const summary = quickSummary(candidate, cvText, cvSkills, profileSkillKeys, profile)
+    const scored = scoreJob(candidate, profile)
+    const requiredKeys = candidate.requiredSkills.map(canonicalSkill).filter(Boolean)
+    const coveredKeys = requiredKeys.filter(
+      (skill) => cvSkills.has(skill) || profileSkillKeys.has(skill),
+    ).length
+    const requiredCoverage = requiredKeys.length ? coveredKeys / requiredKeys.length : 0
+    preliminary.push({
+      candidate,
+      sharedSkills,
+      scored: { score: scored.score, tier: scored.tier },
+      rank: scored.score + tierRank(scored.tier) * 20 + requiredCoverage * 60 + sharedSkills * 3,
+    })
+  }
+
+  preliminary.sort((a, b) => b.rank - a.rank)
+  for (const { candidate, sharedSkills, scored } of preliminary.slice(0, 60)) {
+    const summary = quickSummary(candidate, cvText, cvSkills, profileSkillKeys, profile, scored)
     const candidatePercent = summary.essentialPercent ?? 0
     const essentialImprovement = candidatePercent - currentPercent
     const scoreImprovement = summary.score - currentScore

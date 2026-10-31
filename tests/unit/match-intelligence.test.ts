@@ -98,6 +98,32 @@ describe('FJ Match Intelligence', () => {
     expect(result.alternatives[0].reasons.join(' ')).toContain('Essential fit is 100%')
   })
 
+  it('still finds the strongest alternative in a large related pool', () => {
+    const alternative = makeJob({
+      id: 'better-in-large-pool',
+      title: 'Freelance Frontend Developer',
+      description: [
+        'Requirements',
+        'Required skills include React and TypeScript.',
+        'This freelance engagement is open to applicants in Nigeria.',
+      ].join('\n'),
+      requiredSkills: ['React', 'TypeScript'],
+      usefulSkills: [],
+    })
+    const weak = Array.from({ length: 80 }, (_, index) =>
+      makeJob({
+        id: `weak-${index}`,
+        title: `Frontend role ${index}`,
+        description: 'Requirements\nKubernetes is required.',
+        requiredSkills: ['Kubernetes'],
+        usefulSkills: [],
+      }),
+    )
+
+    const result = analyzeMatchIntelligence(makeJob(), CV, profile, [...weak, alternative])
+    expect(result.alternatives[0]?.job.id).toBe('better-in-large-pool')
+  })
+
   it('does not turn tools, certifications or company history in prose into candidate requirements', () => {
     const result = analyzeMatchIntelligence(
       makeJob({

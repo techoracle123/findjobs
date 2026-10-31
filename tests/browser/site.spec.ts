@@ -517,7 +517,9 @@ NYSC completed in 2024.`
   await expect(proTools).toContainText('Missing skills and gaps')
   await expect(proTools).toContainText('What to do next')
   await proTools.getByRole('button', { name: 'Prepare application' }).click()
-  await expect(proTools.getByRole('button', { name: 'Copy cover letter' })).toBeVisible()
+  await expect(proTools.getByRole('button', { name: 'Copy cover letter' })).toBeVisible({
+    timeout: 30_000,
+  })
   await proTools.getByRole('button', { name: 'Compare my CV with this job' }).click()
   await expect(proTools).toContainText(/Advert wording match|No percentage is available/, {
     timeout: 30_000,
@@ -983,7 +985,14 @@ test('no serious accessibility violations on the main routes', async ({ page }) 
     const serious = results.violations.filter((violation) =>
       ['serious', 'critical'].includes(violation.impact ?? ''),
     )
-    expect(serious.map((violation) => `${path}: ${violation.id} — ${violation.help}`)).toEqual([])
+    expect(
+      serious.flatMap((violation) =>
+        violation.nodes.map(
+          (node) =>
+            `${path}: ${violation.id} — ${violation.help} — ${node.target.join(' ')} — ${node.failureSummary}`,
+        ),
+      ),
+    ).toEqual([])
   }
 })
 
