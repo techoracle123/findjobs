@@ -19,6 +19,21 @@ async function signUp(page: Page): Promise<string> {
   return email
 }
 
+/** Runs an action and waits until its account write has reached the server. */
+async function writeAndWait(
+  page: Page,
+  pathPart: string,
+  method: string,
+  action: () => Promise<void>,
+): Promise<void> {
+  const done = page.waitForResponse(
+    (r) => r.url().includes(pathPart) && r.request().method() === method && r.ok(),
+    { timeout: 20_000 },
+  )
+  await action()
+  await done
+}
+
 for (const width of [320, 390, 414, 768, 1024, 1280, 1600, 1920]) {
   test(`job board stays aligned at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 })
@@ -111,7 +126,9 @@ test('saving and preferences work with a free account', async ({ page }) => {
   await signUp(page)
   await page.goto('/jobs')
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
-  await page.locator('.jobrow__save').first().click()
+  await writeAndWait(page, '/api/account/saved', 'POST', () =>
+    page.locator('.jobrow__save').first().click(),
+  )
   await page.goto('/dashboard')
   await page
     .locator('.tabs')
@@ -121,7 +138,9 @@ test('saving and preferences work with a free account', async ({ page }) => {
   await expect(page.locator('.content .jobrow')).toHaveCount(1)
   await page.goto('/profile')
   await page.getByLabel('Skills', { exact: true }).fill('Python')
-  await page.getByLabel('Skills', { exact: true }).press('Enter')
+  await writeAndWait(page, '/api/account/profile', 'PUT', () =>
+    page.getByLabel('Skills', { exact: true }).press('Enter'),
+  )
   await expect(page.getByRole('button', { name: 'Remove Python' })).toBeVisible()
   await page.reload()
   await expect(page.getByRole('button', { name: 'Remove Python' })).toBeVisible()
@@ -144,6 +163,15 @@ test('jobs API needs an account, serves real jobs to one, and rejects forged ide
     ).status() === 200
   // No account, no jobs: the list itself is behind sign-in now.
   expect((await request.get('/api/jobs?status=open&limit=20')).status()).toBe(401)
+  expect((await request.get('/api/account')).status()).toBe(401)
+  if (!devHeaderWorks)
+    expect(
+      (
+        await request.get('/api/account', {
+          headers: { 'x-dev-user-email': 'spoof@example.com', 'CF-Access-Jwt-Assertion': 'forged' },
+        })
+      ).status(),
+    ).toBe(401)
   let headers: Record<string, string> = {}
   if (devHeaderWorks) headers = { 'x-dev-user-email': 'local@example.com' }
   else {
@@ -169,15 +197,6 @@ test('jobs API needs an account, serves real jobs to one, and rejects forged ide
     expect(job.applyUrl || job.sourceUrl).toMatch(/^https?:\/\//)
     expect(job.lastSeenAt).toBeTruthy()
   }
-  expect((await request.get('/api/account')).status()).toBe(401)
-  if (!devHeaderWorks)
-    expect(
-      (
-        await request.get('/api/account', {
-          headers: { 'x-dev-user-email': 'spoof@example.com', 'CF-Access-Jwt-Assertion': 'forged' },
-        })
-      ).status(),
-    ).toBe(401)
   expect([401, 404]).toContain(
     (await request.post('/api/billing/confirm', { data: { plan: 'pro' } })).status(),
   ) // never a usable anonymous purchase
@@ -316,8 +335,12 @@ test('match rings are visible on phones and never show a numeric grade', async (
   await signUp(page)
   await page.goto('/profile')
   await page.getByLabel('Skills', { exact: true }).fill('Python')
-  await page.getByLabel('Skills', { exact: true }).press('Enter')
-  await page.getByLabel('preferred profession', { exact: false }).selectOption('administration')
+  await writeAndWait(page, '/api/account/profile', 'PUT', () =>
+    page.getByLabel('Skills', { exact: true }).press('Enter'),
+  )
+  await writeAndWait(page, '/api/account/profile', 'PUT', async () => {
+    await page.getByLabel('preferred profession', { exact: false }).selectOption('administration')
+  })
   await page.goto('/jobs')
   await expect(page.locator('.scorebadge').first()).toBeVisible()
   const ringText = await page.locator('.joblist').first().innerText()
@@ -376,7 +399,9 @@ test('personal monthly progress counts confirmations, not link clicks', async ({
   await signUp(page)
   await page.goto('/jobs')
   await page.locator('.joblist .jobrow').first().click()
-  await page.getByRole('button', { name: 'Mark as applied', exact: true }).click()
+  await writeAndWait(page, '/api/account/saved', 'POST', () =>
+    page.getByRole('button', { name: 'Mark as applied', exact: true }).click(),
+  )
   await page.getByRole('button', { name: 'Back to results' }).click()
   await page.goto('/dashboard')
   await page.locator('.tabs').getByRole('button', { name: 'Progress', exact: true }).click()

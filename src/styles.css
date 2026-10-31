@@ -3086,3 +3086,14 @@ summary:focus-visible {
     padding: 14px;
   }
 }
+
+/* Homepage text that sits on the page background (not on white cards) uses
+   the darker ink so small text stays clearly readable. */
+.home-hero p,
+.home-lead,
+.home-list li,
+.home-cta p,
+.home-figure figcaption,
+.home .field__hint {
+  color: var(--ink-soft);
+}

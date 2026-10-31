@@ -491,7 +491,7 @@ export function AuthPage() {
                       </a>
                     </span>
                   )}
-                  {(mode === 'recovery' || mode === 'reset') && (
+                  {(mode === 'reset' || (mode === 'recovery' && !sent)) && (
                     <a href="/auth/login">Back to sign in</a>
                   )}
                 </div>
