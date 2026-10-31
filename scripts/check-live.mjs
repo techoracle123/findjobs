@@ -47,6 +47,30 @@ for (let attempt = 0; !nigeria.total && attempt < 12; attempt++) {
   await new Promise((resolve) => setTimeout(resolve, 10000))
   nigeria = await json('/api/jobs?status=open&limit=200&country=NG')
 }
+// Gigs are part of the main board, not an optional extra. Check more than one
+// page and the stored lane on every returned row, then prove gigs do not leak
+// into the Jobs-only lane.
+const gigChecks = []
+for (const offset of [0, 20, 40]) {
+  const gigs = await json(`/api/jobs?status=open&type=gig&limit=20&offset=${offset}`)
+  if (!gigs.total || !gigs.jobs.length)
+    throw new Error('The live gigs lane is empty or returned no page rows.')
+  if (gigs.jobs.some((job) => job.opportunityType !== 'gig' || job.isDemo))
+    throw new Error('The live gigs lane returned a non-gig or demo row.')
+  gigChecks.push({
+    offset,
+    total: gigs.total,
+    returned: gigs.jobs.length,
+    facetTotal: gigs.facets?.opportunities?.gig ?? null,
+    dataSource: gigs.dataSource ?? null,
+  })
+}
+const jobLane = await json('/api/jobs?status=open&type=job&limit=20')
+if (!jobLane.total || jobLane.jobs.some((job) => job.opportunityType === 'gig' || job.isDemo))
+  throw new Error('The live jobs lane is empty or contains a gig or demo row.')
+console.log(
+  `::notice title=Live gigs check::${JSON.stringify({ gigChecks, jobLaneTotal: jobLane.total })}`,
+)
 const sources =
   process.env.STORAGE_DEGRADED === 'true' ? { sources: [] } : await json('/api/sources')
 console.log(
@@ -79,6 +103,8 @@ console.log(
       aiConfigured: health.aiBinding,
       telegramConfigured: health.telegramConfigured,
       jobs: jobs.total,
+      gigs: gigChecks[0]?.total ?? 0,
+      jobLane: jobLane.total,
       nigeria: nigeria.total,
       ratesDate: rates.date,
       ratesSource: rates.source,

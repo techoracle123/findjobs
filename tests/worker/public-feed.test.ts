@@ -147,6 +147,9 @@ it('serves the broad index without D1 and returns full descriptions on individua
   const { kv, data } = storage(),
     source = await index()
   const snapshot = assemblePublicSnapshot([source], new Set())
+  expect(snapshot.opportunityVersion).toBe(1)
+  expect(snapshot.stats?.totalAllLanguages).toBe(snapshot.jobs.length)
+  expect(snapshot.stats?.total).toBeLessThanOrEqual(snapshot.jobs.length)
   // Simulate the snapshot production served before gig fields existed. Its
   // rows must gain an evidence-backed lane when loaded, not wait for the
   // next scheduled publication.
@@ -179,7 +182,15 @@ it('serves the broad index without D1 and returns full descriptions on individua
     }
   })
   data.set('details:test', JSON.stringify(complete))
-  data.set('published', JSON.stringify({ ...snapshot, jobs: legacyJobs }))
+  data.set(
+    'published',
+    JSON.stringify({
+      ...snapshot,
+      jobs: legacyJobs,
+      opportunityVersion: undefined,
+      stats: undefined,
+    }),
+  )
   const { default: app } = await import('../../src/server/app')
   // Test mode + dev identity: jobs need an account now, and the point of
   // this test is that job data itself comes from the snapshot, never D1.

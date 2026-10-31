@@ -6,6 +6,7 @@ import {
   matchesOpportunityFilter,
   opportunityBadge,
   opportunityOf,
+  primeStoredOpportunity,
   withOpportunity,
 } from '../../src/shared/opportunities'
 import { scoreJob } from '../../src/shared/scoring'
@@ -162,6 +163,25 @@ describe('opportunity filters and badges', () => {
     expect(opportunityOf(explicitJob).engagementLabel).toBe('Full-time job')
   })
 
+  it('can trust a stored unknown lane from a preclassified snapshot', () => {
+    const storedUnknown = makeJob({
+      id: 'stored-unknown',
+      title: 'Contract React Developer',
+      description: 'This is a contract role.',
+      opportunityType: 'unknown',
+      engagementType: 'unknown',
+      engagementLabel: '',
+    })
+    expect(primeStoredOpportunity(storedUnknown)).toMatchObject({
+      opportunityType: 'unknown',
+      engagementType: 'unknown',
+      engagementBasis: 'stored',
+    })
+    expect(opportunityOf(storedUnknown).opportunityType).toBe('unknown')
+    expect(matchesOpportunityFilter(storedUnknown, 'job')).toBe(true)
+    expect(matchesOpportunityFilter(storedUnknown, 'gig')).toBe(false)
+  })
+
   it('filters public results and reports disjunctive counts', () => {
     const jobs = [ordinary, gig, explicitJob]
     expect(matchingPublicJobs(jobs, { opportunityType: 'gig' }).map((job) => job.id)).toEqual([
@@ -175,6 +195,19 @@ describe('opportunity filters and badges', () => {
       all: 3,
       job: 2,
       gig: 1,
+    })
+
+    const combined = jobFacets(jobs, {
+      country: 'NG',
+      roleFamilies: ['frontend'],
+      opportunityType: 'gig',
+      query: 'React',
+    })
+    expect(combined).toMatchObject({
+      total: 1,
+      countries: { NG: 1 },
+      professions: { frontend: 1 },
+      opportunities: { all: 3, job: 2, gig: 1 },
     })
   })
 })

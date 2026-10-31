@@ -230,18 +230,23 @@ export function classifyOpportunity(input: OpportunityInput): OpportunityClassif
   return result
 }
 
-export function opportunityOf(
-  job: Pick<
-    Job,
-    | 'opportunityType'
-    | 'engagementType'
-    | 'engagementLabel'
-    | 'engagementBasis'
-    | 'projectDuration'
-    | 'title'
-    | 'description'
-    | 'salaryPeriod'
-  >,
+type OpportunityJob = Pick<
+  Job,
+  | 'opportunityType'
+  | 'engagementType'
+  | 'engagementLabel'
+  | 'engagementBasis'
+  | 'projectDuration'
+  | 'title'
+  | 'description'
+  | 'salaryPeriod'
+>
+
+const opportunityCache = new WeakMap<object, OpportunityClassification>()
+
+function computeOpportunityOf(
+  job: OpportunityJob,
+  trustStoredUnknown = false,
 ): OpportunityClassification {
   if (job.engagementType && job.engagementType !== 'unknown') {
     const derived = fromEngagement(job.engagementType, job.engagementBasis ?? 'stored')
@@ -273,11 +278,36 @@ export function opportunityOf(
       engagementBasis: job.engagementBasis ?? 'stored',
     }
   }
+  if (trustStoredUnknown) return classification('unknown', 'unknown', 'stored')
   return classifyOpportunity({
     title: job.title,
     description: job.description,
     salaryPeriod: job.salaryPeriod,
   })
+}
+
+export function opportunityOf(job: OpportunityJob): OpportunityClassification {
+  const cached = opportunityCache.get(job)
+  if (cached) return { ...cached }
+  const found = computeOpportunityOf(job)
+  opportunityCache.set(job, { ...found })
+  return found
+}
+
+/**
+ * Records the classification already stored on a preclassified snapshot row.
+ * This is deliberately separate from `opportunityOf`: most stored rows are
+ * legitimately `unknown`, and that stored answer must not make every cold
+ * Worker isolate reread every advert description before it can serve a page.
+ * Callers may use this only when the surrounding snapshot carries the
+ * preclassified-version marker.
+ */
+export function primeStoredOpportunity(job: OpportunityJob): OpportunityClassification {
+  const cached = opportunityCache.get(job)
+  if (cached) return { ...cached }
+  const found = computeOpportunityOf(job, true)
+  opportunityCache.set(job, { ...found })
+  return found
 }
 
 export function withOpportunity<T extends Job>(job: T): T {

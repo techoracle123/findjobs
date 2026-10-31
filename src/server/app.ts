@@ -7,7 +7,7 @@ import { listOpenJobs, findJob, searchJobs } from './jobs'
 import { getRates } from './rates'
 import { suggest } from './cv'
 import { scoreJob } from '../shared/scoring'
-import { isGig, withOpportunity } from '../shared/opportunities'
+import { withOpportunity } from '../shared/opportunities'
 import type { Profile, ScoredJob } from '../shared/types'
 import { requestContext, requireUser, stringList, unauthorized, type AppContext } from './http'
 import { enforceRateLimit } from './ratelimit'
@@ -31,7 +31,12 @@ import { withTimeout } from './timeouts'
 import { log } from './logging'
 import { publicDataCache } from './public-cache'
 import { livePublicEnabled, livePublicJobs, searchLivePublic } from './live-public'
-import { publishedPublicJobs, findPublishedJob, getSchedulerHeartbeat } from './public-feed'
+import {
+  publishedPublicJobs,
+  publishedPublicSummary,
+  findPublishedJob,
+  getSchedulerHeartbeat,
+} from './public-feed'
 import type { JobSearch } from './jobs'
 
 export const app = new Hono<AppEnv>()
@@ -166,30 +171,28 @@ app.get('/api/public-stats', async (c) => {
     }
   }
 
-  let snapshot: Awaited<ReturnType<typeof publishedPublicJobs>> = null
+  let summary: Awaited<ReturnType<typeof publishedPublicSummary>> = null
   try {
-    snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
+    summary = await publishedPublicSummary(c.env?.PUBLIC_JOBS)
   } catch {
-    snapshot = null
+    summary = null
   }
-  if (!snapshot) {
+  if (!summary) {
     c.header('Cache-Control', 'no-store')
     return c.json({ available: false, registeredUsers }, 503)
   }
-  const visible = snapshot.jobs.filter((job) => job.quality?.isEnglish !== false)
-  const countries = new Set(visible.map((job) => job.locationCountry).filter(Boolean))
   // Do not let a brief user-count database failure hide the counter for a
   // full cache minute. Complete public totals can be shared for 60 seconds.
   c.header('Cache-Control', registeredUsers === null ? 'no-store' : 'public, max-age=60')
   return c.json({
     available: true,
-    total: visible.length,
-    gigs: visible.filter((job) => isGig(job)).length,
-    nigeria: visible.filter((job) => job.locationCountry === 'NG').length,
-    remote: visible.filter((job) => job.workMode === 'remote').length,
-    countries: countries.size,
+    total: summary.total,
+    gigs: summary.gigs,
+    nigeria: summary.nigeria,
+    remote: summary.remote,
+    countries: summary.countries,
     registeredUsers,
-    updatedAt: snapshot.refreshedAt,
+    updatedAt: summary.refreshedAt,
   })
 })
 
@@ -351,23 +354,22 @@ app.get('/api/health', async (c) => {
 })
 
 app.get('/api/feed-status', async (c) => {
-  const snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
-  if (!snapshot) return c.json({ available: false, refreshHours: 12 }, 503)
-  const visible = snapshot.jobs.filter((job) => job.quality?.isEnglish !== false)
+  const summary = await publishedPublicSummary(c.env?.PUBLIC_JOBS)
+  if (!summary) return c.json({ available: false, refreshHours: 12 }, 503)
   const heartbeat = c.env?.PUBLIC_JOBS ? await getSchedulerHeartbeat(c.env.PUBLIC_JOBS) : null
   const heartbeatAgeMs = heartbeat ? Date.now() - Date.parse(heartbeat.at) : null
   return c.json({
     available: true,
     // The default feed is English-first; the full corpus is reported alongside.
-    total: visible.length,
-    gigs: visible.filter((job) => isGig(job)).length,
-    totalAllLanguages: snapshot.jobs.length,
-    sourceCount: snapshot.sourceCount,
-    attemptedSources: snapshot.attemptedSources,
-    olderSources: snapshot.olderSources,
-    updatedAt: snapshot.refreshedAt,
+    total: summary.total,
+    gigs: summary.gigs,
+    totalAllLanguages: summary.totalAllLanguages,
+    sourceCount: summary.sourceCount,
+    attemptedSources: summary.attemptedSources,
+    olderSources: summary.olderSources,
+    updatedAt: summary.refreshedAt,
     refreshHours: 12,
-    added: snapshot.added,
+    added: summary.added,
     schedulerHeartbeatAt: heartbeat?.at ?? null,
     // The producer ticks hourly; older than two ticks means it is stuck.
     schedulerStale: heartbeatAgeMs === null || heartbeatAgeMs > 2 * 3600_000,

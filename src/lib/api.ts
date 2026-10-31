@@ -287,6 +287,24 @@ export function fetchHealth(): Promise<ApiHealth> {
 
 const jobsCache = new Map<string, { at: number; value: JobsResponse }>()
 const jobsPending = new Map<string, Promise<JobsResponse>>()
+
+function transientJobsFailure(error: unknown): boolean {
+  if (error instanceof ApiError) return [408, 425, 429, 500, 502, 503, 504].includes(error.status)
+  return error instanceof TypeError || (error instanceof Error && error.name === 'AbortError')
+}
+
+async function requestJobs(path: string, init?: RequestInit): Promise<JobsResponse> {
+  const delays = [250, 750]
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await request<JobsResponse>(path, init)
+    } catch (error) {
+      if (attempt >= delays.length || !transientJobsFailure(error)) throw error
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]))
+    }
+  }
+}
+
 export function fetchJobs(
   offset = 0,
   query = '',
@@ -313,7 +331,7 @@ export function fetchJobs(
   if (!force && hit && Date.now() - hit.at < 5 * 60000) return Promise.resolve(hit.value)
   const active = jobsPending.get(key)
   if (active) return active
-  const work = request<JobsResponse>(
+  const work = requestJobs(
     `/api/jobs?${params}`,
     force ? { headers: { 'cache-control': 'no-cache' } } : undefined,
   )

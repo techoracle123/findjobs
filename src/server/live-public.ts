@@ -213,6 +213,73 @@ function haystack(job: Job): string {
   return value
 }
 
+export interface PublicFacetMatch {
+  matched: boolean
+  withoutOpportunityType: boolean
+  withoutCountry: boolean
+  withoutRoleFamily: boolean
+  gig: boolean
+}
+
+const NO_FACET_MATCH: PublicFacetMatch = {
+  matched: false,
+  withoutOpportunityType: false,
+  withoutCountry: false,
+  withoutRoleFamily: false,
+  gig: false,
+}
+
+/**
+ * One-pass facet predicate. The jobs route needs the exact result plus three
+ * disjunctive variants (country, profession and work lane removed one at a
+ * time). Evaluating those as four full-corpus filters was enough, on a cold
+ * isolate, to push the 15,000-listing snapshot over the Worker CPU budget.
+ */
+export function publicFacetMatch(job: Job, search: JobSearch): PublicFacetMatch {
+  const place = (search.location || '').toLowerCase().trim()
+  const common =
+    search.status !== 'closed' &&
+    (search.worldwide || job.quality?.isEnglish !== false) &&
+    (!place ||
+      `${job.locationLabel} ${job.quality?.location.city ?? ''} ${job.quality?.location.state ?? ''}`
+        .toLowerCase()
+        .includes(place)) &&
+    (!search.workModes?.length || search.workModes.includes(job.workMode)) &&
+    (!search.seniorities?.length || search.seniorities.includes(job.seniority)) &&
+    (!search.verification?.length || search.verification.includes(job.verification || 'unverified'))
+  if (!common) return NO_FACET_MATCH
+
+  const country = !search.country || job.locationCountry === search.country
+  const roleFamily = !search.roleFamilies?.length || search.roleFamilies.includes(job.roleFamily)
+  if (!country && !roleFamily) return NO_FACET_MATCH
+
+  const opportunityType = opportunityOf(job).opportunityType
+  const gig = opportunityType === 'gig'
+  const opportunity =
+    !search.opportunityType || search.opportunityType === 'all'
+      ? true
+      : search.opportunityType === 'gig'
+        ? gig
+        : !gig
+  // Every facet variant still applies two of these three dimensions. If fewer
+  // than two pass, building a search haystack for this job cannot change any
+  // count.
+  if (Number(country) + Number(roleFamily) + Number(opportunity) < 2)
+    return { ...NO_FACET_MATCH, gig }
+
+  const terms = (search.query || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
+  if (terms.length && !terms.every((term) => haystack(job).includes(term)))
+    return { ...NO_FACET_MATCH, gig }
+
+  return {
+    matched: country && roleFamily && opportunity,
+    withoutOpportunityType: country && roleFamily,
+    withoutCountry: roleFamily && opportunity,
+    withoutRoleFamily: country && opportunity,
+    gig,
+  }
+}
+
 export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
   const terms = (search.query || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
   const place = (search.location || '').toLowerCase().trim()

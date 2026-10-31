@@ -256,6 +256,9 @@ test('jobs API needs an account, serves real jobs to one, and rejects forged ide
   const gigResponse = await request.get('/api/jobs?status=open&type=gig&limit=20', { headers })
   expect(gigResponse.ok()).toBe(true)
   const gigFeed = await gigResponse.json()
+  expect(gigFeed.total).toBeGreaterThan(0)
+  expect(gigFeed.jobs.length).toBeGreaterThan(0)
+  expect(gigFeed.facets.opportunities.gig).toBe(gigFeed.total)
   expect(
     gigFeed.jobs.every((job: { opportunityType?: string }) => job.opportunityType === 'gig'),
   ).toBe(true)
@@ -361,8 +364,11 @@ test('work setting and gig filters are visible and employers link is gone', asyn
   await expect(page).toHaveURL(/type=gig/)
   await expect(gigs).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.resultcount')).toContainText(/gigs and contracts|gig or contract/)
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('We couldn’t load jobs. Please try again.')).toHaveCount(0)
   await page.getByRole('button', { name: /All work/ }).click()
   await expect(page).not.toHaveURL(/type=gig/)
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
   await page.getByRole('button', { name: /Work setting/ }).click()
   await page.getByRole('button', { name: 'Remote', exact: true }).click()
   await expect(page).toHaveURL(/mode=remote/)

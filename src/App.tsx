@@ -21,6 +21,7 @@ import type {
 import type { PlanCatalogue, PlanDefinition } from './lib/api'
 import { PlanPanel } from './components/PlanPanel'
 import {
+  ApiError,
   fetchHealth,
   fetchJobs,
   fetchJob,
@@ -196,6 +197,7 @@ export default function App() {
 
   const load = useCallback(
     async (force = false) => {
+      if (account.mode !== 'signed-in') return
       const version = ++requestVersion.current
       setLoading(true)
       setLoadError(null)
@@ -215,12 +217,18 @@ export default function App() {
         setFacets(jobsResponse.facets || null)
       } catch (cause) {
         if (version === requestVersion.current)
-          setLoadError(cause instanceof Error ? cause.message : String(cause))
+          setLoadError(
+            cause instanceof ApiError && cause.status === 401
+              ? 'sign-in-ended'
+              : cause instanceof Error
+                ? cause.message
+                : String(cause),
+          )
       } finally {
         if (version === requestVersion.current) setLoading(false)
       }
     },
-    [filters, page],
+    [account.mode, filters, page],
   )
 
   useEffect(() => {
@@ -950,10 +958,20 @@ export default function App() {
           )}
           {loadError && (
             <div className="banner banner--demo" role="status">
-              <span>{copy('jobs.unavailable')}</span>
-              <button type="button" className="btn btn--sm" onClick={() => void load(true)}>
-                Try again
-              </button>
+              <span>
+                {loadError === 'sign-in-ended'
+                  ? 'Your sign-in has ended. Sign in again to load jobs and gigs.'
+                  : copy('jobs.unavailable')}
+              </span>
+              {loadError === 'sign-in-ended' ? (
+                <a className="btn btn--sm" href="/auth/login?returnTo=%2Fjobs">
+                  Sign in again
+                </a>
+              ) : (
+                <button type="button" className="btn btn--sm" onClick={() => void load(true)}>
+                  Try again
+                </button>
+              )}
             </div>
           )}
           <div className="joblist">

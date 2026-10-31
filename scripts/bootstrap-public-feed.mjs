@@ -85,9 +85,12 @@ export async function bootstrapPublicFeed(api, auth) {
     format: 'esm',
     logLevel: 'silent',
   })
-  const { PUBLIC_SOURCES, refreshPublicSource, publishPublicSnapshot } = await import(
-    pathToFileURL(outfile).href
-  )
+  const {
+    PRECLASSIFIED_SNAPSHOT_VERSION,
+    PUBLIC_SOURCES,
+    refreshPublicSource,
+    publishPublicSnapshot,
+  } = await import(pathToFileURL(outfile).href)
   const current = await kv.get('published')
   console.log(
     `::notice title=Bootstrap path::attempted=${current?.attemptedSources ?? '?'}/${PUBLIC_SOURCES.length} ids=${current?.ids?.length ?? '?'} parts=${current?.parts?.length ?? '?'} ageMin=${current?.refreshedAt ? Math.round((Date.now() - Date.parse(current.refreshedAt)) / 60000) : '?'} forced=${process.env.FJ_FORCE_PUBLIC_REFRESH === 'true'}`,
@@ -105,6 +108,13 @@ export async function bootstrapPublicFeed(api, auth) {
         `::notice title=Publication index repaired::${repaired.jobs.length} unique listings republished in non-overlapping shards; no publisher recrawl.`,
       )
       return { id: ns.id, count: repaired.jobs.length }
+    }
+    if (current.opportunityVersion !== PRECLASSIFIED_SNAPSHOT_VERSION || !current.stats) {
+      const upgraded = await publishPublicSnapshot(kv)
+      console.log(
+        `::notice title=Publication preclassified::${upgraded.jobs.length} listings republished with stored job and gig lanes and public totals; no publisher recrawl.`,
+      )
+      return { id: ns.id, count: upgraded.jobs.length }
     }
     // Legacy fat shards (debug evidence inline) blow the free request budget.
     // Rebuild the publication from the stored source indexes — no recrawl.
