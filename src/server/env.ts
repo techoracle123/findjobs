@@ -21,7 +21,10 @@ export interface Env {
   TELEGRAM_BOT_USERNAME?: string
   /** Comma-separated verified Access emails allowed on /api/admin/*. */
   ADMIN_EMAILS?: string
-  /** Sign-in codes are sent through Resend REST when set; console otherwise. */
+  /** Password reset emails are sent through Brevo or Resend REST when set. */
+  BREVO_API_KEY?: string
+  /** Optional Brevo-only sender; EMAIL_FROM is the usual shared secret. */
+  BREVO_SENDER_EMAIL?: string
   RESEND_API_KEY?: string
   EMAIL_FROM?: string
   /** Alias for EMAIL_FROM, accepted so either secret name works. */

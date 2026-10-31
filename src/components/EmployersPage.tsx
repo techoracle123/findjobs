@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react'
 import { Footer } from './Footer'
 
 /**
- * Employers page. Direct posting is not open yet, so this page states the
- * offer plainly and collects waitlist emails through the same endpoint as
- * the pricing waitlist. No prices are shown until they are final — the
- * waitlist hears them first.
+ * Employer interest page. Direct posting is paused: there are no employer
+ * accounts, no employer prices and no way to publish a job from this page.
+ * The form only records interest in case posting is opened carefully later.
  */
 export function EmployersPage() {
   const [state, setState] = useState<'idle' | 'done' | 'error'>('idle')
@@ -19,65 +18,47 @@ export function EmployersPage() {
   return (
     <>
       <main className="wrap" id="main">
-        <h1>Reach job seekers across Nigeria and beyond</h1>
+        <h1>Employer posting is not open</h1>
         <p className="lede">
-          FJ collects real vacancies from employer career pages and established job boards, cleans
-          them up, and puts them in front of people who are actively looking. Employer accounts with
-          direct posting are on the way.
+          Employers cannot create an account or post a job directly on FJ today. We are keeping the
+          board focused on real public vacancies while the checks and support process a posting
+          service needs are not in place.
         </p>
 
-        <section aria-label="What employers get">
-          <h2>What you will get at launch</h2>
+        <section aria-label="How vacancies appear today">
+          <h2>How vacancies appear today</h2>
+          <p>
+            FJ collects vacancies that are already public on employer career pages and established
+            job boards. Applicants are sent back to the original posting to apply. If a role closes
+            at the source, it is removed here on the next refresh.
+          </p>
+          <p>
+            FJ never charges job seekers, never asks applicants for money on an employer&apos;s
+            behalf, and does not receive applications for collected vacancies.
+          </p>
+        </section>
+
+        <section aria-label="What is paused">
+          <h2>What is paused</h2>
           <ul>
-            <li>
-              <strong>Direct job posting</strong> — publish a vacancy in minutes, edit or close it
-              any time.
-            </li>
-            <li>
-              <strong>Verified employer profile</strong> — your company page with a verified badge,
-              so candidates know the listing is really yours.
-            </li>
-            <li>
-              <strong>Scam protection for your brand</strong> — listings that misuse your company
-              name can be reported and removed; verified profiles help candidates tell you apart
-              from impersonators.
-            </li>
-            <li>
-              <strong>Reach without the noise</strong> — your roles appear in search by profession,
-              country, work type and experience level.
-            </li>
+            <li>No employer accounts.</li>
+            <li>No direct job posting.</li>
+            <li>No employer payment or featured listing.</li>
           </ul>
-        </section>
-
-        <section aria-label="How it works today">
-          <h2>How it works today</h2>
           <p>
-            You may already be on FJ. If your vacancies are published on your public careers page or
-            an established job board or applicant tracking system, FJ collects them automatically at
-            no cost and links applicants back to your original posting. You keep full control: close
-            the role at the source and it disappears here on the next refresh.
-          </p>
-          <p>
-            FJ never charges job seekers, never asks applicants for money on your behalf, and always
-            sends applicants to your original application page.
+            If a listing about your company is wrong or appears to misuse your company name, report
+            it from the job page so it can be reviewed.
           </p>
         </section>
 
-        <section aria-label="Employer pricing">
-          <h2>Pricing</h2>
+        <section className="waitlist" aria-label="Employer interest">
+          <h2>Tell us you are interested</h2>
           <p>
-            Automatic collection from your public listings is free and stays free. Direct posting
-            and verified profiles will be paid plans priced in naira; final prices will be confirmed
-            before launch and waitlist members will hear them first — with founding pricing locked
-            in for early employers.
+            Leave a work email if you want to hear from us only if employer posting is opened in the
+            future. This does not create an account or reserve a posting.
           </p>
-        </section>
-
-        <section className="waitlist" aria-label="Employer waitlist">
-          <h2>Join the employer waitlist</h2>
-          <p>Leave your work email and company name. We will contact you before launch.</p>
           {state === 'done' ? (
-            <p role="status">Thank you. We will email you before employer accounts open.</p>
+            <p role="status">Thank you. We have recorded your interest.</p>
           ) : (
             <form
               onSubmit={(event) => {
@@ -113,7 +94,7 @@ export function EmployersPage() {
                   autoComplete="organization"
                 />
               </label>
-              <button className="btn btn--primary">Join the waitlist</button>
+              <button className="btn btn--primary">Record my interest</button>
               {state === 'error' && (
                 <p className="banner banner--demo" role="status">
                   Could not save that just now. Try again.
@@ -124,8 +105,8 @@ export function EmployersPage() {
         </section>
 
         <p className="field__hint">
-          FJ is not an employer and does not act as a recruiter. We point people to your original
-          posting; hiring decisions stay entirely with you.
+          FJ is not an employer and does not act as a recruiter. We point people to the original
+          posting; hiring decisions stay entirely with the employer.
         </p>
       </main>
       <Footer />

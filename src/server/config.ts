@@ -1,5 +1,6 @@
 import type { Env } from './env'
 import type { BillingProviderId } from './billing/types'
+import { hasConfiguredEmailProvider } from './email/provider'
 
 export interface TelegramConfig {
   botToken: string | null
@@ -54,7 +55,7 @@ export interface AppConfig {
   isStaging: boolean
   isTest: boolean
   isLocal: boolean
-  /** True when a real email provider can send sign-in codes. */
+  /** True when a real email provider can send password reset emails. */
   emailConfigured: boolean
   telegram: TelegramConfig
   billing: BillingConfig
@@ -117,7 +118,7 @@ export function readConfig(env: Env): AppConfig {
     isStaging: appMode === 'staging',
     isTest,
     isLocal,
-    emailConfigured: Boolean(env.RESEND_API_KEY),
+    emailConfigured: hasConfiguredEmailProvider(env),
     telegram: {
       botToken: env.TELEGRAM_BOT_TOKEN ?? null,
       botUsername: env.TELEGRAM_BOT_USERNAME || null,

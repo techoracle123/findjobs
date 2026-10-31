@@ -77,33 +77,44 @@ export interface PaymentProvider {
   subscriptionFromEvent(event: WebhookEvent): ProviderSubscription | null
 }
 
+const PRO_ENTITLEMENTS = [
+  'alerts',
+  'weekly_digest',
+  'verified_source_badges',
+  'unlimited_fast_apply',
+  'prepared_applications',
+  'cv_check',
+  'interview_prep',
+  'salary_guide',
+]
+
 export const PLANS = {
   free: {
     id: 'free',
-    label: 'Desk',
+    label: 'Free',
     // Alerts are free for everyone; they were never meant to sit behind a
     // paywall, and the server has never charged for them.
     entitlements: ['alerts'] as string[],
   },
   pro_graduate: {
     id: 'pro_graduate',
-    label: 'Desk+ Graduate',
-    entitlements: ['alerts', 'weekly_digest', 'verified_source_badges'],
+    label: 'Pro for Graduates',
+    entitlements: PRO_ENTITLEMENTS,
   },
   pro: {
     id: 'pro',
-    label: 'Desk+',
-    entitlements: ['alerts', 'weekly_digest', 'verified_source_badges'],
+    label: 'Pro',
+    entitlements: PRO_ENTITLEMENTS,
   },
   pro_annual: {
     id: 'pro_annual',
-    label: 'Desk+ Annual',
-    entitlements: ['alerts', 'weekly_digest', 'verified_source_badges'],
+    label: 'Pro',
+    entitlements: PRO_ENTITLEMENTS,
   },
   employer: {
     id: 'employer',
-    label: 'Employers',
-    entitlements: ['employer_waitlist'],
+    label: 'Employer interest',
+    entitlements: ['employer_interest'],
   },
 } as const
 

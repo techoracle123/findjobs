@@ -9,6 +9,7 @@ import { recordApplyClick } from '../lib/api'
 import { copy } from '../shared/copy'
 import { ReportDialog } from './ReportDialog'
 import { LeavingWarning } from './LeavingWarning'
+import { ProTools } from './ProTools'
 import type { SalaryView } from '../lib/ranking'
 
 interface JobDetailProps {
@@ -24,6 +25,7 @@ interface JobDetailProps {
   onFastApply?: () => Promise<void>
   cautionBannerEnabled?: boolean
   applyQuota?: { remaining: number; unlimited: boolean; resetsAt: string } | null
+  proEnabled?: boolean
 }
 
 export function JobDetail({
@@ -38,6 +40,7 @@ export function JobDetail({
   onApply,
   onFastApply,
   applyQuota,
+  proEnabled = false,
   cautionBannerEnabled = false,
 }: JobDetailProps) {
   const [fastApplying, setFastApplying] = useState(false)
@@ -222,6 +225,7 @@ export function JobDetail({
             </div>
           </section>
         )}
+        <ProTools key={job.id} job={job} proEnabled={proEnabled} />
         <section className="detail-section">
           <div className="section-heading">
             <h2>Before you apply</h2>

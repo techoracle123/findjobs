@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, BarChart3, Bell, Bookmark, CreditCard, RotateCw, UserRound } from 'lucide-react'
+import {
+  ArrowLeft,
+  Banknote,
+  BarChart3,
+  Bell,
+  Bookmark,
+  CreditCard,
+  RotateCw,
+  UserRound,
+} from 'lucide-react'
 import type { ApiHealth, CvSuggestion, Job, Profile, RatesPayload } from './shared/types'
 import type { ApplyQuota, PlanCatalogue, PlanDefinition } from './lib/api'
 import { PlanPanel } from './components/PlanPanel'
@@ -31,12 +40,13 @@ import { SavedPanel } from './components/SavedPanel'
 import { AlertsPanel } from './components/AlertsPanel'
 import { useAccount, type AccountMode } from './hooks/useAccount'
 import { ProgressPanel } from './components/ProgressPanel'
+import { SalaryGuidePanel } from './components/SalaryGuidePanel'
 import { ReportDialog } from './components/ReportDialog'
 import { deviceActivity } from './shared/activity'
 import { controlEnabled } from './shared/quality'
 import type { JobFacets } from './server/job-stats'
 
-type Tab = 'saved' | 'alerts' | 'progress' | 'plan'
+type Tab = 'saved' | 'alerts' | 'progress' | 'plan' | 'salary'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -44,6 +54,7 @@ const DASHBOARD_TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'progress', label: 'Progress', icon: BarChart3 },
   { id: 'saved', label: 'Saved', icon: Bookmark },
   { id: 'alerts', label: 'Alerts', icon: Bell },
+  { id: 'salary', label: 'Salary guide', icon: Banknote },
   { id: 'plan', label: 'Plan', icon: CreditCard },
 ]
 
@@ -100,7 +111,9 @@ export default function App() {
   const initialQuery = new URLSearchParams(window.location.search)
   const [tab, setTab] = useState<Tab>(() => {
     const requested = initialQuery.get('tab') as Tab | null
-    return requested && ['saved', 'alerts', 'plan'].includes(requested) ? requested : 'progress'
+    return requested && ['saved', 'alerts', 'plan', 'salary'].includes(requested)
+      ? requested
+      : 'progress'
   })
   const [worldwide, setWorldwide] = useState(initialQuery.get('ww') === '1')
   const [page, setPage] = useState(Math.max(1, Number(initialQuery.get('page')) || 1))
@@ -402,6 +415,16 @@ export default function App() {
     [selected, rates, displayCurrency],
   )
 
+  const proEnabled =
+    ['prepared_applications', 'cv_check', 'interview_prep', 'salary_guide'].every((feature) =>
+      account.entitlements.includes(feature),
+    ) ||
+    Boolean(
+      account.subscription &&
+      ['pro', 'pro_graduate', 'pro_annual'].includes(account.subscription.plan) &&
+      ['active', 'trialing'].includes(account.subscription.status),
+    )
+
   const savedIds = useMemo(() => new Set(saved.map((entry) => entry.jobId)), [saved])
   const appliedIds = useMemo(
     () => new Set(saved.filter((entry) => entry.status === 'applied').map((entry) => entry.jobId)),
@@ -617,6 +640,7 @@ export default function App() {
               onApply={() => markApplied(selected.job.id)}
               onFastApply={() => runFastApply(selected.job.id)}
               applyQuota={applyQuota}
+              proEnabled={proEnabled}
               cautionBannerEnabled={cautionBannerEnabled}
             />
           )}
@@ -675,6 +699,13 @@ export default function App() {
               entitlements={account.entitlements}
               onRefresh={account.refresh}
               onRequireSignIn={requireSignIn}
+            />
+          )}
+          {tab === 'salary' && (
+            <SalaryGuidePanel
+              profile={profile}
+              countries={Object.keys(facets?.countries ?? {})}
+              proEnabled={proEnabled}
             />
           )}
           {tab === 'saved' && (

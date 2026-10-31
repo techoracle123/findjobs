@@ -1,4 +1,11 @@
-import type { AlertPreference, Profile, SavedApplication } from '../../shared/types'
+import type {
+  AlertPreference,
+  ApplicationAnswers,
+  PreparedApplication,
+  Profile,
+  SavedApplication,
+} from '../../shared/types'
+import { EMPTY_APPLICATION_ANSWERS, normaliseApplicationAnswers } from '../pro-tools'
 
 export interface AccountUser {
   id: string
@@ -491,6 +498,12 @@ export interface AccountExport {
   alerts: AlertPreference[]
   subscription: Subscription | null
   entitlements: string[]
+  applicationAnswers: ApplicationAnswers
+  preparedApplications: {
+    jobId: string
+    content: PreparedApplication | null
+    updatedAt: string
+  }[]
   consents: { kind: string; granted: boolean; createdAt: string }[]
   audit: { action: string; metadata: string; createdAt: string }[]
 }
@@ -527,6 +540,27 @@ export async function exportAccount(db: D1Database, userId: string): Promise<Acc
     .bind(userId)
     .all<{ action: string; metadata: string; created_at: string }>()
 
+  const answerRow = await db
+    .prepare('SELECT answers FROM application_answers WHERE user_id = ?1')
+    .bind(userId)
+    .first<{ answers: string }>()
+    .catch(() => null)
+  let applicationAnswers = { ...EMPTY_APPLICATION_ANSWERS }
+  if (answerRow) {
+    try {
+      applicationAnswers = normaliseApplicationAnswers(JSON.parse(answerRow.answers))
+    } catch {
+      applicationAnswers = { ...EMPTY_APPLICATION_ANSWERS }
+    }
+  }
+  const preparedRows = await db
+    .prepare(
+      'SELECT job_id, content, updated_at FROM prepared_applications WHERE user_id = ?1 ORDER BY updated_at DESC',
+    )
+    .bind(userId)
+    .all<{ job_id: string; content: string; updated_at: string }>()
+    .catch(() => null)
+
   return {
     applicationHistory:
       (
@@ -549,6 +583,16 @@ export async function exportAccount(db: D1Database, userId: string): Promise<Acc
     alerts,
     subscription,
     entitlements,
+    applicationAnswers,
+    preparedApplications: (preparedRows?.results ?? []).map((row) => {
+      let content: PreparedApplication | null = null
+      try {
+        content = JSON.parse(row.content) as PreparedApplication
+      } catch {
+        content = null
+      }
+      return { jobId: row.job_id, content, updatedAt: row.updated_at }
+    }),
     consents: (consentRows.results ?? []).map((row) => ({
       kind: row.kind,
       granted: Boolean(row.granted),
@@ -571,5 +615,15 @@ export async function exportAccount(db: D1Database, userId: string): Promise<Acc
  */
 export async function deleteAccount(db: D1Database, userId: string): Promise<void> {
   await db.prepare('DELETE FROM audit_log WHERE user_id = ?1').bind(userId).run()
+  await db
+    .prepare('DELETE FROM prepared_applications WHERE user_id = ?1')
+    .bind(userId)
+    .run()
+    .catch(() => undefined)
+  await db
+    .prepare('DELETE FROM application_answers WHERE user_id = ?1')
+    .bind(userId)
+    .run()
+    .catch(() => undefined)
   await db.prepare('DELETE FROM users WHERE id = ?1').bind(userId).run()
 }

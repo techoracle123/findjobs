@@ -59,7 +59,7 @@ export function planCatalogue(config: AppConfig): PlanDefinition[] {
       id: PLANS.employer.id,
       label: PLANS.employer.label,
       entitlements: [...PLANS.employer.entitlements],
-      // Employer pricing opens with the waitlist; never invent a charge.
+      // Employer posting is paused; this records interest only, never a charge.
       price: { amount: 0, currency },
       interval: 'waitlist',
       audience: 'employer',

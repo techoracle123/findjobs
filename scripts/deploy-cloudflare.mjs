@@ -312,16 +312,23 @@ export async function main() {
         TELEGRAM_WEBHOOK_SECRET: telegram.secret,
       }
     : {}
-  if (process.env.RESEND_API_KEY?.trim()) {
-    secrets.RESEND_API_KEY = process.env.RESEND_API_KEY.trim()
-    if (process.env.EMAIL_FROM?.trim()) secrets.EMAIL_FROM = process.env.EMAIL_FROM.trim()
-    else if (process.env.OTP_FROM?.trim()) secrets.EMAIL_FROM = process.env.OTP_FROM.trim()
-    annotation('notice', 'Email sign-in configured', 'Sign-in codes will be emailed by Resend.')
+  const emailFrom =
+    process.env.EMAIL_FROM?.trim() ||
+    process.env.BREVO_SENDER_EMAIL?.trim() ||
+    process.env.OTP_FROM?.trim()
+  const brevoConfigured = Boolean(process.env.BREVO_API_KEY?.trim() && emailFrom)
+  const resendConfigured = Boolean(process.env.RESEND_API_KEY?.trim())
+  if (brevoConfigured || resendConfigured) {
+    if (process.env.BREVO_API_KEY?.trim()) secrets.BREVO_API_KEY = process.env.BREVO_API_KEY.trim()
+    if (process.env.RESEND_API_KEY?.trim())
+      secrets.RESEND_API_KEY = process.env.RESEND_API_KEY.trim()
+    if (emailFrom) secrets.EMAIL_FROM = emailFrom
+    annotation('notice', 'Password reset email configured', 'Password reset emails will be sent.')
   } else
     annotation(
       'warning',
-      'Email sign-in not configured',
-      'Save RESEND_API_KEY as an encrypted repository secret so FJ can email sign-in codes. Until then sign-in honestly reports itself unavailable.',
+      'Password reset email not configured',
+      'Save BREVO_API_KEY and EMAIL_FROM as encrypted repository secrets so FJ can send password reset emails. Until then password recovery honestly reports itself unavailable.',
     )
   if (process.env.OPENROUTER_API_KEY?.trim()) {
     secrets.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY.trim()
@@ -505,7 +512,7 @@ export async function main() {
     if (process.env.GITHUB_STEP_SUMMARY) {
       await writeFile(
         process.env.GITHUB_STEP_SUMMARY,
-        `## Find Jobs deployed\n\n${url}\n\n${feed.total} live open jobs. Payments disabled.\nSign-in: FJ email codes${process.env.RESEND_API_KEY?.trim() ? ' (email sending on)' : ' (needs RESEND_API_KEY)'}. Telegram: ${telegram ? 'bot and webhook verified' : 'requires encrypted bot token'}.\n`,
+        `## Find Jobs deployed\n\n${url}\n\n${feed.total} live open jobs. Payments disabled.\nSign-in: FJ email and password${process.env.BREVO_API_KEY?.trim() || process.env.RESEND_API_KEY?.trim() ? ' (password reset email on)' : ' (needs password reset email secrets)'}. Telegram: ${telegram ? 'bot and webhook verified' : 'requires encrypted bot token'}.\n`,
         { flag: 'a' },
       )
     }
@@ -523,6 +530,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       process.env.CLOUDFLARE_API_TOKEN,
       process.env.TELEGRAM_BOT_TOKEN,
       process.env.OPENROUTER_API_KEY,
+      process.env.BREVO_API_KEY,
+      process.env.RESEND_API_KEY,
     ]) {
       if (token) safeMessage = safeMessage.replaceAll(token, '[REDACTED]')
     }

@@ -47,6 +47,8 @@ const REQUIRED_TABLES = [
   'ai_usage',
   'job_translations',
   'job_advice_cache',
+  'application_answers',
+  'prepared_applications',
   'service_cache',
 ]
 
@@ -128,20 +130,20 @@ export async function buildReadiness(env: Env): Promise<ReadinessReport> {
   if (emailConfigured(config)) {
     checks.push({
       id: 'identity',
-      name: 'Sign-in (FJ email codes)',
+      name: 'Sign-in email delivery',
       status: 'ok',
       required: production,
-      detail: 'Email sign-in codes can be sent.',
+      detail: 'Password reset emails can be sent.',
       action: null,
     })
   } else {
     checks.push({
       id: 'identity',
-      name: 'Sign-in (FJ email codes)',
+      name: 'Sign-in email delivery',
       status: production ? 'missing' : 'warn',
       required: production,
-      detail: 'No email provider is configured, so sign-in codes cannot be sent yet.',
-      action: 'Set RESEND_API_KEY (and EMAIL_FROM) so FJ can email sign-in codes.',
+      detail: 'No email provider is configured, so password reset emails cannot be sent yet.',
+      action: 'Configure an email sending key and a verified sender address.',
     })
   }
 

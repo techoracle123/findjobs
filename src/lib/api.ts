@@ -1,12 +1,17 @@
 import type {
   AlertPreference,
   ApiHealth,
+  ApplicationAnswers,
+  CvCheckResult,
   CvSuggestion,
+  InterviewPrep,
   Job,
   JobAdvice,
   JobTranslation,
+  PreparedApplication,
   Profile,
   RatesPayload,
+  SalaryGuideResult,
   SavedApplication,
 } from '../shared/types'
 import { monthPeriod, type ApplicationActivity } from '../shared/activity'
@@ -141,6 +146,70 @@ export function suggestFromCv(text: string): Promise<CvSuggestion> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text }),
   })
+}
+
+/* ---------- Pro tools ---------- */
+
+export function fetchApplicationAnswers(): Promise<{ answers: ApplicationAnswers }> {
+  return request<{ answers: ApplicationAnswers }>('/api/pro/application-answers')
+}
+
+export function saveApplicationAnswers(
+  answers: ApplicationAnswers,
+): Promise<{ answers: ApplicationAnswers }> {
+  return request<{ answers: ApplicationAnswers }>('/api/pro/application-answers', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ answers }),
+  })
+}
+
+export function fetchPreparedApplication(
+  jobId: string,
+): Promise<{ prepared: PreparedApplication | null }> {
+  return request<{ prepared: PreparedApplication | null }>(
+    `/api/jobs/${encodeURIComponent(jobId)}/prepared-application`,
+  )
+}
+
+export function createPreparedApplication(
+  jobId: string,
+  answers?: ApplicationAnswers,
+): Promise<{ prepared: PreparedApplication }> {
+  return request<{ prepared: PreparedApplication }>(
+    `/api/jobs/${encodeURIComponent(jobId)}/prepared-application`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(answers ? { answers } : {}),
+    },
+  )
+}
+
+export function checkCvForJob(jobId: string, cvText: string): Promise<{ check: CvCheckResult }> {
+  return request<{ check: CvCheckResult }>(`/api/jobs/${encodeURIComponent(jobId)}/cv-check`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ cvText }),
+  })
+}
+
+export function fetchInterviewPrep(jobId: string): Promise<{ prep: InterviewPrep }> {
+  return request<{ prep: InterviewPrep }>(`/api/jobs/${encodeURIComponent(jobId)}/interview-prep`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+}
+
+export function fetchSalaryGuide(params: Record<string, string | undefined>): Promise<{
+  guide: SalaryGuideResult
+}> {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value) query.set(key, value)
+  }
+  return request<{ guide: SalaryGuideResult }>(`/api/salary-guide?${query}`)
 }
 
 /* ---------- account ---------- */

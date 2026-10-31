@@ -223,6 +223,20 @@ test('pricing is linked in the header and the page loads', async ({ page }) => {
   await page.locator('.topnav').getByRole('link', { name: 'Pricing' }).click()
   await expect(page).toHaveURL(/\/pricing$/)
   await expect(page.getByRole('heading', { name: 'Simple pricing' })).toBeVisible()
+  const pricingTable = page.locator('.pricing-table')
+  await expect(pricingTable.getByText('Pro for Graduates')).toBeVisible()
+  await expect(pricingTable.getByText('Prepared applications')).toBeVisible()
+  await expect(pricingTable.getByText('CV check for each job')).toBeVisible()
+  await expect(page.getByText(/Employer accounts and direct job posting are paused/)).toBeVisible()
+  await expect(page.getByText(/Desk\+/)).toHaveCount(0)
+})
+
+test('employers page records interest only and offers no job posting', async ({ page }) => {
+  await page.goto('/employers')
+  await expect(page.getByRole('heading', { name: 'Employer posting is not open' })).toBeVisible()
+  await expect(page.getByText('No direct job posting.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Record my interest' })).toBeVisible()
+  await expect(page.getByText(/publish a vacancy in minutes|founding pricing/)).toHaveCount(0)
 })
 
 test('work type filter is visible and employers link is gone', async ({ page }) => {
@@ -243,6 +257,48 @@ test('job detail shows a plain before-you-apply checklist and no AI panels', asy
   await expect(page.locator('.detail')).toContainText(/Never pay anyone/)
   await expect(page.getByText(/Original listing ·/)).toHaveCount(0)
   await expect(page.getByText(/AI-generated|Get application tips/)).toHaveCount(0)
+})
+
+test('Pro tools prepare help on a job and unlock the salary guide', async ({ page }) => {
+  test.setTimeout(180_000)
+  await signUp(page)
+  await page.goto('/jobs')
+  await page.locator('.joblist .jobrow').first().click()
+  await expect(page.getByRole('heading', { name: 'More help with this application' })).toBeVisible()
+
+  const confirmed = await page.request.post('/api/billing/confirm', { data: { plan: 'pro' } })
+  // The confirmation shortcut exists only in local/test. Hosted production
+  // correctly refuses it, and the worker suite covers the entitled API path.
+  if (!confirmed.ok()) return
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Pro tools for this job' })).toBeVisible()
+  await page.getByText('Your saved application answers').click()
+  await page.getByLabel('Full name').fill('Browser Test User')
+  await page
+    .getByLabel('Short summary of your experience')
+    .fill('Relevant experience for this role.')
+  await page.getByRole('button', { name: 'Save answers' }).click()
+  await expect(page.getByText('Your application answers are saved.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Prepare application' }).click()
+  await expect(page.getByText('Your prepared application is ready below.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Copy cover letter' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Check my CV' }).click()
+  await expect(page.getByText(/Advert wording match|No percentage is available/)).toBeVisible()
+
+  await page.getByRole('button', { name: 'Prepare me for interview' }).click()
+  await expect(page.getByRole('heading', { name: 'Questions to practise' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Show salary guide' }).first().click()
+  await expect(
+    page.getByText(/From [0-9]+ adverts|not enough real data|No matching live adverts/),
+  ).toBeVisible()
+
+  await page.goto('/dashboard?tab=salary')
+  await expect(page.getByRole('heading', { name: 'Salary guide' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Show salary guide' })).toBeVisible()
 })
 
 test('Nigeria and general professions are selectable without repetitive badges', async ({

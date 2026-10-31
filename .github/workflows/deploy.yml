@@ -11,6 +11,7 @@ on:
         arena/ff9585d3-findjobs,
         arena/c00da234-findjobs,
         arena/fb632330-findjobs,
+        arena/6acbf55c-findjobs,
       ]
     paths:
       - .github/workflows/deploy.yml
@@ -37,7 +38,7 @@ concurrency:
 jobs:
   deploy:
     # No pull_request trigger: untrusted PR code must never receive deploy secrets.
-    if: github.ref == 'refs/heads/arena/be298902-findjobs' || github.ref == 'refs/heads/arena/29d1e244-findjobs' || github.ref == 'refs/heads/arena/98ac7a65-findjobs' || github.ref == 'refs/heads/arena/ff9585d3-findjobs' || github.ref == 'refs/heads/arena/c00da234-findjobs' || github.ref == 'refs/heads/arena/fb632330-findjobs'
+    if: github.ref == 'refs/heads/arena/be298902-findjobs' || github.ref == 'refs/heads/arena/29d1e244-findjobs' || github.ref == 'refs/heads/arena/98ac7a65-findjobs' || github.ref == 'refs/heads/arena/ff9585d3-findjobs' || github.ref == 'refs/heads/arena/c00da234-findjobs' || github.ref == 'refs/heads/arena/fb632330-findjobs' || github.ref == 'refs/heads/arena/6acbf55c-findjobs'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -82,6 +83,11 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          OTP_FROM: ${{ secrets.OTP_FROM }}
         run: node scripts/deploy-cloudflare.mjs
       - name: Install Chromium for live browser checks
         run: npx playwright install --with-deps chromium

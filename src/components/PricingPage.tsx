@@ -24,6 +24,11 @@ const ENTITLEMENT_LABELS: Record<string, string> = {
   verified_source_badges: 'Verified source badges',
   cv_suggestions: 'CV tailoring suggestions',
   fast_apply: 'Fast Apply credits',
+  unlimited_fast_apply: 'Unlimited Fast Apply where available',
+  prepared_applications: 'Prepared applications',
+  cv_check: 'CV check for each job',
+  interview_prep: 'Interview preparation',
+  salary_guide: 'Salary guide from real adverts',
 }
 
 /** Free for every job seeker on every plan; shown so the table tells the truth. */
@@ -32,11 +37,11 @@ const BASE_ROWS = ['search', 'shortlist']
 const FAQ = [
   {
     q: 'Do I need a paid plan to find opportunities?',
-    a: 'No. Search, shortlists and job alerts are free for everyone. Paid plans add a weekly digest and verified source badges.',
+    a: 'No. Search, shortlists and job alerts are free for everyone. Paid plans add prepared applications, a CV check for each job, interview preparation and a salary guide from real adverts.',
   },
   {
     q: 'Who is the Graduate plan for?',
-    a: 'Recent graduates and NYSC members. Same Desk+ features at a lower monthly price.',
+    a: 'Recent graduates and NYSC members. Same Pro features at a lower monthly price.',
   },
   {
     q: 'How do I pay?',
@@ -92,7 +97,7 @@ export function PricingPage() {
   )
   const entitlementIds = Array.from(
     new Set(seekerPlans.flatMap((plan) => plan.entitlements)),
-  ).filter((id) => id !== 'employer_waitlist')
+  ).filter((id) => id !== 'employer_interest')
   const hasAnnual = seekerPlans.some((plan) => plan.interval === 'year')
 
   return (
@@ -213,12 +218,12 @@ export function PricingPage() {
         <section aria-label="For employers">
           <h2>Hiring?</h2>
           <p>
-            Employer profiles and direct posting are coming to FJ. Join the employer waitlist and we
-            will contact you before launch. Until then, vacancies on your public careers page or an
-            established job board are collected automatically at no cost.
+            Employer accounts and direct job posting are paused, so there is no employer price to
+            pay. Vacancies on your public careers page or an established job board may be collected
+            automatically at no cost.
           </p>
           <p>
-            <a href="/employers">See the employer offer and join the waitlist</a>
+            <a href="/employers">Read how this works or record employer interest</a>
           </p>
         </section>
         <section aria-label="Pricing questions">

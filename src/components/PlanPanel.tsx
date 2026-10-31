@@ -13,9 +13,32 @@ const COPY: Record<string, { features: string[]; cadence: string }> = {
       'Save roles and track applications',
     ],
   },
+  pro_graduate: {
+    cadence: 'per month',
+    features: [
+      'Prepared applications',
+      'CV check for each job',
+      'Interview preparation',
+      'Salary guide from real adverts',
+    ],
+  },
   pro: {
     cadence: 'per month',
-    features: ['Alerts to Telegram', 'Weekly digest', 'Verified source badges'],
+    features: [
+      'Prepared applications',
+      'CV check for each job',
+      'Interview preparation',
+      'Salary guide from real adverts',
+    ],
+  },
+  pro_annual: {
+    cadence: 'per year',
+    features: [
+      'Prepared applications',
+      'CV check for each job',
+      'Interview preparation',
+      'Salary guide from real adverts',
+    ],
   },
 }
 
@@ -47,11 +70,14 @@ export function PlanPanel({
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
-  const active = subscription && subscription.status === 'active' && !subscription.cancelAtPeriodEnd
-  const isPro = Boolean(active && subscription.plan === 'pro')
+  const active =
+    subscription &&
+    ['active', 'trialing'].includes(subscription.status) &&
+    !subscription.cancelAtPeriodEnd
+  const isPro = Boolean(active && ['pro', 'pro_graduate', 'pro_annual'].includes(subscription.plan))
   const ending = Boolean(subscription?.cancelAtPeriodEnd)
 
-  const subscribe = async () => {
+  const subscribe = async (planId = 'pro') => {
     if (!signedIn) {
       onRequireSignIn()
       return
@@ -69,7 +95,7 @@ export function PlanPanel({
           window.open(session.url, '_blank', 'noopener')
         }
       } else {
-        const { session } = await startCheckout('pro')
+        const { session } = await startCheckout(planId)
         window.location.href = session.url
       }
     } catch {
@@ -94,7 +120,7 @@ export function PlanPanel({
     }
   }
 
-  const shown = plans.length > 0 ? plans : []
+  const shown = plans.filter((plan) => plan.id !== 'employer')
 
   return (
     <div className="panel">
@@ -102,11 +128,11 @@ export function PlanPanel({
         <h2 className="panel__title">Plan</h2>
         <div style={{ flex: 1 }} />
         {isPro ? (
-          <span className="chip chip--ok">Desk+ active</span>
+          <span className="chip chip--ok">Pro active</span>
         ) : ending ? (
           <span className="chip chip--plain">Ending</span>
         ) : (
-          <span className="chip chip--plain">Desk</span>
+          <span className="chip chip--plain">Free</span>
         )}
       </div>
       <div className="panel__body">
@@ -123,7 +149,7 @@ export function PlanPanel({
         {ending && (
           <div className="banner banner--info">
             <span>
-              Your Desk+ plan is set to end on{' '}
+              Your Pro plan is set to end on{' '}
               {subscription?.currentPeriodEnd
                 ? new Date(subscription.currentPeriodEnd).toLocaleDateString()
                 : 'the next renewal'}{' '}
@@ -135,7 +161,7 @@ export function PlanPanel({
         <div className="skillsplit" style={{ gridTemplateColumns: '1fr' }}>
           {shown.map((plan) => {
             const copy = COPY[plan.id] ?? { features: [], cadence: 'per month' }
-            const isCurrent = plan.id === 'pro' ? isPro : !isPro
+            const isCurrent = isPro ? subscription?.plan === plan.id : plan.id === 'free'
             const price =
               plan.price.amount > 0
                 ? `${currencySymbol(plan.price.currency)}${plan.price.amount.toLocaleString('en-US')}`
@@ -162,12 +188,12 @@ export function PlanPanel({
                     ))}
                   </ul>
 
-                  {plan.id === 'pro' && (
+                  {['pro', 'pro_graduate', 'pro_annual'].includes(plan.id) && (
                     <div className="btnrow">
                       <button
                         type="button"
                         className="btn btn--sm"
-                        onClick={() => void subscribe()}
+                        onClick={() => void subscribe(plan.id)}
                         disabled={busy || !billingEnabled}
                       >
                         {isPro ? (
@@ -175,7 +201,7 @@ export function PlanPanel({
                             <ExternalLink size={13} /> Manage billing
                           </>
                         ) : (
-                          'Choose Desk+'
+                          'Choose Pro'
                         )}
                       </button>
                       {isPro && (

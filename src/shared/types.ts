@@ -184,3 +184,77 @@ export interface JobTranslation {
   available: boolean
   message?: string
 }
+
+/** Facts a Pro member saves once and reuses across applications. */
+export interface ApplicationAnswers {
+  fullName: string
+  phone: string
+  location: string
+  portfolioUrl: string
+  linkedinUrl: string
+  summary: string
+  whyFit: string
+  achievement: string
+  availability: string
+  salaryExpectation: string
+  workPermission: string
+}
+
+export interface PreparedAnswer {
+  question: string
+  answer: string
+}
+
+export interface PreparedApplication {
+  jobId: string
+  generatedAt: string
+  subject: string
+  coverLetter: string
+  emailBody: string
+  recipientEmail: string | null
+  mailtoUrl: string | null
+  answers: PreparedAnswer[]
+  checklist: string[]
+  missingInfo: string[]
+}
+
+export interface CvCheckResult {
+  basis: 'cv-and-profile' | 'profile'
+  requiredMatched: string[]
+  requiredMissing: string[]
+  usefulMatched: string[]
+  usefulMissing: string[]
+  requiredPercent: number | null
+  overallPercent: number | null
+  actions: string[]
+  fitNotes: string[]
+  message: string
+}
+
+export interface InterviewQuestion {
+  question: string
+  prepare: string
+}
+
+export interface InterviewPrep {
+  intro: string
+  questions: InterviewQuestion[]
+  examplesToPrepare: string[]
+  questionsToAsk: string[]
+  checklist: string[]
+}
+
+export interface SalaryGuideResult {
+  available: boolean
+  message: string
+  sampleCount: number
+  scope: string
+  currency: string | null
+  period: SalaryPeriod | null
+  medianMidpoint: number | null
+  lowerQuartileMidpoint: number | null
+  upperQuartileMidpoint: number | null
+  lowest: number | null
+  highest: number | null
+  updatedAt: string | null
+}

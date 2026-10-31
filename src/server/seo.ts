@@ -114,7 +114,7 @@ export function pageMeta(pathname: string): { title: string; description: string
     },
     '/employers': {
       title: 'For employers | FJ - Find Jobs',
-      description: 'Employer profiles and job posting are coming to FJ.',
+      description: 'Employer accounts and direct job posting are paused on FJ.',
     },
     '/auth/login': {
       title: 'Sign in to FJ',
@@ -185,12 +185,12 @@ export function pageBody(pathname: string): string {
     '/contact': `<p>Questions, feedback or a listing to report? Reach the FJ team through the contact options in the app.</p>
 <p>Report suspicious listings any time from the job page — no account needed.</p>`,
     '/pricing': `<p>Finding opportunities is free, always. Job alerts are free too. Pay only when you want more help applying.</p>
-<p>Desk (free): search and browse opportunities, shortlist and application tracking, job alerts. Desk+ Graduate: everything in Desk plus a weekly digest and verified source badges, at a lower monthly price for recent graduates. Desk+: ₦10,000 per month. Desk+ Annual: ₦100,000 per year.</p>
+<p>Free: search and browse opportunities, shortlist and application tracking, job alerts. Pro for Graduates: ₦3,000 per month for recent graduates, with prepared applications, a CV check for each job, interview preparation and a salary guide from real adverts. Pro: ₦10,000 per month or ₦100,000 per year, with the same tools.</p>
 <p>Payments are not open yet — join the waitlist on the pricing page and we will email you when paid plans open. When billing opens you will pay through our payment partner; we never see or store your card details. You can cancel at any time from your account page.</p>
 <p>FJ is not an employer. We do not own, verify or endorse any listing, and we never guarantee employment. Never pay anyone for a job or an application.</p>`,
     '/employers': `<p>FJ collects real vacancies from employer career pages and established job boards, cleans them up, and puts them in front of people who are actively looking across Nigeria and beyond.</p>
-<p>At launch, employers will get direct job posting, a verified employer profile with a verified badge, protection against impersonators misusing your company name, and reach in search by profession, country, work type and experience level.</p>
-<p>Today, automatic collection from your public listings is free and stays free: if your vacancies are on your public careers page or an established board, FJ collects them and links applicants to your original posting. Direct posting and verified profiles will be paid plans priced in naira, confirmed before launch. Join the employer waitlist on this page to hear first.</p>
+<p>Employer accounts and direct job posting are paused. There is no employer price and no way to publish a job directly on FJ today.</p>
+<p>Today, automatic collection from your public listings is free: if your vacancies are on your public careers page or an established board, FJ may collect them and link applicants to your original posting. You can record employer interest on this page in case posting is opened carefully in future.</p>
 <p>FJ never charges job seekers and never asks applicants for money on your behalf.</p>`,
   }
   return bodies[pathname] ?? `<p>${esc(pageMeta(pathname).description)}</p>`

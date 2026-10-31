@@ -18,6 +18,7 @@ import { sourceRoutes } from './routes/sources'
 import { billingRoutes } from './routes/billing'
 import { telegramRoutes } from './routes/telegram'
 import { insightRoutes } from './routes/insights'
+import { proRoutes } from './routes/pro'
 import { applyRoutes } from './routes/apply'
 import { adminRoutes } from './routes/admin'
 import { authRoutes } from './routes/auth'
@@ -591,6 +592,7 @@ app.get('/api/rates', async (c) => {
 })
 
 app.route('/api', insightRoutes)
+app.route('/api', proRoutes)
 app.route('/api', applyRoutes)
 app.route('/api', adminRoutes)
 app.route('/api', trustRoutes)
