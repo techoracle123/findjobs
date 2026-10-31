@@ -142,9 +142,7 @@ function safeFeePreference(value) {
 function enabledMethods(settings) {
   const methods = isRecord(settings.enabled_payment_methods) ? settings.enabled_payment_methods : {}
   return Object.entries(methods)
-    .filter(
-      ([method, entry]) => /^[A-Z0-9_]{2,40}$/.test(method) && methodEnabled(settings, method),
-    )
+    .filter(([method]) => /^[A-Z0-9_]{2,40}$/.test(method) && methodEnabled(settings, method))
     .map(([method]) => method)
 }
 
