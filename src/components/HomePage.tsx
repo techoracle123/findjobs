@@ -224,8 +224,8 @@ export function HomePage() {
           <p className="eyebrow">No card. No application limit.</p>
           <h2 id="home-free-heading">Everything you need to find and apply is free</h2>
           <p className="home-lead">
-            A free account lets you search, save and apply. We will not ask you to pay to finish an
-            application.
+            A free account lets you search, save and apply. We will not ask you to pay to get a job
+            or gig, or to finish an application.
           </p>
           <div className="home-feature-grid">
             {FREE_FEATURES.map((feature) => (
