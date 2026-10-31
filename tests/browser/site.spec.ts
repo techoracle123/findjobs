@@ -250,7 +250,9 @@ test('pricing is linked in the header and the page loads', async ({ page }) => {
   await expect(pricingTable.getByText('CV-to-job comparison')).toBeVisible()
   await expect(pricingTable.getByText('Before-you-apply check')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Try Pro free for 3 days' })).toBeVisible()
-  await expect(page.locator('body')).toContainText('one full CV analysis and three')
+  await expect(page.locator('body')).toContainText(
+    'One full CV analysis, three complete application packs',
+  )
   await expect(page.getByRole('heading', { name: 'Payments open in the next stage' })).toBeVisible()
   await expect(page.getByText(/Employer accounts and direct job posting are paused/)).toBeVisible()
   await expect(page.getByText(/Desk\+/)).toHaveCount(0)
