@@ -19,6 +19,12 @@ async function signUp(page: Page): Promise<string> {
   return email
 }
 
+async function paymentsOpen(page: Page): Promise<boolean> {
+  const response = await page.request.get('/api/billing/plans')
+  expect(response.ok()).toBe(true)
+  return Boolean(((await response.json()) as { billingEnabled?: boolean }).billingEnabled)
+}
+
 /** Runs an action and waits until its account write has reached the server. */
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
@@ -98,7 +104,7 @@ test('homepage explains the platform in plain words and sends people to sign up'
   await expect(page.locator('.home-price-grid')).toContainText('₦5,000/month')
   await expect(page.locator('.home-price-grid')).toContainText('₦40,000/year')
   await expect(page.locator('.home-price-grid')).toContainText('₦3,000/month')
-  await expect(page.locator('body')).toContainText('Payments are not open yet')
+  await expect(page.locator('body')).toContainText('Compare the plans before you decide')
   await page
     .getByRole('link', { name: /Create a free account/ })
     .first()
@@ -255,7 +261,14 @@ test('pricing is linked in the header and the page loads', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Try Pro free for 3 days' })).toBeVisible()
   await expect(page.locator('body')).toContainText('Check one CV in full')
   await expect(page.locator('body')).toContainText('Prepare applications for three jobs')
-  await expect(page.getByRole('heading', { name: 'Payments are not open yet' })).toBeVisible()
+  if (await paymentsOpen(page)) {
+    await expect(page.locator('body')).toContainText('Pay by card or bank transfer')
+    await expect(page.locator('body')).toContainText(
+      'FJ will not charge you again unless you choose to pay',
+    )
+  } else {
+    await expect(page.getByRole('heading', { name: 'Payments are not open yet' })).toBeVisible()
+  }
   await expect(page.getByText(/Employer accounts and direct job posting are paused/)).toBeVisible()
   await expect(page.getByText(/Desk\+/)).toHaveCount(0)
 })
@@ -390,7 +403,9 @@ NYSC completed in 2024.`
   await expect(page.getByRole('heading', { name: '3-day Pro free trial' })).toBeVisible()
   await expect(page.locator('body')).toContainText('We do not ask for card details')
   await expect(page.locator('body')).toContainText(
-    'Payments are not open yet. Nothing on this page can charge you.',
+    (await paymentsOpen(page))
+      ? 'Pay by card or bank transfer. Each payment buys one month or one year.'
+      : 'Payments are not open yet. Nothing on this page can charge you.',
   )
   await writeAndWait(page, '/api/pro/trial/start', 'POST', () =>
     page.getByRole('button', { name: 'Start my 3-day free trial' }).click(),

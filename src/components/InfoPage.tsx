@@ -65,9 +65,10 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           email delivery partner, which processes your email address only to deliver that message.
         </p>
         <p>
-          <strong>Payments.</strong> Paid plans are not open yet. Card and bank transfer payments
-          will come later and will be handled by our payment partner; we will never see or store
-          your card details.
+          <strong>Payments.</strong> If you buy Pro, our payment partner Bachs processes your name,
+          email, payment amount and payment details so it can take the payment and confirm it to FJ.
+          FJ stores your plan, amount paid, payment reference and paid end date. FJ never sees or
+          stores your full card number.
         </p>
         <p>
           <strong>Retention.</strong> Account data is kept until you delete the relevant item or
@@ -103,9 +104,9 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
         </p>
         <p>
           <strong>Finding and applying are free.</strong> We do not charge to browse, save, receive
-          basic alerts or apply on an employer's own site. Optional Pro tools may be paid when
-          payments open, but Pro is never a fee for a job or for submitting an application. Anyone
-          asking you for money to get a job found through FJ should be reported.
+          basic alerts or apply on an employer's own site. Pro tools are optional and paid, but Pro
+          is never a fee for a job or for submitting an application. Anyone asking you for money to
+          get a job found through FJ should be reported.
         </p>
         <p>
           <strong>Your use of FJ.</strong> Use the service lawfully, do not scrape or abuse it, and
@@ -118,6 +119,14 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           true before sending it. FJ does not submit applications for you and does not guarantee a
           reply, interview, offer or job. The advert checker shows evidence and warning signs; it is
           not employer verification.
+        </p>
+        <p>
+          <strong>Paid time and refunds.</strong> Each naira payment buys one month or one year of
+          Pro. It does not renew by itself. Pro turns on when our payment partner confirms the
+          payment. If a confirmed payment does not turn Pro on, FJ will fix it or refund that
+          payment. If you pay twice for the same time by mistake, contact FJ about the duplicate
+          payment. After paid time has started, it normally runs to the end date shown in your
+          account and then stops.
         </p>
         <p>
           <strong>Liability.</strong> FJ is provided “as is”. To the extent permitted by law, we are

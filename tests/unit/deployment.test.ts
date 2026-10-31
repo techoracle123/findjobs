@@ -4,7 +4,8 @@ import consumerConfig from '../../wrangler.ingest-consumer.jsonc?raw'
 // @ts-expect-error Node deployment scripts are deliberately plain JavaScript.
 import * as deployment from '../../scripts/deploy-cloudflare.mjs'
 
-const { client, credentials, deploymentConfig, findResource, provision } = deployment
+const { bachsDeployment, client, credentials, deploymentConfig, findResource, provision } =
+  deployment
 
 const account = 'a'.repeat(32)
 
@@ -128,6 +129,36 @@ describe('Cloudflare deployment automation', () => {
       BILLING_PROVIDER: 'fake',
     })
     expect(config.queues.producers[0].binding).toBe('INGEST_QUEUE')
+  })
+
+  it('opens Bachs only with a live key and its webhook secret', () => {
+    expect(
+      bachsDeployment({
+        BACHS_SECRET_KEY: ' sk_live_test ',
+        BACHS_WEBHOOK_SECRET: ' whsec_test ',
+      }),
+    ).toEqual({
+      configured: true,
+      secretKey: 'sk_live_test',
+      webhookSecret: 'whsec_test',
+    })
+    expect(
+      bachsDeployment({
+        BACHS_SECRET_KEY: 'sk_sandbox_test',
+        BACHS_WEBHOOK_SECRET: 'whsec_test',
+      }).configured,
+    ).toBe(false)
+    expect(bachsDeployment({ BACHS_SECRET_KEY: 'sk_live_test' }).configured).toBe(false)
+
+    const config = JSON.parse(
+      deploymentConfig(
+        `{"d1_databases":[{"binding":"DB","database_id":"placeholder"}],"vars":{}}`,
+        'wrangler.jsonc',
+        'real-id',
+        { BILLING_PROVIDER: 'bachs' },
+      ),
+    )
+    expect(config.vars.BILLING_PROVIDER).toBe('bachs')
   })
 
   it('rejects broken configs before deploying', () => {

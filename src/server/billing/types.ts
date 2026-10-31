@@ -15,6 +15,8 @@ export type PlanPriceMap = Record<string, PlanPrice>
 export interface CheckoutRequest {
   userId: string
   email: string
+  /** The customer's display name, when FJ has one. */
+  name?: string | null
   plan: string
   /** The provider's own price identifier, when it has one. */
   priceId: string
@@ -23,6 +25,16 @@ export interface CheckoutRequest {
   /** An ISO 4217 currency code. */
   currency: string
   returnUrl: string
+  /** Where the hosted checkout sends the customer after payment. */
+  successUrl?: string
+  /** Where the hosted checkout sends the customer when they stop. */
+  cancelUrl?: string
+  /** FJ's durable checkout reference. It is generated before the provider call. */
+  reference?: string
+  /** Reused if the same checkout creation has to be repeated after an uncertain result. */
+  idempotencyKey?: string
+  /** Server-written metadata used to match a signed webhook to this checkout. */
+  metadata?: Record<string, string>
 }
 
 export interface CheckoutSession {
@@ -43,11 +55,31 @@ export interface ProviderSubscription {
   cancelAtPeriodEnd: boolean
 }
 
+export interface ProviderPayment {
+  checkoutId: string | null
+  chargeId: string | null
+  reference: string | null
+  status: 'succeeded' | 'failed' | 'expired' | 'refunded' | 'disputed' | 'unknown'
+  /** Provider-specific detail, such as a dispute status. Never shown raw to users. */
+  statusDetail: string | null
+  /** The amount in major units, as confirmed by the provider. */
+  amount: number | null
+  currency: string | null
+  customerId: string | null
+  plan: string | null
+  paidAt: string | null
+}
+
 export interface WebhookEvent {
   type: string
   /** A stable identifier for the event, used to ignore a replay. */
   eventId: string | null
+  /** When the provider says the event happened, used to ignore older retries. */
+  createdAt?: string | null
+  /** FJ's own user id from server-written checkout metadata, when present. */
+  userId?: string | null
   providerSubscription: ProviderSubscription | null
+  providerPayment?: ProviderPayment | null
   customerEmail: string | null
 }
 
@@ -75,6 +107,10 @@ export interface PaymentProvider {
    */
   parseWebhook(payload: string, headers: Headers): Promise<WebhookEvent | null>
   subscriptionFromEvent(event: WebhookEvent): ProviderSubscription | null
+  /** Reads one checkout back from the provider, for a missed or delayed webhook. */
+  fetchCheckout?(checkoutId: string): Promise<ProviderPayment | null>
+  /** Cancels a real provider subscription at the end of its paid period, where supported. */
+  cancelSubscription?(providerSubscriptionId: string): Promise<void>
 }
 
 const PRO_ENTITLEMENTS = [
@@ -135,13 +171,14 @@ export function subscriptionHasFeature(
 ): boolean {
   if (!subscription) return false
   if (subscription.status !== 'active' && subscription.status !== 'trialing') return false
+  const endsAt = subscription.currentPeriodEnd
+    ? new Date(subscription.currentPeriodEnd).getTime()
+    : 0
+  if (subscription.currentPeriodEnd && (!endsAt || endsAt <= Date.now())) return false
   if (subscription.cancelAtPeriodEnd) {
     // Cancelling does not take away time that has already been paid for, so
     // the feature stands until the period it was bought for has ended.
-    const endsAt = subscription.currentPeriodEnd
-      ? new Date(subscription.currentPeriodEnd).getTime()
-      : 0
-    if (!endsAt || endsAt <= Date.now()) return false
+    if (!endsAt) return false
   }
   return entitlements.includes(feature)
 }

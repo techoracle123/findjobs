@@ -82,7 +82,7 @@ function number(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
 }
 
-const PROVIDERS: BillingProviderId[] = ['fake', 'stripe', 'paystack', 'flutterwave']
+const PROVIDERS: BillingProviderId[] = ['fake', 'stripe', 'paystack', 'flutterwave', 'bachs']
 
 /**
  * Works out which gateway to use.

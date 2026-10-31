@@ -90,6 +90,8 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           OTP_FROM: ${{ secrets.OTP_FROM }}
+          BACHS_SECRET_KEY: ${{ secrets.BACHS_SECRET_KEY }}
+          BACHS_WEBHOOK_SECRET: ${{ secrets.BACHS_WEBHOOK_SECRET }}
         run: node scripts/deploy-cloudflare.mjs
       - name: Install Chromium for live browser checks
         run: npx playwright install --with-deps chromium

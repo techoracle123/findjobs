@@ -483,6 +483,15 @@ export function cancelSubscription(): Promise<{ subscription: Subscription }> {
   return request('/api/billing/cancel', { method: 'POST' })
 }
 
+export function reconcileBilling(): Promise<{
+  subscription: Subscription | null
+  entitlements: string[]
+  checked: number
+  applied: boolean
+}> {
+  return request('/api/billing/reconcile', { method: 'POST' })
+}
+
 export function exportAccount(): Promise<unknown> {
   return request('/api/account/export')
 }

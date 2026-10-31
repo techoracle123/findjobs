@@ -16,6 +16,14 @@ import type { PaymentProvider } from './types'
  * used instead, which never charges anyone, and the readiness report says
  * what is missing.
  */
+function bachsKeyUsable(secretKey: string, config: AppConfig): boolean {
+  // Bachs keys belong to one environment. A sandbox key must never be the
+  // thing that turns on production checkout, and an unrecognised prefix must
+  // not reach the SDK constructor.
+  if (config.isProduction) return secretKey.startsWith('sk_live_')
+  return secretKey.startsWith('sk_live_') || secretKey.startsWith('sk_sandbox_')
+}
+
 export function providerFor(config: AppConfig): PaymentProvider {
   const plans = planPrices(config)
   const billing = config.billing
@@ -41,7 +49,11 @@ export function providerFor(config: AppConfig): PaymentProvider {
       }
       break
     case 'bachs':
-      if (billing.bachs.secretKey && billing.bachs.webhookSecret) {
+      if (
+        billing.bachs.secretKey &&
+        billing.bachs.webhookSecret &&
+        bachsKeyUsable(billing.bachs.secretKey, config)
+      ) {
         return new BachsProvider(billing.bachs.secretKey, billing.bachs.webhookSecret, plans)
       }
       break

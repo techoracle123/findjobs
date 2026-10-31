@@ -239,8 +239,8 @@ export function HomePage() {
             </div>
           </div>
           <p className="field__hint">
-            Payments are not open yet. Prices are shown now so you can decide later.{' '}
-            <a href="/pricing">Compare plans or check the graduate price</a>.
+            Compare the plans before you decide. The free trial needs no card.{' '}
+            <a href="/pricing">See prices or check the graduate price</a>.
           </p>
         </section>
 

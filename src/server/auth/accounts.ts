@@ -104,6 +104,38 @@ export async function upsertUser(
   }
 }
 
+export async function getUserById(db: D1Database, userId: string): Promise<AccountUser | null> {
+  const row = await db
+    .prepare('SELECT id, email, display_name, created_at FROM users WHERE id = ?1')
+    .bind(userId)
+    .first<{ id: string; email: string; display_name: string | null; created_at: string }>()
+  return row
+    ? { id: row.id, email: row.email, displayName: row.display_name, createdAt: row.created_at }
+    : null
+}
+
+export async function getUserByEmail(db: D1Database, email: string): Promise<AccountUser | null> {
+  return getUserById(db, await userIdFor(email))
+}
+
+export async function findUserIdByProviderSubscription(
+  db: D1Database,
+  providerSubscriptionId: string | null,
+  providerCustomerId: string | null,
+): Promise<string | null> {
+  if (!providerSubscriptionId && !providerCustomerId) return null
+  const row = await db
+    .prepare(
+      `SELECT user_id FROM subscriptions
+       WHERE (?1 IS NOT NULL AND provider_subscription_id = ?1)
+          OR (?2 IS NOT NULL AND provider_customer_id = ?2)
+       ORDER BY updated_at DESC LIMIT 1`,
+    )
+    .bind(providerSubscriptionId, providerCustomerId)
+    .first<{ user_id: string }>()
+  return row?.user_id ?? null
+}
+
 export async function getProfile(db: D1Database, userId: string): Promise<Profile> {
   const row = await db
     .prepare(

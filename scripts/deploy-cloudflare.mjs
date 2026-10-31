@@ -100,6 +100,18 @@ export async function provision(api, projectName) {
   return { databaseId: database.uuid, productionBranch: project.production_branch }
 }
 
+export function bachsDeployment(env = process.env) {
+  const secretKey = env.BACHS_SECRET_KEY?.trim() ?? ''
+  const webhookSecret = env.BACHS_WEBHOOK_SECRET?.trim() ?? ''
+  return {
+    // Production checkout opens only with a live Bachs key and the matching
+    // production webhook signing secret. A sandbox or partial setup stays off.
+    configured: Boolean(secretKey.startsWith('sk_live_') && webhookSecret),
+    secretKey,
+    webhookSecret,
+  }
+}
+
 export function deploymentConfig(text, filename, databaseId, vars = {}, publicNamespace) {
   const parsed = ts.parseConfigFileTextToJson(filename, text)
   if (parsed.error) throw new Error(`Cannot parse ${filename}`)
@@ -110,7 +122,13 @@ export function deploymentConfig(text, filename, databaseId, vars = {}, publicNa
     db.binding === 'DB' ? { ...db, database_id: databaseId } : db,
   )
   if (publicNamespace) config.kv_namespaces = [{ binding: 'PUBLIC_JOBS', id: publicNamespace }]
-  config.vars = { ...config.vars, ...vars, APP_MODE: 'production', BILLING_PROVIDER: 'fake' }
+  const billingProvider = vars.BILLING_PROVIDER ?? config.vars?.BILLING_PROVIDER
+  config.vars = {
+    ...config.vars,
+    ...vars,
+    APP_MODE: 'production',
+    BILLING_PROVIDER: billingProvider || 'fake',
+  }
   return `${JSON.stringify(config, null, 2)}\n`
 }
 
@@ -343,8 +361,26 @@ export async function main() {
       'OpenRouter secret missing',
       'Save a rotated OPENROUTER_API_KEY as an encrypted repository secret to enable English translation and AI advice.',
     )
+  const bachs = bachsDeployment(process.env)
+  if (bachs.configured) {
+    secrets.BACHS_SECRET_KEY = bachs.secretKey
+    secrets.BACHS_WEBHOOK_SECRET = bachs.webhookSecret
+    annotation(
+      'notice',
+      'Bachs live payments configured',
+      'Production checkout will use Bachs. Confirm one small real payment turns Pro on before announcing payments.',
+    )
+  } else
+    annotation(
+      'warning',
+      'Bachs payments not open',
+      'Save BACHS_SECRET_KEY (a live sk_live_ key) and BACHS_WEBHOOK_SECRET as encrypted repository secrets, then rerun deployment. Never paste them in chat. Until both are present, checkout stays off and nobody can be charged.',
+    )
   await pageSecrets(api, project, secrets)
-  const vars = { ...(telegram ? { TELEGRAM_BOT_USERNAME: telegram.username } : {}) }
+  const vars = {
+    ...(telegram ? { TELEGRAM_BOT_USERNAME: telegram.username } : {}),
+    BILLING_PROVIDER: bachs.configured ? 'bachs' : 'fake',
+  }
   const files = ['wrangler.jsonc', 'wrangler.ingest.jsonc', 'wrangler.ingest-consumer.jsonc']
   const originals = new Map()
   try {
@@ -508,11 +544,13 @@ export async function main() {
           .map((check) => check.action)
           .join(' '),
       )
-    console.log(`Find Jobs deployed: ${url}. Payments are disabled.`)
+    console.log(
+      `Find Jobs deployed: ${url}. ${bachs.configured ? 'Bachs payments are configured.' : 'Payments are disabled.'}`,
+    )
     if (process.env.GITHUB_STEP_SUMMARY) {
       await writeFile(
         process.env.GITHUB_STEP_SUMMARY,
-        `## Find Jobs deployed\n\n${url}\n\n${feed.total} live open jobs. Payments disabled.\nSign-in: FJ email and password${process.env.BREVO_API_KEY?.trim() || process.env.RESEND_API_KEY?.trim() ? ' (password reset email on)' : ' (needs password reset email secrets)'}. Telegram: ${telegram ? 'bot and webhook verified' : 'requires encrypted bot token'}.\n`,
+        `## Find Jobs deployed\n\n${url}\n\n${feed.total} live open jobs. ${bachs.configured ? 'Bachs payments are configured. Confirm one small real payment before announcing.' : 'Payments disabled.'}\nSign-in: FJ email and password${process.env.BREVO_API_KEY?.trim() || process.env.RESEND_API_KEY?.trim() ? ' (password reset email on)' : ' (needs password reset email secrets)'}. Telegram: ${telegram ? 'bot and webhook verified' : 'requires encrypted bot token'}.\n`,
         { flag: 'a' },
       )
     }
@@ -532,6 +570,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       process.env.OPENROUTER_API_KEY,
       process.env.BREVO_API_KEY,
       process.env.RESEND_API_KEY,
+      process.env.BACHS_SECRET_KEY,
+      process.env.BACHS_WEBHOOK_SECRET,
     ]) {
       if (token) safeMessage = safeMessage.replaceAll(token, '[REDACTED]')
     }
