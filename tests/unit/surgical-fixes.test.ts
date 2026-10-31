@@ -414,4 +414,52 @@ describe('crawler bodies (3.1) and email (1)', () => {
       textContent: 'Reset link',
     })
   })
+
+  it('calls a receiver-sensitive platform fetch as a plain function', async () => {
+    const receiverSensitiveFetch = function (
+      this: unknown,
+      _url: string,
+      _init?: RequestInit,
+    ): Promise<Response> {
+      if (this !== undefined) throw new TypeError('Illegal invocation')
+      return Promise.resolve(
+        new Response(JSON.stringify({ messageId: 'brevo-plain-fetch' }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    } as unknown as typeof fetch
+    const provider = new BrevoProvider(
+      'brevo-test',
+      { name: 'FJ - Find Jobs', email: 'fjfindjobs@gmail.com' },
+      receiverSensitiveFetch,
+    )
+
+    await expect(
+      provider.send({ to: 'user@example.com', subject: 'Reset', text: 'Reset link' }),
+    ).resolves.toEqual({ id: 'brevo-plain-fetch' })
+  })
+
+  it('keeps the safe provider error detail without leaking addresses or the key', async () => {
+    const fetchFn = (async () =>
+      new Response(
+        JSON.stringify({
+          code: 'unauthorized',
+          message: 'Key not found brevo-test for user@example.com from fjfindjobs@gmail.com',
+        }),
+        { status: 401, headers: { 'content-type': 'application/json' } },
+      )) as typeof fetch
+    const provider = new BrevoProvider(
+      'brevo-test',
+      { name: 'FJ - Find Jobs', email: 'fjfindjobs@gmail.com' },
+      fetchFn,
+    )
+
+    await expect(
+      provider.send({ to: 'user@example.com', subject: 'Reset', text: 'Reset link' }),
+    ).rejects.toThrow('email_send_failed_401:unauthorized:Key not found [redacted]')
+    await expect(
+      provider.send({ to: 'user@example.com', subject: 'Reset', text: 'Reset link' }),
+    ).rejects.not.toThrow('user@example.com')
+  })
 })

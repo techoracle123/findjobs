@@ -98,11 +98,30 @@ function senderFromEnv(env: EmailEnv): SenderAddress | null {
 /** Brevo sends over HTTPS from one verified sender address; no DNS is needed. */
 export class BrevoProvider implements EmailProvider {
   readonly name = 'brevo'
+  private readonly fetchFn: typeof fetch
+
   constructor(
     private readonly apiKey: string,
     private readonly sender: SenderAddress,
-    private readonly fetchFn: typeof fetch = fetch,
-  ) {}
+    fetchFn: typeof fetch = fetch,
+  ) {
+    // The platform's native fetch must be called as a plain function, not as
+    // `this.fetchFn(...)`: in the hosted runtime that method-style call is
+    // rejected with "Illegal invocation" before any request is made. Wrap it
+    // once here so the provider can never call it with the wrong receiver.
+    this.fetchFn = ((input, init) => fetchFn(input, init)) as typeof fetch
+  }
+
+  private safeErrorDetail(value: unknown, message: EmailMessage): string {
+    return String(value ?? '')
+      .replaceAll(this.apiKey, '[redacted]')
+      .replaceAll(message.to, '[redacted]')
+      .replaceAll(this.sender.email, '[redacted]')
+      .replace(/[\r\n]+/g, ' ')
+      .trim()
+      .slice(0, 180)
+  }
+
   async send(message: EmailMessage): Promise<{ id: string }> {
     const response = await this.fetchFn('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -119,7 +138,16 @@ export class BrevoProvider implements EmailProvider {
         ...(message.html ? { htmlContent: message.html } : {}),
       }),
     })
-    if (!response.ok) throw new Error(`email_send_failed_${response.status}`)
+    if (!response.ok) {
+      const errorBody = (await response.json().catch(() => ({}))) as {
+        code?: unknown
+        message?: unknown
+      }
+      const code = this.safeErrorDetail(errorBody.code, message)
+      const detail = this.safeErrorDetail(errorBody.message, message)
+      const suffix = [code, detail].filter(Boolean).join(':')
+      throw new Error(`email_send_failed_${response.status}${suffix ? `:${suffix}` : ''}`)
+    }
     const body = (await response.json().catch(() => ({}))) as { messageId?: string }
     return { id: body.messageId ?? 'sent' }
   }

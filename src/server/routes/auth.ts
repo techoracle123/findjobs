@@ -10,6 +10,7 @@ import type { AppEnv } from '../env'
 import { requireUser, unauthorized, readJson, type AppContext } from '../http'
 import { enforceRateLimit } from '../ratelimit'
 import { emailProviderFromEnv, otpEmail, passwordResetEmail } from '../email/provider'
+import { logger } from '../logging'
 import { upsertUser } from '../auth/accounts'
 import { burnPasswordTime, hashPassword, passwordProblem, verifyPassword } from '../auth/passwords'
 
@@ -221,7 +222,21 @@ authRoutes.post('/auth/password/forgot', async (c) => {
     // the request is recorded and the same flow works the moment sending is
     // switched on. Never reveal whether the account exists either way.
     if (emailer.name !== 'console' || c.env?.APP_MODE !== 'production') {
-      await emailer.send({ to: email, ...passwordResetEmail(link) }).catch(() => undefined)
+      await emailer.send({ to: email, ...passwordResetEmail(link) }).catch((error: unknown) => {
+        // The public answer stays identical whether the account exists or the
+        // send fails, but operators need the safe provider reason. Never log
+        // the recipient address or the reset link/token.
+        logger.error('password reset email failed', {
+          provider: emailer.name,
+          error:
+            error instanceof Error
+              ? error.message
+                  .replaceAll(email, '[redacted]')
+                  .replaceAll(link, '[redacted]')
+                  .slice(0, 300)
+              : 'unknown_error',
+        })
+      })
     }
   }
   // Local and test harnesses read the token from this response so the flow
