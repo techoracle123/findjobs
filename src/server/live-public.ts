@@ -1,4 +1,5 @@
 import { roleFamilyLabel } from '../shared/taxonomy'
+import { matchesOpportunityFilter, opportunityOf } from '../shared/opportunities'
 import { marketRank } from '../shared/scoring'
 import type { Job } from '../shared/types'
 import type { JobSearch, JobSearchResult } from './jobs'
@@ -197,8 +198,16 @@ const haystackCache = new WeakMap<Job, string>()
 function haystack(job: Job): string {
   let value = haystackCache.get(job)
   if (value === undefined) {
+    const opportunity = opportunityOf(job)
+    const opportunityTerms = [
+      opportunity.opportunityType,
+      opportunity.engagementType,
+      opportunity.engagementLabel,
+      opportunity.projectDuration ?? '',
+      opportunity.opportunityType === 'gig' ? 'gig gigs contract freelance project' : 'job jobs',
+    ].join(' ')
     value =
-      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${job.description} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')}`.toLowerCase()
+      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${opportunityTerms} ${job.description} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')}`.toLowerCase()
     haystackCache.set(job, value)
   }
   return value
@@ -220,6 +229,7 @@ export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
       (!search.roleFamilies?.length || search.roleFamilies.includes(job.roleFamily)) &&
       (!search.workModes?.length || search.workModes.includes(job.workMode)) &&
       (!search.seniorities?.length || search.seniorities.includes(job.seniority)) &&
+      matchesOpportunityFilter(job, search.opportunityType) &&
       (!search.verification?.length ||
         search.verification.includes(job.verification || 'unverified')) &&
       terms.every((term) => haystack(job).includes(term)),

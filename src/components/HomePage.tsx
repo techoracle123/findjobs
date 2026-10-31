@@ -20,6 +20,7 @@ interface PublicStats {
   total: number
   nigeria: number
   remote: number
+  gigs?: number
   countries: number
   registeredUsers?: number | null
   updatedAt: string
@@ -82,20 +83,21 @@ export function HomePage() {
 
       <main className="content home">
         <section className="home-hero">
-          <span className="eyebrow">Jobs in Nigeria. Remote jobs from abroad.</span>
+          <span className="eyebrow">Jobs in Nigeria. Gigs and remote work from abroad.</span>
           <h1>Thousands of job opportunities. All in one place.</h1>
           <p>
-            We bring jobs from companies in Nigeria and companies abroad into one place. You do not
-            need to check many websites each day.
+            We bring jobs, freelance gigs, short projects and contracts from Nigeria and abroad into
+            one place. You do not need to check many websites each day.
           </p>
           <p>
-            Some jobs pay in naira. Some remote jobs pay in dollars, pounds or euros. If a company
-            states the pay, you will see it before you apply.
+            Some work pays in naira. Some remote work pays in dollars, pounds or euros. Look for web
+            development, cybersecurity, data analytics, design, writing and other digital skills. If
+            an advert states the pay, you will see it before you apply.
           </p>
           <div className="home-hero__actions">
             {signedIn ? (
               <a className="btn btn--primary" href="/jobs">
-                See your jobs <ArrowRight size={17} />
+                See jobs and gigs <ArrowRight size={17} />
               </a>
             ) : (
               <>
@@ -119,8 +121,8 @@ export function HomePage() {
           )}
           <p className="field__hint">
             {signedIn
-              ? 'You are signed in. Your saved jobs and free alerts are in your account.'
-              : 'You need a free account to see the jobs. Creating one takes less than a minute, and it lets us save your jobs and send you free alerts.'}
+              ? 'You are signed in. Your saved work and free alerts are in your account.'
+              : 'You need a free account to see the jobs and gigs. Creating one takes less than a minute, and it lets us save your work and send you free alerts.'}
           </p>
         </section>
 
@@ -141,16 +143,22 @@ export function HomePage() {
                 <>
                   <div className="home-stat">
                     <strong>{number(stats.total)}</strong>
-                    <span>jobs listed right now</span>
+                    <span>jobs and gigs listed right now</span>
                   </div>
                   <div className="home-stat">
                     <strong>{number(stats.nigeria)}</strong>
-                    <span>jobs in Nigeria</span>
+                    <span>listings in Nigeria</span>
                   </div>
                   <div className="home-stat">
                     <strong>{number(stats.remote)}</strong>
-                    <span>remote jobs you can do from home</span>
+                    <span>remote listings you may do from home</span>
                   </div>
+                  {typeof stats.gigs === 'number' && (
+                    <div className="home-stat">
+                      <strong>{number(stats.gigs)}</strong>
+                      <span>gigs and contracts</span>
+                    </div>
+                  )}
                   <div className="home-stat">
                     <strong>{number(stats.countries)}</strong>
                     <span>countries hiring</span>
@@ -163,7 +171,7 @@ export function HomePage() {
         {(stats || registeredUsers !== null) && (
           <p className="field__hint home-stats__note">
             {stats
-              ? 'Job numbers come from the adverts on FJ right now. New adverts are collected twice a day, and jobs that have closed are removed. '
+              ? 'Listing numbers come from the adverts on FJ right now. New adverts are collected twice a day, and closed listings are removed. The gig number counts only adverts with clear contract, freelance, project or temporary wording. '
               : ''}
             The registered-user number counts FJ accounts and leaves out test accounts.
           </p>
@@ -194,19 +202,19 @@ export function HomePage() {
             </div>
             <div className="home-step">
               <Bookmark size={20} />
-              <h3>2. Find and save good jobs</h3>
+              <h3>2. Find and save good work</h3>
               <p>
-                Search by work type, place, or remote. Read each advert well. Save the ones that fit
-                you so you can come back to them any time.
+                Choose jobs, gigs and contracts, or all work. Then search by profession, place or
+                work setting. Save the adverts that fit you so you can come back to them.
               </p>
             </div>
             <div className="home-step">
               <Bell size={20} />
               <h3>3. Apply and keep going</h3>
               <p>
-                We take you to the company page where the real application happens. Applying there
-                is always free. Keep a list of where you applied, and turn on free alerts so new
-                jobs come to you.
+                We take you to the original page where the real application or pitch happens.
+                Applying there is always free. Keep a list of where you applied, and turn on free
+                alerts so new work comes to you.
               </p>
             </div>
           </div>
@@ -234,8 +242,10 @@ export function HomePage() {
           <p className="eyebrow">More help</p>
           <h2 id="home-pro-heading">Pro helps you check and prepare</h2>
           <p className="home-lead">
-            Finding jobs is only one part. You also need to know if people in Nigeria can apply, if
-            the advert looks safe, and if your CV matches the job. Pro helps with these checks.
+            Finding work is only one part. FJ Match Intelligence compares your CV with an advert,
+            separates essential requirements from desirable ones, names missing skills, checks
+            location signals, and points to stronger alternatives. Other Pro tools help you prepare
+            and check safety signs in the advert text.
           </p>
           <div className="home-feature-grid">
             {PRO_FEATURES.map((feature) => (
@@ -250,9 +260,9 @@ export function HomePage() {
             <div>
               <h3>Try it free for 3 days</h3>
               <p>
-                Check one CV in full and prepare applications for three jobs. We do not ask for card
-                details. The trial ends on its own. It is optional. You can skip it and buy Pro at
-                once.
+                Check one CV in full and get help, including FJ Match Intelligence, for three
+                listings. We do not ask for card details. The trial ends on its own. It is optional.
+                You can skip it and buy Pro at once.
               </p>
             </div>
             <a className="btn btn--primary" href="/pricing#trial-heading">
@@ -288,7 +298,7 @@ export function HomePage() {
         </section>
 
         <section className="home-section">
-          <h2>What kind of jobs are here?</h2>
+          <h2>What kind of work is here?</h2>
           <div className="home-two">
             <div className="home-card">
               <MapPin size={20} />
@@ -297,6 +307,12 @@ export function HomePage() {
                 Work with banks, hospitals, schools, factories, shops, offices and tech companies in
                 Lagos, Abuja, Port Harcourt and other states. There are jobs for graduates starting
                 out and jobs for people with many years of experience.
+              </p>
+              <h3>Gigs and contracts</h3>
+              <p>
+                Short projects and contract work appear only when the source or advert gives clear
+                contract, freelance, project or temporary wording. Contract length is shown when the
+                advert states it.
               </p>
             </div>
             <div className="home-card">
@@ -313,7 +329,7 @@ export function HomePage() {
         </section>
 
         <section className="home-section">
-          <h2>What decides if you get the job?</h2>
+          <h2>What decides if you get the work?</h2>
           <p className="home-lead">
             Let us be honest with you. Seeing many jobs is only the first step. Companies abroad get
             applications from all over the world, so your chances depend mostly on your skills and
@@ -362,8 +378,8 @@ export function HomePage() {
             </li>
           </ul>
           <p className="home-lead">
-            Nobody can promise you a job. We bring jobs into one place so you can spend your time
-            applying well.
+            Nobody can promise you a job or gig. We bring real adverts into one place so you can
+            spend your time applying well.
           </p>
         </section>
 
@@ -372,23 +388,24 @@ export function HomePage() {
           <div className="home-card home-card--wide">
             <ShieldCheck size={20} />
             <p>
-              A real employer will not ask you to pay to get a job. Do not pay for a form, training
-              or uniform. Do not send bank details before you start work. The advert check in Pro
-              can check a job advert, but it does not approve a company. Check each company yourself
-              before you share personal documents.
+              A real employer or client will not ask you to pay to get work. Do not pay for a form,
+              training or uniform. For a gig, agree the scope, deadline, revisions and payment
+              schedule in writing before you start. The advert check in Pro can review advert text,
+              but it does not approve a company or client. Check each one yourself before you share
+              personal documents.
             </p>
           </div>
         </section>
 
         <section className="home-cta">
-          <h2>Your next job may already be listed here.</h2>
+          <h2>Your next job or gig may already be listed here.</h2>
           <p>
-            Create your free account now and see today's jobs in Nigeria and remote jobs from
-            companies abroad.
+            Create your free account now and see today's jobs, gigs and contracts in Nigeria and
+            from companies abroad.
           </p>
           {signedIn ? (
             <a className="btn btn--primary" href="/jobs">
-              See your jobs <ArrowRight size={17} />
+              See jobs and gigs <ArrowRight size={17} />
             </a>
           ) : (
             <a className="btn btn--primary" href="/auth/signup?returnTo=%2Fjobs">

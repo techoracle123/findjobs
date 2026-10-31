@@ -102,15 +102,15 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
     body: (
       <>
         <p>
-          <strong>What FJ is.</strong> FJ aggregates publicly listed job opportunities. We do not
-          guarantee that any listing is accurate, current, genuine, or that any employer will
-          respond. No employment relationship exists between you and FJ.
+          <strong>What FJ is.</strong> FJ aggregates publicly listed jobs, gigs and contracts. We do
+          not guarantee that any listing is accurate, current or genuine, or that any employer or
+          client will respond. No employment relationship exists between you and FJ.
         </p>
         <p>
           <strong>Finding and applying are free.</strong> We do not charge to browse, save, receive
-          basic alerts or apply on an employer's own site. Pro tools are optional and paid, but Pro
-          is never a fee for a job or for submitting an application. Anyone asking you for money to
-          get a job found through FJ should be reported.
+          basic alerts or apply on an employer's or client's own site. Pro tools are optional and
+          paid, but Pro is never a fee for a job, gig, application or pitch. Anyone asking you for
+          money to get a job found through FJ should be reported.
         </p>
         <p>
           <strong>Your use of FJ.</strong> Use the service lawfully, do not scrape or abuse it, and
@@ -118,11 +118,12 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
         </p>
         <p>
           <strong>Pro tools and the free trial.</strong> The trial lasts 3 days. It includes one
-          full CV check and help for three jobs. It ends on its own. We do not take card details. CV
-          suggestions and prepared applications are drafts. You must check that every statement is
-          true before sending it. FJ does not submit applications for you and does not guarantee a
-          reply, interview, offer or job. The advert checker shows evidence and warning signs; it is
-          not employer verification.
+          full CV check and help for three listings. It ends on its own. We do not take card
+          details. CV suggestions and prepared applications are drafts. You must check that every
+          statement is true before sending it. FJ does not submit applications for you and does not
+          guarantee a reply, interview, client call, offer, job or gig. FJ Match Intelligence is a
+          decision aid, not a hiring prediction. The advert checker shows evidence and warning
+          signs; it is not employer or client verification.
         </p>
         <p>
           <strong>Paid time and refunds.</strong> Each naira payment buys one month or one year of
@@ -149,9 +150,9 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           and unlimited. FJ never asks you to pay for a job or an application.
         </p>
         <p>
-          <strong>Are the jobs verified?</strong> We collect public listings and point you to the
-          original posting. We do not verify or endorse employers. Always check the employer’s
-          official website and confirm the vacancy there.
+          <strong>Are the listings verified?</strong> We collect public listings and point you to
+          the original posting. We do not verify or endorse employers or clients. Always check the
+          official website and confirm the work there.
         </p>
         <p>
           <strong>How do I spot a job scam?</strong> See <a href="/scams">How to spot a job scam</a>
@@ -167,20 +168,23 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           for Nigerian users. Turn on Worldwide in the More filter to see every language.
         </p>
         <p>
-          <strong>Why do I need an account to see jobs?</strong> So we can save your jobs, alerts
-          and applications and show them to you on any device. The account is free, and applying on
-          the employer's site is always free.
+          <strong>Why do I need an account to see listings?</strong> So we can save your jobs, gigs,
+          alerts and applications and show them to you on any device. The account is free, and
+          applying on the original site is always free.
         </p>
         <p>
-          <strong>What is Pro?</strong> Pro adds a saved CV, a full CV check, a check of your CV
-          against one job, help to prepare applications, advert checks, best matches, Telegram
-          alerts with filters, application stages, a list of skills to learn, interview practice and
-          pay checks. See <a href="/pricing">Pricing</a> to compare plans.
+          <strong>What is Pro?</strong> Pro adds a saved CV, a full CV check and FJ Match
+          Intelligence. Match Intelligence compares your CV with one advert, separates essential
+          requirements from desirable ones, names missing skills, checks location signals and
+          suggests stronger alternatives. Pro also helps prepare applications, checks adverts, shows
+          best matches, sends Telegram alerts with more filters, tracks stages, lists skills to
+          learn, helps with interviews and checks pay. See <a href="/pricing">Pricing</a> to compare
+          plans.
         </p>
         <p>
           <strong>How does the free trial work?</strong> After creating a free account, you can
           start one free Pro trial for 3 days. We do not ask for card details. It includes one full
-          CV check and help for three jobs. It ends on its own. Work you create stays in your
+          CV check and help for three listings. It ends on its own. Work you create stays in your
           account. The trial is optional. You can skip it and buy Pro at once.
         </p>
         <p>

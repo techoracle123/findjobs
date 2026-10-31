@@ -29,7 +29,7 @@ email verification. A personal Progress dashboard counts each user's confirmed
 applications per month. Full database-backed account writes still need storage
 recovery, and real email/chat delivery needs user confirmation.
 
-The default ranking is eligibility-first (eligible overlap, unknown, then restricted), followed by internal skill/preference overlap and recency. Visitors see a green match ring, not a numeric grade. The score weights required skills (48%), useful skills (14%), role family (18%), seniority (10%) and work mode (10%); missing details are neutral, and eligibility is separate. The work-eligibility picker searches every ISO alpha-2 region except Antarctica. Salary conversion uses dated live rates when available; salary sorting never annualises different pay periods.
+The default ranking is eligibility-first (eligible overlap, unknown, then restricted), followed by internal skill/preference overlap and recency. Visitors see a green match ring, not a numeric grade. The score weights required skills (44%), useful skills (13%), role family (17%), seniority (9%), work setting (9%) and job-or-gig preference (8%); missing or inapplicable details are excluded rather than counted as failures, and eligibility is separate. The work-eligibility picker searches every ISO alpha-2 region except Antarctica. Salary conversion uses dated live rates when available; salary sorting never annualises different pay periods.
 
 See [general jobs and secure AI](docs/GENERAL-JOBS-AND-AI.md) for the new sources,
 English translation, tailored tips, salary conversions and the chosen hostname.
@@ -39,6 +39,8 @@ English translation, tailored tips, salary conversions and the chosen hostname.
 **Opportunity desk**
 
 - Simple results with job, employer, location and salary; dedicated `/jobs/:id` pages with working browser history, saved state and original application links. No repetitive verification/eligibility/source badges.
+- Jobs, gigs and contracts share one discovery surface. A conservative classifier marks a listing as a gig only from a source-declared contract, freelance, project or temporary type, clear title wording, or explicit engagement wording in the advert. Unknown postings stay in Jobs and All work rather than being promoted as gigs. The lane is available in URL/API filters (`type=job|gig`), counts, profile preferences, saved work and free or Pro Telegram alerts.
+- Himalayas contractor/temporary search results and Jobicy's structured employment types top up the existing public feeds. Hourly, weekly, fortnightly, monthly, yearly and fixed-project pay periods remain distinct and are never annualised.
 - Skill/preference scoring remains explainable, with optional detail on the job page. Country, profession, arrangement and experience filters operate in D1 before pagination.
 - Number-free match rings with a plain-language explanation and optional qualitative skill/preference detail. Internal weighted scoring remains deterministic. Components that cannot be compared are excluded from the total rather than counted as failures, so a sparse posting is not penalised for being sparse.
 - Work-eligibility picker covering every ISO 3166-1 alpha-2 region except Antarctica. The list is **generated** from `i18n-iso-countries` (`npm run data:generate`), never hand-maintained.
@@ -68,6 +70,11 @@ English translation, tailored tips, salary conversions and the chosen hostname.
 - The feed is searched and paged in the database rather than shipped whole to the browser.
 - Recorded API fixtures drive the tests, so the pipeline is exercised end to end without touching the network.
 
+**FJ Match Intelligence (Pro)**
+
+- `POST /api/jobs/:id/match-intelligence` compares a saved or supplied CV and the account profile with one live advert. It separates essential from desirable requirements, shows matched evidence and missing skills, flags location or work-eligibility blockers stated in the advert, gives next actions, and can suggest stronger live alternatives.
+- The result is an evidence-based decision aid, not an employer score or hiring prediction. It never invents employer criteria or candidate experience, and it says when the advert or CV does not contain enough evidence. Search, opening a listing, free alerts and applying on the original site remain free.
+
 **Billing**
 
 - A payment-provider interface with Paystack, Flutterwave and Stripe behind one seam. The plan and the price live on the server, never in the browser.
@@ -76,7 +83,7 @@ English translation, tailored tips, salary conversions and the chosen hostname.
 - When no provider is configured the app runs with a safe fake provider that never charges and never accepts a webhook. The UI says so plainly.
 - Plans are Free, Pro Monthly (founding ₦5,000), Pro Yearly (founding ₦40,000) and Pro for Graduates (₦3,000/month). Later standard Pro prices are ₦10,000/month and ₦60,000/year. Monthly, Yearly and Graduate expose the same Pro entitlements.
 - Phase 3 uses Bachs behind the same provider interface. FJ records a server-priced checkout before calling Bachs, sends amounts to Bachs as decimal strings, stores money as kobo integers, and grants Pro only after a signed Bachs confirmation matches the saved user, plan, amount and currency. Each naira payment buys one month or one year and does not renew by itself. Checkout stays off until a live `sk_live_` key and the production webhook secret are configured; see [Bachs payments](docs/PAYMENTS-BACHS.md).
-- A one-time 3-day trial needs no payment details. The server allows one successful distinct general CV analysis and complete packs for three distinct jobs; regenerating the same CV/job does not consume another allowance. Existing prepared packs remain readable after access ends.
+- A one-time 3-day trial needs no payment details. The server allows one successful distinct general CV analysis and complete packs for three distinct listings; regenerating help for the same CV or listing does not consume another allowance. Existing prepared packs remain readable after access ends.
 - Graduate eligibility uses final-year/recent-graduate/current-or-recent-NYSC timing plus under two years of full-time work, with profile/CV conflicts routed to review. It does not collect age, BVN or NIN.
 - Fast Apply and its daily meter are retired. FJ preparation tools never claim to submit an application; employer-site applications remain free and unlimited.
 

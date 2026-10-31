@@ -78,7 +78,7 @@ for (const width of [320, 390, 414, 768, 1024, 1280, 1600, 1920]) {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
-    const apply = page.getByRole('link', { name: /Apply for this role|Open original listing/ })
+    const apply = page.getByRole('link', { name: /Apply for this (role|gig|contract)/ })
     await expect(apply).toHaveAttribute('href', /^https?:\/\//)
     await page.screenshot({ path: testInfo.outputPath(`find-jobs-${width}.png`), fullPage: false })
     expect(errors).toEqual([])
@@ -98,6 +98,8 @@ test('homepage explains the platform in plain words and sends people to sign up'
     page.getByRole('heading', { name: 'What decides if you get the job?' }),
   ).toBeVisible()
   await expect(page.locator('body')).toContainText('pay in dollars')
+  await expect(page.locator('body')).toContainText('gigs and contracts')
+  await expect(page.locator('body')).toContainText('FJ Match Intelligence')
   await expect(page.locator('body')).toContainText('will not ask you to pay to get a job')
   await expect(page.getByRole('heading', { name: 'Pro helps you check and prepare' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Try it free for 3 days' })).toBeVisible()
@@ -191,6 +193,13 @@ test('saving and preferences work with a free account', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Remove Python' })).toBeVisible()
   await page.reload()
   await expect(page.getByRole('button', { name: 'Remove Python' })).toBeVisible()
+  const gigPreference = page.getByRole('button', { name: 'Gigs and contracts', exact: true })
+  await writeAndWait(page, '/api/account/profile', 'PUT', () => gigPreference.click())
+  await expect(gigPreference).toHaveAttribute('aria-pressed', 'true')
+  await page.reload()
+  await expect(
+    page.getByRole('button', { name: 'Gigs and contracts', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
   await page.goto('/dashboard')
   await page
     .locator('.tabs')
@@ -244,6 +253,12 @@ test('jobs API needs an account, serves real jobs to one, and rejects forged ide
     expect(job.applyUrl || job.sourceUrl).toMatch(/^https?:\/\//)
     expect(job.lastSeenAt).toBeTruthy()
   }
+  const gigResponse = await request.get('/api/jobs?status=open&type=gig&limit=20', { headers })
+  expect(gigResponse.ok()).toBe(true)
+  const gigFeed = await gigResponse.json()
+  expect(
+    gigFeed.jobs.every((job: { opportunityType?: string }) => job.opportunityType === 'gig'),
+  ).toBe(true)
   expect([401, 404]).toContain(
     (await request.post('/api/billing/confirm', { data: { plan: 'pro' } })).status(),
   ) // never a usable anonymous purchase
@@ -283,12 +298,14 @@ test('pricing is linked in the header and the page loads', async ({ page }) => {
   await expect(page.locator('.pricing-cards')).toContainText('₦5,000')
   await expect(page.locator('.pricing-cards')).toContainText('₦40,000')
   await expect(page.locator('.pricing-cards')).toContainText('₦3,000')
-  await expect(pricingTable.getByText('Prepare your application')).toBeVisible()
-  await expect(pricingTable.getByText('Compare your CV with a job')).toBeVisible()
-  await expect(pricingTable.getByText('Check a job advert')).toBeVisible()
+  await expect(pricingTable.getByText('Prepare your application or pitch')).toBeVisible()
+  await expect(pricingTable.getByText('FJ Match Intelligence')).toBeVisible()
+  await expect(pricingTable.getByText('Check an advert before you apply')).toBeVisible()
+  await expect(pricingTable).toContainText('essential requirements from desirable ones')
+  await expect(pricingTable).toContainText('suggests stronger alternatives')
   await expect(page.getByRole('heading', { name: 'Try Pro free for 3 days' })).toBeVisible()
   await expect(page.locator('body')).toContainText('Check one CV in full')
-  await expect(page.locator('body')).toContainText('Prepare applications for three jobs')
+  await expect(page.locator('body')).toContainText('for three listings')
   if (await paymentsOpen(page)) {
     await expect(page.locator('body')).toContainText('Pay by card or bank transfer')
     await expect(page.locator('body')).toContainText(
@@ -322,7 +339,7 @@ test('homepage and pricing explain Phase 2 cleanly at phone, tablet and desktop 
     ).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Try Pro free for 3 days' })).toBeVisible()
     await expect(page.locator('.pricing-table')).toContainText('Save and check your CV')
-    await expect(page.locator('.pricing-table')).toContainText('Telegram alerts with filters')
+    await expect(page.locator('.pricing-table')).toContainText('Telegram alerts with more filters')
     await expectNoHorizontalOverflow(page)
     await page.screenshot({ path: testInfo.outputPath(`phase2-pricing-${width}.png`) })
   }
@@ -336,10 +353,17 @@ test('employers page records interest only and offers no job posting', async ({ 
   await expect(page.getByText(/publish a vacancy in minutes|founding pricing/)).toHaveCount(0)
 })
 
-test('work type filter is visible and employers link is gone', async ({ page }) => {
+test('work setting and gig filters are visible and employers link is gone', async ({ page }) => {
   await signUp(page)
   await page.goto('/jobs')
-  await page.getByRole('button', { name: /Work type/ }).click()
+  const gigs = page.getByRole('button', { name: /Gigs and contracts/ })
+  await gigs.click()
+  await expect(page).toHaveURL(/type=gig/)
+  await expect(gigs).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.resultcount')).toContainText(/gigs and contracts|gig or contract/)
+  await page.getByRole('button', { name: /All work/ }).click()
+  await expect(page).not.toHaveURL(/type=gig/)
+  await page.getByRole('button', { name: /Work setting/ }).click()
   await page.getByRole('button', { name: 'Remote', exact: true }).click()
   await expect(page).toHaveURL(/mode=remote/)
   await expect(page.getByText('What does the green circle mean?')).toHaveCount(0)
@@ -352,7 +376,8 @@ test('job detail shows a plain before-you-apply checklist and no AI panels', asy
   await page.locator('.joblist .jobrow').first().click()
   await expect(page.getByRole('heading', { name: 'Before you apply' })).toBeVisible()
   await expect(page.locator('.detail')).toContainText(/Never pay anyone/)
-  await expect(page.getByText(/Original listing ·/)).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Original listing' })).toBeVisible()
+  await expect(page.locator('.original-listing')).toContainText('FJ does not verify or endorse')
   await expect(page.getByText(/AI-generated|Get application tips/)).toHaveCount(0)
 })
 
@@ -475,10 +500,15 @@ NYSC completed in 2024.`
   await page.goto('/jobs')
   await page.locator('.joblist .jobrow').first().click()
   await expect(page.getByText(/left today|Fast Apply/)).toHaveCount(0)
-  await expect(page.getByRole('link', { name: /Apply for this role/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Apply for this (role|gig|contract)/ })).toBeVisible()
   const proTools = page.locator('.pro-tools')
   await proTools.getByRole('button', { name: 'Check this advert' }).click()
   await expect(proTools).toContainText('not employer verification')
+  await proTools.getByRole('button', { name: 'Run Match Intelligence' }).click()
+  await expect(proTools.locator('.match-result')).toBeVisible({ timeout: 30_000 })
+  await expect(proTools).toContainText('Your matching qualifications')
+  await expect(proTools).toContainText('Missing skills and gaps')
+  await expect(proTools).toContainText('What to do next')
   await proTools.getByRole('button', { name: 'Prepare application' }).click()
   await expect(proTools.getByRole('button', { name: 'Copy cover letter' })).toBeVisible()
   await proTools.getByRole('button', { name: 'Compare my CV with this job' }).click()
@@ -510,6 +540,10 @@ NYSC completed in 2024.`
   await page.goto('/dashboard?tab=alerts')
   await page.getByLabel('Alert name').fill('Smart frontend')
   await page.getByLabel('Keywords').fill('frontend')
+  await page
+    .getByLabel(/Work to watch/)
+    .first()
+    .selectOption('gig')
   await page.getByLabel(/Pro alert with filters/).check()
   await page.getByLabel('Minimum fit score').selectOption('55')
   await page.getByLabel('Countries (two-letter codes)').fill('NG')
@@ -522,6 +556,7 @@ NYSC completed in 2024.`
   await expect(smartAlert).toContainText('55+ fit score')
   await expect(smartAlert).toContainText('NG')
   await expect(smartAlert).toContainText('pay stated')
+  await expect(smartAlert).toContainText('Gigs and contracts')
   await page.reload()
   await expect(page.locator('.alert-card', { hasText: 'Smart frontend' })).toContainText(
     'Alert with filters',
@@ -684,6 +719,8 @@ test('expanded live corpus is paginated, regularly refreshed and opens complete 
   expect(status.ok()).toBe(true)
   const metadata = await status.json()
   expect(metadata.total).toBeGreaterThanOrEqual(2000)
+  expect(typeof metadata.gigs).toBe('number')
+  expect(metadata.gigs).toBeGreaterThanOrEqual(0)
   expect(metadata.refreshHours).toBe(12)
   expect(metadata.sourceCount).toBeGreaterThan(10)
   expect(Date.now() - Date.parse(metadata.updatedAt)).toBeLessThan(36 * 3600000)

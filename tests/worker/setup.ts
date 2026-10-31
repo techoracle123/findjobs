@@ -26,6 +26,7 @@ import m0023 from '../../migrations/0023_password_auth.sql?raw'
 import m0024 from '../../migrations/0024_pro_tools.sql?raw'
 import m0025 from '../../migrations/0025_phase2_pro.sql?raw'
 import m0026 from '../../migrations/0026_bachs_payments.sql?raw'
+import m0027 from '../../migrations/0027_opportunities.sql?raw'
 import m0015 from '../../migrations/0015_public_read_indexes.sql?raw'
 
 /**
@@ -62,6 +63,7 @@ const MIGRATIONS = [
   m0024,
   m0025,
   m0026,
+  m0027,
 ]
 
 /**

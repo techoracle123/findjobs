@@ -1,6 +1,7 @@
 /** Durable public discovery, independent of account/D1 storage. No credentials or
  * user data live in this namespace. Publish the pointer only after its data. */
 import { specialistRole } from '../shared/specialisms'
+import { opportunityOf } from '../shared/opportunities'
 import { buildQualitySnapshot, dedupeJobs, qualityPass } from './quality'
 import type { QualitySnapshot } from '../shared/quality'
 import { withTimeout } from './timeouts'
@@ -324,9 +325,15 @@ export function assemblePublicSnapshot(
       requiredSkills: job.requiredSkills,
       usefulSkills: job.usefulSkills,
     })
+    const opportunity = opportunityOf(job)
     return {
       ...job,
       ...patch,
+      opportunityType: opportunity.opportunityType,
+      engagementType: opportunity.engagementType,
+      engagementLabel: opportunity.engagementLabel,
+      engagementBasis: opportunity.engagementBasis,
+      ...(opportunity.projectDuration ? { projectDuration: opportunity.projectDuration } : {}),
       // List shards stay slim: per-skill evidence lives in the detail
       // payloads, not in every list response. Without this, each publish
       // regenerated evidence into the shards, the deploy bootstrap's

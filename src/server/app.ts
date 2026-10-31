@@ -7,6 +7,7 @@ import { listOpenJobs, findJob, searchJobs } from './jobs'
 import { getRates } from './rates'
 import { suggest } from './cv'
 import { scoreJob } from '../shared/scoring'
+import { isGig } from '../shared/opportunities'
 import type { Profile, ScoredJob } from '../shared/types'
 import { requestContext, requireUser, stringList, unauthorized, type AppContext } from './http'
 import { enforceRateLimit } from './ratelimit'
@@ -107,6 +108,9 @@ function normaliseProfile(input: unknown): Profile {
     targetSeniority: stringList(raw.targetSeniority) as Profile['targetSeniority'],
     preferredWorkModes: stringList(raw.preferredWorkModes) as Profile['preferredWorkModes'],
     workCountry: typeof raw.workCountry === 'string' ? raw.workCountry.trim().toUpperCase() : '',
+    opportunityTypes: stringList(raw.opportunityTypes).filter(
+      (type): type is 'job' | 'gig' => type === 'job' || type === 'gig',
+    ),
   }
 }
 
@@ -180,6 +184,7 @@ app.get('/api/public-stats', async (c) => {
   return c.json({
     available: true,
     total: visible.length,
+    gigs: visible.filter((job) => isGig(job)).length,
     nigeria: visible.filter((job) => job.locationCountry === 'NG').length,
     remote: visible.filter((job) => job.workMode === 'remote').length,
     countries: countries.size,
@@ -355,6 +360,7 @@ app.get('/api/feed-status', async (c) => {
     available: true,
     // The default feed is English-first; the full corpus is reported alongside.
     total: visible.length,
+    gigs: visible.filter((job) => isGig(job)).length,
     totalAllLanguages: snapshot.jobs.length,
     sourceCount: snapshot.sourceCount,
     attemptedSources: snapshot.attemptedSources,
@@ -384,6 +390,12 @@ app.get('/api/jobs', async (c) => {
     roleFamilies: (url.searchParams.get('roles') || '').split(',').filter(Boolean).slice(0, 30),
     workModes: (url.searchParams.get('modes') || '').split(',').filter(Boolean).slice(0, 3),
     seniorities: (url.searchParams.get('levels') || '').split(',').filter(Boolean).slice(0, 8),
+    opportunityType:
+      url.searchParams.get('type') === 'gig'
+        ? 'gig'
+        : url.searchParams.get('type') === 'job'
+          ? 'job'
+          : 'all',
     status: status === 'all' || status === 'closed' ? status : 'open',
     limit,
     offset,
@@ -417,7 +429,7 @@ app.get('/api/jobs', async (c) => {
     !status &&
     limit === undefined &&
     offset === undefined &&
-    !['country', 'roles', 'modes', 'levels'].some((key) => url.searchParams.has(key))
+    !['country', 'roles', 'modes', 'levels', 'type'].some((key) => url.searchParams.has(key))
   ) {
     const { jobs, source, warning } = await withTimeout(listOpenJobs(env.DB), 3000)
     if (warning && livePublicEnabled(env.APP_MODE)) {

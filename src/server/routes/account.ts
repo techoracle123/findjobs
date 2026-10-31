@@ -55,7 +55,9 @@ function normaliseAlertSettings(
   body: Record<string, unknown>,
   smartAllowed: boolean,
 ): Partial<AlertPreference> {
-  if (body.kind !== 'smart' || !smartAllowed) return { kind: 'keyword' }
+  const opportunityType =
+    body.opportunityType === 'gig' || body.opportunityType === 'job' ? body.opportunityType : 'all'
+  if (body.kind !== 'smart' || !smartAllowed) return { kind: 'keyword', opportunityType }
   const minScoreRaw = Number(body.minScore)
   const currency = typeof body.currency === 'string' ? body.currency.trim().toUpperCase() : ''
   return {
@@ -69,6 +71,7 @@ function normaliseAlertSettings(
     workModes: stringList(body.workModes, 4).filter((mode) =>
       (WORK_MODES as readonly string[]).includes(mode),
     ) as AlertPreference['workModes'],
+    opportunityType,
     salaryOnly: body.salaryOnly === true,
     ...(/^[A-Z]{3}$/.test(currency) ? { currency } : {}),
     ...(typeof body.exclude === 'string' && body.exclude.trim()
@@ -96,6 +99,9 @@ function normaliseProfile(input: unknown): Profile {
     preferredWorkModes: stringList(raw.preferredWorkModes) as Profile['preferredWorkModes'],
     workCountry:
       typeof raw.workCountry === 'string' ? raw.workCountry.trim().toUpperCase().slice(0, 2) : '',
+    opportunityTypes: stringList(raw.opportunityTypes).filter(
+      (type): type is 'job' | 'gig' => type === 'job' || type === 'gig',
+    ),
   }
 }
 
@@ -275,6 +281,12 @@ accountRoutes.patch('/account/alerts/:id', async (c) => {
   if (typeof body.query === 'string') patch.query = body.query.trim().slice(0, 200)
   if (Array.isArray(body.channels)) patch.channels = stringList(body.channels, 5)
   if (typeof body.enabled === 'boolean') patch.enabled = body.enabled
+  if ('opportunityType' in body) {
+    patch.opportunityType =
+      body.opportunityType === 'gig' || body.opportunityType === 'job'
+        ? body.opportunityType
+        : 'all'
+  }
   if (
     [
       'kind',
@@ -353,7 +365,12 @@ accountRoutes.post('/account/import', async (c) => {
   const alerts = Array.isArray(body.alerts) ? body.alerts : []
   for (const entry of alerts.slice(0, 100)) {
     if (!entry || typeof entry !== 'object') continue
-    const record = entry as { label?: unknown; query?: unknown; channels?: unknown }
+    const record = entry as {
+      label?: unknown
+      query?: unknown
+      channels?: unknown
+      opportunityType?: unknown
+    }
     if (typeof record.label !== 'string' || !record.label.trim()) continue
     await createAlert(c.env.DB, user.id, {
       id: `alt_${crypto.randomUUID()}`,
@@ -361,6 +378,10 @@ accountRoutes.post('/account/import', async (c) => {
       query: typeof record.query === 'string' ? record.query.slice(0, 200) : '',
       channels: stringList(record.channels, 5),
       enabled: false,
+      opportunityType:
+        record.opportunityType === 'gig' || record.opportunityType === 'job'
+          ? record.opportunityType
+          : 'all',
     })
     imported.alerts += 1
   }

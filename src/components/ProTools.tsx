@@ -23,6 +23,7 @@ import {
 } from '../lib/api'
 import { formatRange, PERIOD_LABELS } from '../shared/format'
 import { AdvertCheckResultView } from './AdvertCheckPanel'
+import { MatchIntelligencePanel } from './MatchIntelligencePanel'
 
 const EMPTY_ANSWERS: ApplicationAnswers = {
   fullName: '',
@@ -198,9 +199,10 @@ interface ProToolsProps {
   proEnabled: boolean
   trial?: ProTrialState
   onRefresh?: () => Promise<void> | void
+  onOpenJob?: (job: Job) => void
 }
 
-export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
+export function ProTools({ job, proEnabled, trial, onRefresh, onOpenJob }: ProToolsProps) {
   const [answers, setAnswers] = useState<ApplicationAnswers>(EMPTY_ANSWERS)
   const [prepared, setPrepared] = useState<PreparedApplication | null>(null)
   const [cvText, setCvText] = useState('')
@@ -282,11 +284,13 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       <section className="detail-section pro-tools" aria-label="Pro tools">
         <h2>More help with this application</h2>
         <p>
-          Pro can check if this job is open to people in Nigeria. It can compare your CV with the
-          job, help you prepare answers, and help you get ready for an interview.
+          FJ Match Intelligence compares your CV with this advert, separates essential requirements
+          from desirable ones, shows missing skills, checks location signals, and suggests stronger
+          alternatives. Pro also helps you prepare answers and get ready for an interview.
         </p>
         <ul className="plain-list">
-          <li>The free trial includes one CV check and help for three jobs.</li>
+          <li>FJ Match Intelligence is included in every Pro plan.</li>
+          <li>The free trial includes one CV check and help for three listings.</li>
           <li>We do not ask for card details. The trial ends after 3 days.</li>
           <li>You can skip the trial and buy Pro at once.</li>
           <li>You can always apply free on the company website.</li>
@@ -311,8 +315,8 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       <h2>Pro tools for this job</h2>
       {trialState?.status === 'active' ? (
         <p className="trial-inline" role="status">
-          Free trial: help for {trialPacksLeft} of {trialState.limits.applicationPacks} jobs is
-          left. A new job uses one. The same job does not use another.
+          Free trial: help for {trialPacksLeft} of {trialState.limits.applicationPacks} listings is
+          left. A new listing uses one. The same listing does not use another.
         </p>
       ) : null}
       {message ? (
@@ -344,6 +348,15 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
         </button>
         {advertCheck ? <AdvertCheckResultView check={advertCheck} /> : null}
       </div>
+
+      <MatchIntelligencePanel
+        job={job}
+        onOpenJob={onOpenJob}
+        onComplete={(nextTrial) => {
+          if (nextTrial) setTrialState(nextTrial)
+          refreshInBackground()
+        }}
+      />
 
       <details className="pro-step">
         <summary>Your saved application answers</summary>
@@ -398,7 +411,7 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       </details>
 
       <div className="pro-step">
-        <h3>2. Prepare your application</h3>
+        <h3>3. Prepare your application</h3>
         <p>
           FJ will write a cover letter and common answers for this job. If you saved a CV, FJ will
           use it. Read every line. Fill in anything in square brackets before you copy or send it.
@@ -429,7 +442,7 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       </div>
 
       <div className="pro-step">
-        <h3>3. Compare your CV with this job</h3>
+        <h3>4. Compare your CV with this job or gig</h3>
         <p>
           FJ will use your saved CV. You can paste a different CV here for this one check. We do not
           save pasted text in this tool.
@@ -518,7 +531,7 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       </div>
 
       <div className="pro-step">
-        <h3>4. Prepare for the interview</h3>
+        <h3>5. Prepare for the interview or client call</h3>
         <button
           className="btn"
           type="button"
@@ -569,7 +582,7 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       </div>
 
       <div className="pro-step">
-        <h3>5. Check pay evidence</h3>
+        <h3>6. Check pay evidence</h3>
         <p>Built only from live FJ adverts that stated pay. At least three adverts are needed.</p>
         <button
           className="btn"

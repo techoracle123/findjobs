@@ -558,6 +558,30 @@ async function bachsHeaders(payload: string): Promise<Headers> {
   return headers({ 'x-bachs-signature-v2': `t=${timestamp},v1=${signature}` })
 }
 
+function fakeBachsClient(
+  create: (input: unknown, options: unknown) => Promise<unknown>,
+): BachsClientLike {
+  return {
+    checkoutSessions: {
+      create,
+      get: async () => {
+        throw new Error('not used')
+      },
+    },
+    customerPortal: {
+      createSession: async () => ({ id: 'psn_test', url: 'https://portal.example.test' }),
+    },
+    subscriptions: {
+      cancel: async () => ({ id: 'sub_test', status: 'active' }),
+    },
+    webhooks: {
+      constructEvent: () => {
+        throw new Error('not used')
+      },
+    },
+  } as unknown as BachsClientLike
+}
+
 describe('bachs adapter', () => {
   it('keeps Bachs money as decimal strings and FJ money as kobo', () => {
     expect(toDecimalString(500_000)).toBe('5000.00')
@@ -637,6 +661,151 @@ describe('bachs adapter', () => {
       pricing_tier: 'founding',
     })
     expect(seenOptions).toEqual({ idempotencyKey: 'fj-checkout-att_test' })
+  })
+
+  it('falls back to guest checkout when the Bachs key cannot create a customer', async () => {
+    const inputs: unknown[] = []
+    const optionsSeen: unknown[] = []
+    const provider = new BachsProvider(
+      'sk_sandbox_test',
+      BACHS_WEBHOOK_SECRET,
+      PLANS,
+      fakeBachsClient(async (input, options) => {
+        inputs.push(input)
+        optionsSeen.push(options)
+        if (inputs.length === 1) {
+          throw Object.assign(new Error('raw forbidden detail'), {
+            name: 'BachsApiError',
+            statusCode: 403,
+            errorCode: 'FORBIDDEN',
+          })
+        }
+        return {
+          checkout_id: 'chk_guest',
+          checkout_url: 'https://checkout.example.test/chk_guest',
+          status: 'open',
+          expires_at: '2026-11-01T00:00:00Z',
+          created_at: '2026-10-31T00:00:00Z',
+          reference: 'fj_att_guest',
+        }
+      }),
+    )
+
+    await expect(
+      provider.createCheckoutSession({
+        userId: 'usr_1',
+        email: 'person@example.com',
+        name: 'Test Person',
+        plan: 'pro',
+        priceId: '',
+        amount: 5000,
+        currency: 'NGN',
+        returnUrl: 'https://example.com/dashboard',
+        reference: 'fj_att_guest',
+        idempotencyKey: 'fj-checkout-att_guest',
+      }),
+    ).resolves.toEqual({ id: 'chk_guest', url: 'https://checkout.example.test/chk_guest' })
+
+    const seen = inputs as {
+      customer?: { email: string; name: string }
+      customer_creation?: string
+      payment_method_types?: string[]
+      reference: string
+    }[]
+    expect(seen).toHaveLength(2)
+    expect(seen[0].customer).toEqual({ email: 'person@example.com', name: 'Test Person' })
+    expect(seen[1].customer).toBeUndefined()
+    expect(seen[1].customer_creation).toBe('if_required')
+    expect(seen[1].payment_method_types).toEqual(['NGN_CARD', 'NGN_BANK_TRANSFER'])
+    expect(seen.map((input) => input.reference)).toEqual(['fj_att_guest', 'fj_att_guest'])
+    expect(optionsSeen).toEqual([
+      { idempotencyKey: 'fj-checkout-att_guest' },
+      { idempotencyKey: 'fj-checkout-att_guest-guest-ngn-methods' },
+    ])
+  })
+
+  it('uses Bachs account methods when the NGN restriction leaves no method', async () => {
+    const inputs: unknown[] = []
+    const provider = new BachsProvider(
+      'sk_sandbox_test',
+      BACHS_WEBHOOK_SECRET,
+      PLANS,
+      fakeBachsClient(async (input) => {
+        inputs.push(input)
+        if (inputs.length === 1) {
+          throw Object.assign(new Error('raw restriction detail'), {
+            name: 'BachsApiError',
+            statusCode: 400,
+            errorCode: 'CHECKOUT_RESTRICTION_LEAVES_NO_PAYMENT_METHOD',
+          })
+        }
+        return {
+          checkout_id: 'chk_defaults',
+          checkout_url: 'https://checkout.example.test/chk_defaults',
+          status: 'open',
+          expires_at: '2026-11-01T00:00:00Z',
+          created_at: '2026-10-31T00:00:00Z',
+          reference: 'fj_att_defaults',
+        }
+      }),
+    )
+
+    await provider.createCheckoutSession({
+      userId: 'usr_1',
+      email: 'person@example.com',
+      name: 'Test Person',
+      plan: 'pro',
+      priceId: '',
+      amount: 5000,
+      currency: 'NGN',
+      returnUrl: 'https://example.com/dashboard',
+      reference: 'fj_att_defaults',
+      idempotencyKey: 'fj-checkout-att_defaults',
+    })
+
+    const seen = inputs as {
+      customer?: { email: string; name: string }
+      payment_method_types?: string[]
+    }[]
+    expect(seen).toHaveLength(2)
+    expect(seen[0].payment_method_types).toEqual(['NGN_CARD', 'NGN_BANK_TRANSFER'])
+    expect(seen[1].payment_method_types).toBeUndefined()
+    expect(seen[1].customer).toEqual({ email: 'person@example.com', name: 'Test Person' })
+  })
+
+  it('lets Bachs collect buyer details when the stored account email is unusable', async () => {
+    let seenInput: unknown
+    const provider = new BachsProvider(
+      'sk_sandbox_test',
+      BACHS_WEBHOOK_SECRET,
+      PLANS,
+      fakeBachsClient(async (input) => {
+        seenInput = input
+        return {
+          checkout_id: 'chk_collect_details',
+          checkout_url: 'https://checkout.example.test/chk_collect_details',
+          status: 'open',
+          expires_at: '2026-11-01T00:00:00Z',
+          created_at: '2026-10-31T00:00:00Z',
+          reference: 'fj_att_collect_details',
+        }
+      }),
+    )
+
+    await provider.createCheckoutSession({
+      userId: 'usr_1',
+      email: 'not-an-email',
+      plan: 'pro',
+      priceId: '',
+      amount: 5000,
+      currency: 'NGN',
+      returnUrl: 'https://example.com/dashboard',
+      reference: 'fj_att_collect_details',
+    })
+
+    const input = seenInput as { customer?: unknown; customer_creation?: string }
+    expect(input.customer).toBeUndefined()
+    expect(input.customer_creation).toBe('if_required')
   })
 
   it('never sends an internal FJ id or email address as the Bachs customer name', () => {

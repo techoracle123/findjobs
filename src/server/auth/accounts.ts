@@ -180,7 +180,8 @@ export async function findUserIdByProviderSubscription(
 export async function getProfile(db: D1Database, userId: string): Promise<Profile> {
   const row = await db
     .prepare(
-      `SELECT skills, target_role_families, target_seniority, preferred_work_modes, work_country
+      `SELECT skills, target_role_families, target_seniority, preferred_work_modes, work_country,
+        opportunity_types
        FROM profiles WHERE user_id = ?1`,
     )
     .bind(userId)
@@ -190,6 +191,7 @@ export async function getProfile(db: D1Database, userId: string): Promise<Profil
       target_seniority: string
       preferred_work_modes: string
       work_country: string | null
+      opportunity_types: string | null
     }>()
 
   if (!row) {
@@ -199,6 +201,7 @@ export async function getProfile(db: D1Database, userId: string): Promise<Profil
       targetSeniority: [],
       preferredWorkModes: [],
       workCountry: '',
+      opportunityTypes: [],
     }
   }
 
@@ -208,6 +211,9 @@ export async function getProfile(db: D1Database, userId: string): Promise<Profil
     targetSeniority: parseList(row.target_seniority) as Profile['targetSeniority'],
     preferredWorkModes: parseList(row.preferred_work_modes) as Profile['preferredWorkModes'],
     workCountry: row.work_country ?? '',
+    opportunityTypes: parseList(row.opportunity_types).filter(
+      (type): type is 'job' | 'gig' => type === 'job' || type === 'gig',
+    ),
   }
 }
 
@@ -215,10 +221,11 @@ export async function saveProfile(db: D1Database, userId: string, profile: Profi
   await db
     .prepare(
       `INSERT INTO profiles (user_id, skills, target_role_families, target_seniority,
-        preferred_work_modes, work_country, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        preferred_work_modes, work_country, updated_at, opportunity_types)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
        ON CONFLICT(user_id) DO UPDATE SET skills = ?2, target_role_families = ?3,
-         target_seniority = ?4, preferred_work_modes = ?5, work_country = ?6, updated_at = ?7`,
+         target_seniority = ?4, preferred_work_modes = ?5, work_country = ?6, updated_at = ?7,
+         opportunity_types = ?8`,
     )
     .bind(
       userId,
@@ -228,6 +235,9 @@ export async function saveProfile(db: D1Database, userId: string, profile: Profi
       JSON.stringify(profile.preferredWorkModes),
       profile.workCountry || null,
       new Date().toISOString(),
+      JSON.stringify(
+        (profile.opportunityTypes ?? []).filter((type) => type === 'job' || type === 'gig'),
+      ),
     )
     .run()
 }
@@ -335,6 +345,7 @@ type AlertSettings = Pick<
   | 'minScore'
   | 'countries'
   | 'workModes'
+  | 'opportunityType'
   | 'salaryOnly'
   | 'currency'
   | 'exclude'
@@ -347,6 +358,9 @@ function alertSettingsOf(alert: Partial<AlertPreference>): AlertSettings {
     ...(typeof alert.minScore === 'number' ? { minScore: alert.minScore } : {}),
     ...(alert.countries?.length ? { countries: alert.countries } : {}),
     ...(alert.workModes?.length ? { workModes: alert.workModes } : {}),
+    ...(alert.opportunityType && ['all', 'job', 'gig'].includes(alert.opportunityType)
+      ? { opportunityType: alert.opportunityType }
+      : {}),
     ...(typeof alert.salaryOnly === 'boolean' ? { salaryOnly: alert.salaryOnly } : {}),
     ...(alert.currency ? { currency: alert.currency } : {}),
     ...(alert.exclude ? { exclude: alert.exclude } : {}),

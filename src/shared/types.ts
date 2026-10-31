@@ -7,7 +7,26 @@ export type EligibilityTier = 'eligible' | 'unknown' | 'restricted'
 
 export type Sponsorship = 'available' | 'unavailable' | 'unknown'
 
-export type SalaryPeriod = 'hour' | 'month' | 'year' | 'unknown'
+export type SalaryPeriod = 'hour' | 'week' | 'fortnight' | 'month' | 'year' | 'project' | 'unknown'
+
+/** The marketplace lane a listing belongs in. `gig` covers freelance work,
+ * fixed-scope projects, contracts and other time-bounded engagements. */
+export type OpportunityType = 'job' | 'gig' | 'unknown'
+
+export type OpportunityFilter = 'all' | 'job' | 'gig'
+
+export type EngagementType =
+  | 'full-time'
+  | 'part-time'
+  | 'permanent'
+  | 'contract'
+  | 'freelance'
+  | 'project'
+  | 'temporary'
+  | 'internship'
+  | 'unknown'
+
+export type EngagementBasis = 'source' | 'title' | 'description' | 'stored'
 
 export type VerificationLevel = 'verified' | 'unverified' | 'stale'
 
@@ -26,6 +45,14 @@ export interface Job {
   salaryMax: number
   salaryCurrency: string
   salaryPeriod: SalaryPeriod
+  /** Job versus gig/contract lane. Optional for older stored snapshots; the
+   * shared classifier can derive a conservative value at read time. */
+  opportunityType?: OpportunityType
+  engagementType?: EngagementType
+  engagementLabel?: string
+  engagementBasis?: EngagementBasis
+  /** A duration stated by the source or advert, such as `3-6 months`. */
+  projectDuration?: string
   description: string
   /** Lightweight search excerpt; detail pages must load the full listing. */
   descriptionPreview?: boolean
@@ -88,10 +115,12 @@ export interface Profile {
   targetSeniority: Seniority[]
   preferredWorkModes: WorkMode[]
   workCountry: string
+  /** Jobs and/or gigs the person wants FJ to prioritise. Empty means both. */
+  opportunityTypes?: OpportunityType[]
 }
 
 export type ScoreComponentKey =
-  'requiredSkills' | 'usefulSkills' | 'roleFamily' | 'seniority' | 'workMode'
+  'requiredSkills' | 'usefulSkills' | 'roleFamily' | 'seniority' | 'workMode' | 'opportunityType'
 
 export interface ScoreComponent {
   key: ScoreComponentKey
@@ -176,6 +205,7 @@ export interface AlertPreference {
   minScore?: number
   countries?: string[]
   workModes?: WorkMode[]
+  opportunityType?: OpportunityFilter
   salaryOnly?: boolean
   currency?: string
   exclude?: string
@@ -247,6 +277,55 @@ export interface CvCheckResult {
   evidence?: { skill: string; line: string }[]
   /** Copy-ready summary built only from profile/CV skills already evidenced. */
   tailoredSummary?: string
+}
+
+export type MatchRequirementGroup = 'essential' | 'desirable' | 'eligibility' | 'practical'
+
+export type MatchRequirementStatus = 'met' | 'partial' | 'missing' | 'needs-check'
+
+export interface MatchRequirement {
+  label: string
+  group: MatchRequirementGroup
+  status: MatchRequirementStatus
+  detail: string
+  /** Exact profile/CV or advert lines that support the judgement. */
+  evidence: string[]
+  action: string
+}
+
+export interface MatchAlternative {
+  job: Job
+  score: number
+  essentialPercent: number | null
+  missingEssential: string[]
+  reasons: string[]
+}
+
+export interface MatchIntelligenceResult {
+  jobId: string
+  generatedAt: string
+  basis: 'cv-and-profile' | 'profile'
+  verdict:
+    'strong-match' | 'possible-match' | 'stretch' | 'check-location-first' | 'not-enough-evidence'
+  headline: string
+  summary: string
+  fitScore: number
+  essentialPercent: number | null
+  desirablePercent: number | null
+  evidencePercent: number | null
+  confidence: 'low' | 'medium' | 'high'
+  requirements: MatchRequirement[]
+  strengths: string[]
+  gaps: string[]
+  actions: string[]
+  eligibility: {
+    status: 'clear-signal' | 'needs-check' | 'possible-blocker'
+    headline: string
+    evidence: string[]
+    notes: string[]
+  }
+  alternatives: MatchAlternative[]
+  limitations: string[]
 }
 
 export interface InterviewQuestion {
@@ -405,6 +484,9 @@ export interface BestMatch {
   matchedSkills: string[]
   missingSkills: string[]
   reasons: string[]
+  essentialPercent?: number | null
+  desirablePercent?: number | null
+  eligibilityStatus?: 'clear-signal' | 'needs-check' | 'possible-blocker'
 }
 
 export interface SkillPlanItem {

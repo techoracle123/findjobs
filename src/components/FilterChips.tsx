@@ -21,6 +21,7 @@ import {
 } from '../shared/taxonomy'
 import { controlEnabled } from '../shared/quality'
 import type { FieldCoverage } from '../shared/quality'
+import { OPPORTUNITY_FILTER_OPTIONS } from '../shared/opportunities'
 import { CountryPicker } from './CountryPicker'
 
 interface FilterChipsProps {
@@ -28,7 +29,11 @@ interface FilterChipsProps {
   coverage?: FieldCoverage
   adminControls: boolean
   worldwide: boolean
-  counts?: { countries: Record<string, number>; professions: Record<string, number> }
+  counts?: {
+    countries: Record<string, number>
+    professions: Record<string, number>
+    opportunities?: { all: number; job: number; gig: number }
+  }
   onChange: (filters: Filters) => void
   onWorldwide: (worldwide: boolean) => void
   onReset: () => void
@@ -68,6 +73,7 @@ export function FilterChips({
 
   const toggle = (chip: ChipId) => setOpen((current) => (current === chip ? null : chip))
   const active = Boolean(
+    (filters.opportunityType && filters.opportunityType !== 'all') ||
     filters.country ||
     filters.roleFamilies.length ||
     filters.seniorities.length ||
@@ -78,6 +84,31 @@ export function FilterChips({
 
   return (
     <div className="chipbar-wrap" ref={wrapRef}>
+      <div className="opportunity-switch" role="group" aria-label="Choose the type of work">
+        {OPPORTUNITY_FILTER_OPTIONS.map((option) => {
+          const selected = (filters.opportunityType ?? 'all') === option.id
+          const count = counts?.opportunities?.[option.id]
+          return (
+            <button
+              key={option.id}
+              type="button"
+              className="opportunity-switch__button"
+              aria-pressed={selected}
+              aria-label={
+                count === undefined
+                  ? option.label
+                  : `${option.label}, ${count.toLocaleString()} listings`
+              }
+              onClick={() => onChange({ ...filters, opportunityType: option.id })}
+            >
+              <span>{option.label}</span>
+              {count !== undefined && (
+                <span className="opportunity-switch__count">{count.toLocaleString()}</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
       <div className="chipbar">
         <button
           type="button"
@@ -121,7 +152,7 @@ export function FilterChips({
             <Clock size={13} />{' '}
             {filters.workModes.length
               ? filters.workModes.map((mode) => WORK_MODE_LABELS[mode as 'remote']).join(', ')
-              : 'Work type'}{' '}
+              : 'Work setting'}{' '}
             <ChevronDown size={12} />
           </button>
         )}

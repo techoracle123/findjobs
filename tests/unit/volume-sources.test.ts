@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { arbeitnow } from '../../src/server/sources/arbeitnow'
-import { himalayas, themuse, workable } from '../../src/server/sources/public-boards'
+import { himalayas, jobicy, themuse, workable } from '../../src/server/sources/public-boards'
 import { smartrecruiters } from '../../src/server/sources/ats'
 import type { SourceRef } from '../../src/server/sources/types'
 
@@ -127,6 +127,124 @@ describe('himalayas pagination', () => {
       fetchImpl,
     )
     expect(postings).toHaveLength(60)
+  })
+})
+
+describe('himalayas gig top-up', () => {
+  it('dedupes contractor search results into the same source and preserves hourly contractor fields', async () => {
+    const browseJob = {
+      guid: 'https://himalayas.app/jobs/permanent',
+      applicationLink: 'https://example.com/apply/permanent',
+      title: 'Permanent Engineer',
+      companyName: 'RemoteCo',
+      description: 'Permanent role',
+      employmentType: 'Full Time',
+      pubDate: 1793351475,
+      currency: 'USD',
+      minSalary: 90000,
+      maxSalary: 100000,
+      salaryPeriod: 'annual',
+    }
+    const contractor = {
+      guid: 'https://himalayas.app/jobs/contractor',
+      applicationLink: 'https://example.com/apply/contractor',
+      title: 'Security Contractor',
+      companyName: 'RemoteCo',
+      description: 'Run security reviews.',
+      employmentType: 'Contractor',
+      pubDate: 1793351475,
+      currency: 'USD',
+      minSalary: 70,
+      maxSalary: 90,
+      salaryPeriod: 'hourly',
+    }
+    const temporary = {
+      ...contractor,
+      guid: 'https://himalayas.app/jobs/temporary',
+      applicationLink: 'https://example.com/apply/temporary',
+      title: 'Temporary Data Analyst',
+      employmentType: 'Temporary',
+      salaryPeriod: 'weekly',
+    }
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/jobs/api/search') && url.includes('employment_type=Contractor')) {
+        return json({ jobs: [browseJob, contractor] })
+      }
+      if (url.includes('/jobs/api/search') && url.includes('employment_type=Temporary')) {
+        return json({ jobs: [temporary] })
+      }
+      return json({ jobs: [browseJob], nextCursor: null })
+    }) as typeof fetch
+
+    const postings = await himalayas.fetchPostings(
+      ref('himalayas', 'https://himalayas.app/jobs/api'),
+      fetchImpl,
+    )
+    expect(postings).toHaveLength(3)
+    const found = postings.find((posting) => posting.externalId === contractor.guid)
+    expect(found?.jobType).toBe('Contractor')
+    expect(found?.applyUrl).toBe('https://example.com/apply/contractor')
+    expect(found?.salary).toEqual({ min: 70, max: 90, currency: 'USD', period: 'hour' })
+    expect(postings.find((posting) => posting.externalId === temporary.guid)?.salary?.period).toBe(
+      'week',
+    )
+  })
+})
+
+describe('jobicy structured gigs', () => {
+  it('walks cursors, preserves structured type and salary, and dedupes title top-ups', async () => {
+    const contract = {
+      id: 101,
+      jobTitle: 'Contract Web Developer',
+      companyName: 'BuildCo',
+      url: 'https://jobicy.com/jobs/101',
+      jobGeo: 'Worldwide',
+      jobDescription: 'Build a website.',
+      jobType: ['Contract'],
+      jobIndustry: ['Web Development'],
+      pubDate: '2026-10-30T10:00:00Z',
+      salaryMin: 50,
+      salaryMax: 70,
+      salaryCurrency: 'USD',
+      salaryPeriod: 'hourly',
+    }
+    const fullTime = {
+      ...contract,
+      id: 102,
+      jobTitle: 'Frontend Developer',
+      jobType: ['Full-Time'],
+    }
+    const freelance = {
+      ...contract,
+      id: 103,
+      jobTitle: 'Freelance Data Analyst',
+      jobType: ['Freelance'],
+      salaryMin: 1200,
+      salaryMax: 1200,
+      salaryPeriod: 'weekly',
+    }
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = new URL(String(input))
+      const tag = url.searchParams.get('tag')
+      if (tag === 'contract') return json({ jobs: [contract], nextCursor: null, hasMore: false })
+      if (tag === 'freelance') return json({ jobs: [freelance], nextCursor: null, hasMore: false })
+      if (url.searchParams.get('cursor') === 'next-1') {
+        return json({ jobs: [fullTime], nextCursor: null, hasMore: false })
+      }
+      return json({ jobs: [contract], nextCursor: 'next-1', hasMore: true })
+    }) as typeof fetch
+
+    const postings = await jobicy.fetchPostings(
+      ref('jobicy', 'https://jobicy.com/api/v2/remote-jobs?count=100'),
+      fetchImpl,
+    )
+    expect(postings.map((posting) => posting.externalId)).toEqual(['101', '102', '103'])
+    expect(postings[0].jobType).toBe('Contract')
+    expect(postings[0].publishedAt).toBe('2026-10-30T10:00:00.000Z')
+    expect(postings[0].salary).toEqual({ min: 50, max: 70, currency: 'USD', period: 'hour' })
+    expect(postings[2].jobType).toBe('Freelance')
+    expect(postings[2].salary?.period).toBe('week')
   })
 })
 

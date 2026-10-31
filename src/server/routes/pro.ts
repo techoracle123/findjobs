@@ -61,6 +61,7 @@ import {
   buildAdvertCheckForJob,
   normaliseAdvertCheckInput,
 } from '../advert-check'
+import { analyzeMatchIntelligence } from '../match-intelligence'
 
 export const proRoutes = new Hono<AppEnv>()
 
@@ -78,6 +79,7 @@ const privateResponse = async (c: AppContext, next: () => Promise<void>) => {
   await next()
 }
 proRoutes.use('/pro/*', privateResponse)
+proRoutes.use('/jobs/:id/*', privateResponse)
 proRoutes.use('/salary-guide', privateResponse)
 
 function uniqueStrings(values: string[]): string[] {
@@ -201,7 +203,7 @@ async function enforceTrialPack(
       error: 'trial_limit_reached',
       trial: await getTrialState(gate.db, gate.user.id),
       message:
-        'You have used help for three jobs in your free trial. Buy Pro for more, or apply free on the company website.',
+        'You have used help for three listings in your free trial. Buy Pro for more, or apply free on the original website.',
       upgradeUrl: '/pricing#plans',
     },
     403,
@@ -593,6 +595,42 @@ proRoutes.post('/jobs/:id/cv-check', async (c) => {
   const check = buildCvCheck(job, profile, suppliedCvText || masterCvText)
   if (!gate.paid) await recordTrialPack(gate.db, gate.user.id, job.id)
   return c.json({ check, trial: await getTrialState(gate.db, gate.user.id), paid: gate.paid })
+})
+
+proRoutes.post('/jobs/:id/match-intelligence', async (c) => {
+  const gate = await requireFeature(c, 'cv_check')
+  if (!gate.ok) return gate.response
+  const limited = await enforceRateLimit(c, {
+    bucket: 'match-intelligence',
+    limit: 20,
+    windowSeconds: 60,
+  })
+  if (limited) return limited
+
+  const job = await jobForRequest(c)
+  if (!job) return c.json({ error: 'not_found' }, 404)
+  const trialDenied = await enforceTrialPack(c, gate, job.id)
+  if (trialDenied) return trialDenied
+
+  const body = await readJson(c)
+  const suppliedCvText = typeof body.cvText === 'string' ? body.cvText.slice(0, 30_000) : ''
+  const [profile, masterCvText, { jobs }] = await Promise.all([
+    getProfile(gate.db, gate.user.id),
+    suppliedCvText ? Promise.resolve('') : getMasterCvText(gate.db, gate.user.id),
+    salaryJobs(c),
+  ])
+  const match = analyzeMatchIntelligence(job, suppliedCvText || masterCvText, profile, jobs)
+
+  await recordAudit(gate.db, gate.user.id, 'pro.match_intelligence', {
+    jobId: job.id,
+    verdict: match.verdict,
+    fitScore: match.fitScore,
+    basis: match.basis,
+  })
+  if (!gate.paid && match.verdict !== 'not-enough-evidence') {
+    await recordTrialPack(gate.db, gate.user.id, job.id)
+  }
+  return c.json({ match, trial: await getTrialState(gate.db, gate.user.id), paid: gate.paid })
 })
 
 proRoutes.post('/jobs/:id/before-you-apply', async (c) => {

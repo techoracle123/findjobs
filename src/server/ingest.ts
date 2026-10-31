@@ -54,7 +54,10 @@ export function contentHashOf(raw: RawPosting): string {
     raw.location,
     raw.remote ? 'remote' : 'onsite',
     raw.tags.join(','),
-    raw.salary ? `${raw.salary.min}-${raw.salary.max}-${raw.salary.currency}` : '',
+    raw.jobType,
+    raw.salary
+      ? `${raw.salary.min}-${raw.salary.max}-${raw.salary.currency}-${raw.salary.period}`
+      : '',
     raw.closed ? 'closed' : 'open',
   ].join('')
 }
@@ -258,9 +261,11 @@ async function writeJob(
         required_skills, useful_skills, eligible_countries, sponsorship, source_name, source_url,
         posted_days_ago, posted_at, is_demo, source_id, external_id, content_hash, expired_at,
         verification, verification_reason, verified_at, job_status, closed_at, closed_reason,
-        first_seen_at, last_seen_at, apply_url, company_url, source_kind, source_platform)
+        first_seen_at, last_seen_at, apply_url, company_url, source_kind, source_platform,
+        opportunity_type, engagement_type, engagement_label, engagement_basis, project_duration)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, 0,
-        ?20, 0, ?21, ?22, ?23, NULL, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35)
+        ?20, 0, ?21, ?22, ?23, NULL, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35,
+        ?36, ?37, ?38, ?39, ?40)
        ON CONFLICT(id) DO UPDATE SET title = ?2, company = ?3, role_family = ?4, seniority = ?5,
          work_mode = ?6, location_country = ?7, location_label = ?8, salary_min = ?9,
          salary_max = ?10, salary_currency = ?11, salary_period = ?12, description = ?13,
@@ -268,8 +273,10 @@ async function writeJob(
          source_name = ?18, source_url = ?19, posted_at = ?20, source_id = ?21, external_id = ?22,
          content_hash = ?23, expired_at = NULL, verification = ?24, verification_reason = ?25,
          verified_at = ?26, job_status = ?27, closed_at = ?28, closed_reason = ?29,
-         first_seen_at = ?30, last_seen_at = ?31, apply_url = ?32, company_url = ?33,
-         source_kind = ?34, source_platform = ?35`,
+        first_seen_at = ?30, last_seen_at = ?31, apply_url = ?32, company_url = ?33,
+        source_kind = ?34, source_platform = ?35, opportunity_type = ?36,
+        engagement_type = ?37, engagement_label = ?38, engagement_basis = ?39,
+        project_duration = ?40`,
       )
       .bind(
         job.id,
@@ -307,6 +314,11 @@ async function writeJob(
         job.companyUrl ?? null,
         job.sourceKind ?? null,
         job.sourcePlatform ?? null,
+        job.opportunityType ?? 'unknown',
+        job.engagementType ?? 'unknown',
+        job.engagementLabel || null,
+        job.engagementBasis ?? null,
+        job.projectDuration ?? null,
       ),
   )
 

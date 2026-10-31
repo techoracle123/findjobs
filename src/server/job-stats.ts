@@ -1,4 +1,5 @@
 import type { Job } from '../shared/types'
+import { isGig } from '../shared/opportunities'
 import type { JobSearch } from './jobs'
 import { matchingPublicJobs } from './live-public'
 import { coverageOf } from './quality'
@@ -12,6 +13,7 @@ export interface JobFacets {
   unknownLocation: number
   countries: Record<string, number>
   professions: Record<string, number>
+  opportunities: { all: number; job: number; gig: number }
   /** Share of matched listings carrying a caution flag; banners stay quiet above 20%. */
   cautionShare: number
   /** Field completeness across the full matching set; drives control visibility. */
@@ -41,6 +43,8 @@ export function jobFacets(jobs: Job[], search: JobSearch): JobFacets {
 
 function computeFacets(jobs: Job[], search: JobSearch): JobFacets {
   const matched = matchingPublicJobs(jobs, search)
+  const withoutOpportunityType = matchingPublicJobs(jobs, { ...search, opportunityType: 'all' })
+  const gigCount = withoutOpportunityType.filter((job) => isGig(job)).length
   return {
     total: matched.length,
     globalTotal: jobs.length,
@@ -52,6 +56,11 @@ function computeFacets(jobs: Job[], search: JobSearch): JobFacets {
       'locationCountry',
     ),
     professions: count(matchingPublicJobs(jobs, { ...search, roleFamilies: [] }), 'roleFamily'),
+    opportunities: {
+      all: withoutOpportunityType.length,
+      gig: gigCount,
+      job: withoutOpportunityType.length - gigCount,
+    },
     cautionShare: matched.length
       ? matched.filter((job) => job.moderationState === 'caution').length / matched.length
       : 0,

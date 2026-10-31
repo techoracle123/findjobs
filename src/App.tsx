@@ -139,6 +139,7 @@ export default function App() {
     if (f.query.trim()) params.set('q', f.query.trim())
     if (f.location?.trim()) params.set('loc', f.location.trim())
     if (f.country) params.set('country', f.country)
+    if (f.opportunityType && f.opportunityType !== 'all') params.set('type', f.opportunityType)
     if (f.roleFamilies[0]) params.set('role', f.roleFamilies[0])
     if (f.workModes.length) params.set('mode', f.workModes.join(','))
     if (f.seniorities.length) params.set('level', f.seniorities.join(','))
@@ -161,6 +162,10 @@ export default function App() {
     query: initialQuery.get('q') ?? '',
     location: initialQuery.get('loc') ?? '',
     country: (initialQuery.get('country') ?? '').toUpperCase(),
+    opportunityType:
+      initialQuery.get('type') === 'gig' || initialQuery.get('type') === 'job'
+        ? (initialQuery.get('type') as 'gig' | 'job')
+        : 'all',
     roleFamilies: initialQuery.get('role') ? [initialQuery.get('role')!] : [],
     workModes: initialQuery.get('mode') ? initialQuery.get('mode')!.split(',') : [],
     seniorities: initialQuery.get('level')
@@ -644,6 +649,7 @@ export default function App() {
               proEnabled={proEnabled}
               trial={account.proTrial}
               onRefreshAccount={account.refresh}
+              onOpenJob={openBestMatch}
               cautionBannerEnabled={cautionBannerEnabled}
             />
           )}
@@ -827,7 +833,7 @@ export default function App() {
         <main className="content browse">
           <div className="page-intro">
             <h1>Find work that fits your skills</h1>
-            <p>Real opportunities in Nigeria and worldwide.</p>
+            <p>Jobs, gigs and contracts in Nigeria and worldwide.</p>
           </div>
           <SearchBar
             value={{
@@ -877,7 +883,18 @@ export default function App() {
           />
           <div className="results-head">
             <span className="resultcount">
-              {total.toLocaleString()} {total === 1 ? 'job' : 'jobs'}
+              {total.toLocaleString()}{' '}
+              {filters.opportunityType === 'gig'
+                ? total === 1
+                  ? 'gig or contract'
+                  : 'gigs and contracts'
+                : filters.opportunityType === 'job'
+                  ? total === 1
+                    ? 'job'
+                    : 'jobs'
+                  : total === 1
+                    ? 'job or gig'
+                    : 'jobs and gigs'}
               {filters.query.trim() ? ` for \u201c${filters.query.trim()}\u201d` : ''}
               {(filters.location?.trim() || filters.country) && (
                 <>
@@ -947,11 +964,11 @@ export default function App() {
               </div>
             ) : sorted.jobs.length === 0 ? (
               <div className="empty">
-                <p className="empty__title">No roles match</p>
+                <p className="empty__title">No work matches</p>
                 <p>Try loosening a filter or clearing your search.</p>
                 <a
                   className="btn btn--sm"
-                  href={`/dashboard?tab=alerts&q=${encodeURIComponent(filters.query)}`}
+                  href={`/dashboard?tab=alerts&q=${encodeURIComponent(filters.query)}${filters.opportunityType && filters.opportunityType !== 'all' ? `&type=${filters.opportunityType}` : ''}`}
                 >
                   Create an alert for this search
                 </a>
@@ -999,8 +1016,9 @@ export default function App() {
           )}
           {facets && (
             <p className="hint market-line">
-              {facets.remote.toLocaleString()} listed remote · {facets.locations} stated countries ·
-              refreshed{' '}
+              {facets.remote.toLocaleString()} listed remote ·{' '}
+              {facets.opportunities.gig.toLocaleString()} classified as gigs or contracts ·{' '}
+              {facets.locations} stated countries · refreshed{' '}
               {feedUpdatedAt ? new Date(feedUpdatedAt).toLocaleString() : 'every 12 hours'}
             </p>
           )}

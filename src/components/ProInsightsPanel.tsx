@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { ArrowRight, ListChecks } from 'lucide-react'
 import { fetchBestMatches, fetchSkillPlan } from '../lib/api'
 import type { BestMatch, Job, ProTrialState, SkillPlanResult } from '../shared/types'
+import { PERIOD_LABELS } from '../shared/format'
+import { opportunityBadge } from '../shared/opportunities'
 
 interface ProInsightsPanelProps {
   proEnabled: boolean
@@ -17,8 +19,8 @@ function salaryLine(job: Job): string {
   if (!(job.salaryMin > 0 || job.salaryMax > 0)) return 'Pay not stated'
   const amount = (value: number) => value.toLocaleString('en-NG')
   if (job.salaryMin > 0 && job.salaryMax > job.salaryMin)
-    return `${job.salaryCurrency} ${amount(job.salaryMin)} to ${amount(job.salaryMax)} / ${job.salaryPeriod}`
-  return `${job.salaryCurrency} ${amount(job.salaryMax || job.salaryMin)} / ${job.salaryPeriod}`
+    return `${job.salaryCurrency} ${amount(job.salaryMin)} to ${amount(job.salaryMax)} ${PERIOD_LABELS[job.salaryPeriod]}`
+  return `${job.salaryCurrency} ${amount(job.salaryMax || job.salaryMin)} ${PERIOD_LABELS[job.salaryPeriod]}`
 }
 
 function MatchCard({ match, onOpenJob }: { match: BestMatch; onOpenJob: (job: Job) => void }) {
@@ -33,6 +35,9 @@ function MatchCard({ match, onOpenJob }: { match: BestMatch; onOpenJob: (job: Jo
         </div>
         <span className="status-pill status-open">Fit score {match.score}/100</span>
       </div>
+      {opportunityBadge(match.job) ? (
+        <span className="chip chip--gig">{opportunityBadge(match.job)}</span>
+      ) : null}
       <p className="muted">{salaryLine(match.job)}</p>
       <ul className="plain-list">
         {match.reasons.slice(0, 4).map((reason) => (
@@ -112,16 +117,17 @@ export function ProInsightsPanel({
       </div>
       <div className="panel__body stack">
         <p className="panel__note">
-          See the jobs that fit you best. Then see which skills keep coming up so you know what to
-          learn next.
+          See the jobs, gigs and contracts that fit you best. Then see which skills keep coming up
+          so you know what to learn next.
         </p>
 
         {!proEnabled ? (
           <div className="locked-box">
-            <h3>Start with jobs that fit you</h3>
+            <h3>Start with work that fits you</h3>
             <p>
-              Pro checks the job list against your profile and saved CV. It shows your best matches
-              and the skills you may need to learn.
+              Pro checks current jobs, gigs and contracts against your profile and saved CV. It
+              shows your best matches and the skills you may need to learn. Open a listing to run FJ
+              Match Intelligence for a deeper decision check.
             </p>
             <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
               {trial.status === 'not_started' ? 'Trial or buy Pro' : 'Buy Pro'}
@@ -156,7 +162,7 @@ export function ProInsightsPanel({
             {best ? (
               <div className="stack">
                 <p className="muted" role="status">
-                  {best.message} {best.totalJobs.toLocaleString()} current jobs checked.
+                  {best.message} {best.totalJobs.toLocaleString()} current listings checked.
                 </p>
                 {!best.available ? (
                   <button className="btn btn--primary" type="button" onClick={onOpenProfile}>
@@ -170,13 +176,13 @@ export function ProInsightsPanel({
                   </div>
                 ) : (
                   <p>
-                    No current job reaches a useful fit yet. Widen your target roles or add more
+                    No current listing reaches a useful fit yet. Widen your target roles or add more
                     skills.
                   </p>
                 )}
               </div>
             ) : busy === 'best' ? (
-              <p role="status">Ranking current jobs against your profile…</p>
+              <p role="status">Ranking current work against your profile…</p>
             ) : null}
 
             {plan ? (
@@ -184,7 +190,7 @@ export function ProInsightsPanel({
                 <h3>Skills to learn</h3>
                 <p>{plan.message}</p>
                 <p className="muted">
-                  Based on {plan.sampleJobs} current jobs that fit your search.
+                  Based on {plan.sampleJobs} current listings that fit your search.
                 </p>
                 {plan.items.length ? (
                   <div className="week-grid">
@@ -211,7 +217,7 @@ export function ProInsightsPanel({
                     })}
                   </div>
                 ) : (
-                  <p>No skill came up again and again in these jobs.</p>
+                  <p>No skill came up again and again in these listings.</p>
                 )}
                 <p className="field__hint">
                   Add a skill to your CV only when you can show real work, training or a project

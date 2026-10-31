@@ -1,4 +1,5 @@
 import { scoreJob } from '../shared/scoring'
+import { matchesOpportunityFilter } from '../shared/opportunities'
 import type { AlertPreference, Job, Profile } from '../shared/types'
 import {
   getEntitlements,
@@ -92,6 +93,7 @@ export function jobMatchesAlert(job: Job, query: string): boolean {
 
 export function jobMatchesSmartAlert(job: Job, alert: AlertPreference, profile: Profile): boolean {
   if (!jobMatchesAlert(job, alert.query)) return false
+  if (!matchesOpportunityFilter(job, alert.opportunityType)) return false
   if (alert.kind !== 'smart') return true
 
   const searchable =
@@ -159,7 +161,8 @@ export async function deliverNewAlerts(
       for (const job of jobs) {
         const matches = subscriber.smartAllowed
           ? jobMatchesSmartAlert(job, alert, subscriber.profile)
-          : jobMatchesAlert(job, alert.query)
+          : jobMatchesAlert(job, alert.query) &&
+            matchesOpportunityFilter(job, alert.opportunityType)
         if (!matches) continue
 
         const already = await db

@@ -44,8 +44,11 @@ const SYMBOLS: Record<string, string> = {
 export const PERIOD_LABELS: Record<SalaryPeriod, string> = {
   unknown: '(period not stated)',
   hour: '/hr',
+  week: '/week',
+  fortnight: '/2 weeks',
   month: '/mo',
   year: '/yr',
+  project: '/project',
 }
 
 export function currencySymbol(code: string): string {

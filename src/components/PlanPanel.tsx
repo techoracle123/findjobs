@@ -275,9 +275,9 @@ export function PlanPanel({
             <p className="eyebrow">Free trial</p>
             <h3>3-day Pro free trial</h3>
             <p>
-              Use all Pro tools for 3 days. Check one CV in full. Prepare applications for three
-              jobs. We do not ask for card details. There is no charge when the trial ends. This
-              trial is optional. You do not need it before you pay.{' '}
+              Use all Pro tools for 3 days. Check one CV in full. Use Match Intelligence and
+              application help for three listings. We do not ask for card details. There is no
+              charge when the trial ends. This trial is optional. You do not need it before you pay.{' '}
               <a href="#fj-plan-prices">See the paid plans below</a>.
             </p>
           </div>

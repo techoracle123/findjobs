@@ -68,6 +68,7 @@ describe('Pro tool gates', () => {
       await request('/api/pro/application-answers', 'GET', FREE),
       await request('/api/jobs/pro-tools-job/prepared-application', 'POST', FREE, {}),
       await request('/api/jobs/pro-tools-job/cv-check', 'POST', FREE, { cvText: '' }),
+      await request('/api/jobs/pro-tools-job/match-intelligence', 'POST', FREE, { cvText: '' }),
       await request('/api/jobs/pro-tools-job/interview-prep', 'POST', FREE, {}),
       await request('/api/salary-guide', 'GET', FREE),
     ]
@@ -126,6 +127,35 @@ describe('Pro tools for a paid account', () => {
     }
     expect(prepBody.prep.questions).toHaveLength(8)
     expect(prepBody.prep.intro).toContain('health dashboard')
+  })
+
+  it('runs FJ Match Intelligence with requirement evidence and private caching', async () => {
+    const response = await request('/api/jobs/pro-tools-job/match-intelligence', 'POST', PRO, {
+      cvText:
+        'Frontend engineer with 5 years of experience using React and TypeScript to build accessible dashboards.',
+    })
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toContain('no-store')
+    const body = (await response.json()) as {
+      match: {
+        basis: string
+        essentialPercent: number | null
+        requirements: { label: string; group: string; status: string; evidence: string[] }[]
+        eligibility: { status: string }
+        limitations: string[]
+      }
+      paid: boolean
+    }
+    expect(body.paid).toBe(true)
+    expect(body.match.basis).toBe('cv-and-profile')
+    expect(body.match.essentialPercent).toBeGreaterThan(0)
+    expect(body.match.requirements.find((item) => item.label === 'React')).toMatchObject({
+      group: 'essential',
+      status: 'met',
+    })
+    expect(body.match.requirements.find((item) => item.label === 'CSS')?.status).toBe('missing')
+    expect(body.match.eligibility.status).toBe('clear-signal')
+    expect(body.match.limitations.join(' ')).toContain('final decision')
   })
 
   it('exports and deletes the saved Pro answers with the account', async () => {

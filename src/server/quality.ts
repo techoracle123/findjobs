@@ -340,6 +340,7 @@ const PERIOD_MULTIPLIER: Record<string, number> = {
   hour: 2080,
   day: 260,
   week: 52,
+  fortnight: 26,
   month: 12,
   year: 1,
   unknown: 1,
@@ -353,6 +354,13 @@ export function salaryPlausible(
 ): boolean {
   if (!currency || min <= 0) return false
   const band = YEARLY_BANDS[currency.toUpperCase()]
+  if (period === 'project') {
+    // A fixed project fee cannot be annualised. Keep only a broad sanity
+    // range so a stated $500 or ₦250,000 project is not thrown away merely
+    // because it is not a yearly salary.
+    if (!band) return max >= min && max <= 2_000_000_000
+    return min >= Math.max(1, band[0] / 1000) && max >= min && max <= band[1]
+  }
   const multiplier = PERIOD_MULTIPLIER[period] ?? 1
   const yearlyMin = min * multiplier
   const yearlyMax = max * multiplier

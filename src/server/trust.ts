@@ -204,6 +204,7 @@ export function scamScore(
   const monthlyBand = job.salaryPeriod === 'month' ? [30_000, 5_000_000] : [200_000, 40_000_000]
   if (
     job.salaryCurrency === 'NGN' &&
+    ['month', 'year', 'unknown'].includes(job.salaryPeriod) &&
     job.salaryMin > 0 &&
     (job.salaryMin > monthlyBand[1] || job.salaryMin < monthlyBand[0] / 4) &&
     !/\b(?:director|head of|chief|executive|manager)\b/i.test(job.title)

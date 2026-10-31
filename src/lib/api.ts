@@ -13,6 +13,7 @@ import type {
   JobAdvice,
   JobTranslation,
   MasterCv,
+  MatchIntelligenceResult,
   PreparedApplication,
   ProTrialState,
   Profile,
@@ -300,6 +301,9 @@ export function fetchJobs(
   })
   if (query.trim()) params.set('q', query.trim())
   if (filters?.country) params.set('country', filters.country)
+  if (filters?.opportunityType && filters.opportunityType !== 'all') {
+    params.set('type', filters.opportunityType)
+  }
   if (filters?.location) params.set('loc', filters.location)
   if (filters?.roleFamilies.length) params.set('roles', filters.roleFamilies.join(','))
   if (filters?.workModes.length) params.set('modes', filters.workModes.join(','))
@@ -481,6 +485,20 @@ export function checkCvForJob(
 ): Promise<{ check: CvCheckResult; trial?: ProTrialState; paid?: boolean }> {
   return request<{ check: CvCheckResult; trial?: ProTrialState; paid?: boolean }>(
     `/api/jobs/${encodeURIComponent(jobId)}/cv-check`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cvText }),
+    },
+  )
+}
+
+export function fetchMatchIntelligence(
+  jobId: string,
+  cvText = '',
+): Promise<{ match: MatchIntelligenceResult; trial?: ProTrialState; paid?: boolean }> {
+  return request<{ match: MatchIntelligenceResult; trial?: ProTrialState; paid?: boolean }>(
+    `/api/jobs/${encodeURIComponent(jobId)}/match-intelligence`,
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

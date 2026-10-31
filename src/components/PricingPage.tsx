@@ -46,7 +46,7 @@ const FAQ = [
   },
   {
     q: 'What do I get in the free trial?',
-    a: 'You get all Pro tools for 3 days. You can check one CV in full. You can prepare applications for three jobs. If you compare your CV with a new job first, that job counts as one of the three. You can prepare the same job again without using another one. We do not ask for card details.',
+    a: 'You get all Pro tools for 3 days. You can check one CV in full. You can get help, including FJ Match Intelligence and prepared applications, for three listings. Using help for a new listing counts as one of the three. You can use help for the same listing again without using another one. We do not ask for card details.',
   },
   {
     q: 'Are Pro Monthly and Pro Yearly different?',
@@ -90,8 +90,13 @@ const PLAN_ORDER = ['free', 'pro', 'pro_annual', 'pro_graduate']
 
 const PLAN_POINTS: Record<string, string[]> = {
   free: ['Search all jobs', 'Apply free', 'Save jobs', 'Free Telegram alerts'],
-  pro: ['All Pro tools', 'Check your CV', 'Prepare applications', 'One month at a time'],
-  pro_annual: ['All Pro tools', 'Check your CV', 'Prepare applications', 'Lower cost each month'],
+  pro: ['All Pro tools', 'FJ Match Intelligence', 'Prepare applications', 'One month at a time'],
+  pro_annual: [
+    'All Pro tools',
+    'FJ Match Intelligence',
+    'Prepare applications',
+    'Lower cost each month',
+  ],
   pro_graduate: [
     'All Pro tools',
     'Lower monthly price',
@@ -243,7 +248,7 @@ export function PricingPage() {
       if (next) setAccess(next)
       setTrialNotice(
         result.trial.status === 'active'
-          ? 'Your free trial is on. Go to your dashboard to check your CV. You can also open a job and prepare your application.'
+          ? 'Your free trial is on. Go to your dashboard to check your CV. You can also open a job or gig and run Match Intelligence.'
           : 'You have used your free trial. You can still search and apply for free.',
       )
     } catch {
@@ -375,7 +380,7 @@ export function PricingPage() {
   const planAction = (plan: PlanRow): PlanAction => {
     if (plan.id === 'free') {
       return access
-        ? { href: '/jobs', label: 'See jobs' }
+        ? { href: '/jobs', label: 'See jobs and gigs' }
         : { href: '/auth/signup?returnTo=%2Fjobs', label: 'Create free account' }
     }
     if (access?.paid) return { href: '/dashboard?tab=plan', label: 'Open your plan' }
@@ -434,8 +439,9 @@ export function PricingPage() {
           <p className="eyebrow">Pricing</p>
           <h1 id="pricing-heading">Simple pricing</h1>
           <p className="lede">
-            Finding a job and applying are free. Pro helps you check your CV, check the advert and
-            prepare your application.
+            Finding jobs and gigs and applying are free. FJ Match Intelligence helps you decide if
+            an advert fits your CV, what is essential, what is missing, and whether a stronger
+            alternative is available.
           </p>
           <div className="pricing-hero-actions">
             {heroAction()}
@@ -483,7 +489,8 @@ export function PricingPage() {
                 <Check size={16} aria-hidden="true" /> Check one CV in full
               </li>
               <li>
-                <Check size={16} aria-hidden="true" /> Prepare applications for three jobs
+                <Check size={16} aria-hidden="true" /> Use Match Intelligence and application help
+                for three listings
               </li>
               <li>
                 <Check size={16} aria-hidden="true" /> The trial ends on its own
@@ -614,7 +621,10 @@ export function PricingPage() {
             </article>
             <article>
               <h3>Try Pro</h3>
-              <p>Try Pro if you want help to check your CV and prepare each application.</p>
+              <p>
+                Try Pro if you want Match Intelligence, CV checks and help preparing each
+                application.
+              </p>
             </article>
             <article>
               <h3>Choose Yearly</h3>

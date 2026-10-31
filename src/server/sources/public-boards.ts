@@ -79,6 +79,63 @@ export const remoteok = jsonBoard('remoteok', 'remoteok', (body) =>
     ),
 )
 
+function himalayasSalaryPeriod(value: unknown): NonNullable<RawPosting['salary']>['period'] {
+  const period = String(value ?? '').toLowerCase()
+  if (period === 'hourly' || period === 'hour') return 'hour'
+  if (period === 'weekly' || period === 'week') return 'week'
+  if (period === 'fortnightly' || period === 'fortnight') return 'fortnight'
+  if (period === 'monthly' || period === 'month') return 'month'
+  if (period === 'annual' || period === 'yearly' || period === 'year') return 'year'
+  return 'unknown'
+}
+
+function himalayasPosting(
+  item: Record<string, unknown>,
+): { id: string; posting: RawPosting } | null {
+  const guid = String(item.guid ?? item.applicationLink ?? '')
+  const id = guid || String(item.id ?? item.slug ?? '')
+  if (!id) return null
+  const restrictions = Array.isArray(item.locationRestrictions)
+    ? item.locationRestrictions.map(String).filter(Boolean)
+    : []
+  const location = restrictions.length > 0 ? restrictions.join(', ') : 'Remote'
+  const min = typeof item.minSalary === 'number' ? item.minSalary : null
+  const max = typeof item.maxSalary === 'number' ? item.maxSalary : null
+  const epoch = (value: unknown): string | null =>
+    typeof value === 'number' && value > 0 ? new Date(value * 1000).toISOString() : null
+  return {
+    id,
+    posting: posting(
+      id,
+      String(item.title ?? ''),
+      String(item.companyName ?? item.company ?? 'Employer not stated'),
+      guid || `https://himalayas.app/jobs/${String(item.slug ?? '')}`,
+      location,
+      String(item.description ?? ''),
+      {
+        remote: true,
+        applyUrl: typeof item.applicationLink === 'string' ? item.applicationLink : undefined,
+        publishedAt: epoch(item.pubDate),
+        validThrough: epoch(item.expiryDate),
+        jobType: String(item.employmentType ?? ''),
+        tags: [
+          ...(Array.isArray(item.categories) ? item.categories.map(String) : []),
+          ...(Array.isArray(item.seniority) ? item.seniority.map(String) : []),
+        ],
+        salary:
+          (min ?? max) !== null && typeof item.currency === 'string' && item.currency
+            ? {
+                min,
+                max,
+                currency: item.currency,
+                period: himalayasSalaryPeriod(item.salaryPeriod),
+              }
+            : null,
+      },
+    ),
+  }
+}
+
 /**
  * Himalayas returns { jobs: [...] } with cursor pagination (offset is
  * deprecated by the publisher). Items key on `guid` (the canonical job URL);
@@ -120,55 +177,51 @@ export const himalayas: SourceParser = {
       const jobs = body.jobs ?? []
       let fresh = 0
       for (const item of jobs) {
-        const guid = String(item.guid ?? item.applicationLink ?? '')
-        const id = guid || String(item.id ?? item.slug ?? '')
-        if (!id || seen.has(id)) continue
-        seen.add(id)
+        const mapped = himalayasPosting(item)
+        if (!mapped || seen.has(mapped.id)) continue
+        seen.add(mapped.id)
         fresh += 1
-        const restrictions = Array.isArray(item.locationRestrictions)
-          ? item.locationRestrictions.map(String).filter(Boolean)
-          : []
-        const location = restrictions.length > 0 ? restrictions.join(', ') : 'Remote'
-        const min = typeof item.minSalary === 'number' ? item.minSalary : null
-        const max = typeof item.maxSalary === 'number' ? item.maxSalary : null
-        const epoch = (value: unknown): string | null =>
-          typeof value === 'number' && value > 0 ? new Date(value * 1000).toISOString() : null
-        postings.push(
-          posting(
-            id,
-            String(item.title ?? ''),
-            String(item.companyName ?? item.company ?? 'Employer not stated'),
-            guid || `https://himalayas.app/jobs/${String(item.slug ?? '')}`,
-            location,
-            String(item.description ?? ''),
-            {
-              remote: true,
-              applyUrl: typeof item.applicationLink === 'string' ? item.applicationLink : undefined,
-              publishedAt: epoch(item.pubDate),
-              validThrough: epoch(item.expiryDate),
-              jobType: String(item.employmentType ?? ''),
-              tags: [
-                ...(Array.isArray(item.categories) ? item.categories.map(String) : []),
-                ...(Array.isArray(item.seniority) ? item.seniority.map(String) : []),
-              ],
-              salary:
-                (min ?? max) !== null && typeof item.currency === 'string' && item.currency
-                  ? {
-                      min,
-                      max,
-                      currency: item.currency,
-                      period: item.salaryPeriod === 'monthly' ? 'month' : 'year',
-                    }
-                  : null,
-            },
-          ),
-        )
+        postings.push(mapped.posting)
       }
       cursor = typeof body.nextCursor === 'string' && body.nextCursor ? body.nextCursor : null
       // Follow the cursor, not the requested size: the publisher may serve
       // fewer items per page than asked (it caps at 20), and treating that
       // as the last page once cut this source to a single page of 20.
       if (!cursor || jobs.length === 0 || fresh === 0) break
+    }
+
+    // The full recent feed can bury time-bounded work under permanent roles.
+    // Himalayas' documented search endpoint lets the same source top up real
+    // contractor and temporary listings without creating a second source or
+    // duplicate job IDs: every result is deduped by its stable guid above.
+    try {
+      const base = new URL(source.listingUrl)
+      if (base.hostname.endsWith('himalayas.app')) {
+        for (const employmentType of ['Contractor', 'Temporary']) {
+          for (let page = 1; page <= 5; page += 1) {
+            const url = new URL('/jobs/api/search', base)
+            url.searchParams.set('employment_type', employmentType)
+            url.searchParams.set('sort', 'recent')
+            url.searchParams.set('page', String(page))
+            const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
+            if (!response.ok) break
+            const body = (await response.json()) as { jobs?: Record<string, unknown>[] }
+            const jobs = body.jobs ?? []
+            let fresh = 0
+            for (const item of jobs) {
+              const mapped = himalayasPosting(item)
+              if (!mapped || seen.has(mapped.id)) continue
+              seen.add(mapped.id)
+              fresh += 1
+              postings.push(mapped.posting)
+            }
+            if (!jobs.length || fresh === 0 || jobs.length < 20) break
+          }
+        }
+      }
+    } catch {
+      // The browse feed is the source of truth; a search-top-up failure must
+      // not discard hundreds of valid listings already fetched.
     }
     return postings
   },
@@ -255,11 +308,37 @@ export const workingNomads = jsonBoard('workingnomads', 'workingnomads', (body) 
   ),
 )
 
-/** Jobicy returns { jobs: [...] } with geo and compensation fields. */
-export const jobicy = jsonBoard('jobicy', 'jobicy', (body) =>
-  ((body as { jobs?: Record<string, unknown>[] }).jobs ?? []).map((item) =>
-    posting(
-      String(item.id ?? item.url),
+function jobicySalaryPeriod(value: unknown): NonNullable<RawPosting['salary']>['period'] {
+  const period = String(value ?? '').toLowerCase()
+  if (period === 'hourly' || period === 'hour') return 'hour'
+  if (period === 'weekly' || period === 'week') return 'week'
+  if (period === 'fortnightly' || period === 'fortnight') return 'fortnight'
+  if (period === 'monthly' || period === 'month') return 'month'
+  if (period === 'yearly' || period === 'annual' || period === 'year') return 'year'
+  return 'unknown'
+}
+
+function jobicyPosting(item: Record<string, unknown>): { id: string; posting: RawPosting } | null {
+  const id = String(item.id ?? item.url ?? '')
+  if (!id) return null
+  const numberOrNull = (value: unknown): number | null => {
+    const number =
+      typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+    return Number.isFinite(number) && number > 0 ? number : null
+  }
+  const min = numberOrNull(item.salaryMin)
+  const max = numberOrNull(item.salaryMax)
+  const jobType = Array.isArray(item.jobType)
+    ? item.jobType.map(String).join(', ')
+    : String(item.jobType ?? '')
+  const publishedAt =
+    typeof item.pubDate === 'string' && Number.isFinite(Date.parse(item.pubDate))
+      ? new Date(item.pubDate).toISOString()
+      : null
+  return {
+    id,
+    posting: posting(
+      id,
       String(item.jobTitle ?? item.title ?? ''),
       String(item.companyName ?? 'Employer not stated'),
       String(item.url),
@@ -267,11 +346,92 @@ export const jobicy = jsonBoard('jobicy', 'jobicy', (body) =>
       String(item.jobDescription ?? item.description ?? ''),
       {
         tags: Array.isArray(item.jobIndustry) ? item.jobIndustry.map(String) : [],
+        jobType,
+        publishedAt,
         remote: true,
+        salary:
+          (min ?? max) !== null && typeof item.salaryCurrency === 'string' && item.salaryCurrency
+            ? {
+                min,
+                max,
+                currency: item.salaryCurrency,
+                period: jobicySalaryPeriod(item.salaryPeriod),
+              }
+            : null,
       },
     ),
-  ),
-)
+  }
+}
+
+/**
+ * Jobicy returns structured employment type, publication date and salary
+ * fields. Preserve them: they are the reliable route to real contract and
+ * freelance inventory, rather than guessing solely from advert prose.
+ */
+export const jobicy: SourceParser = {
+  id: 'jobicy',
+  name: 'Jobicy',
+  kind: 'api',
+  platform: 'jobicy',
+  homepage: 'https://jobicy.com',
+  attribution: 'Jobicy public job feed',
+  verification: 'unverified',
+  verificationReason: 'A public opportunity; verify with the employer.',
+  async fetchPostings(source: SourceRef, fetchImpl: typeof fetch = fetch) {
+    const seen = new Set<string>()
+    const postings: RawPosting[] = []
+    const base = new URL(source.listingUrl)
+
+    const walk = async (start: URL, maxPages: number, required: boolean): Promise<void> => {
+      let cursor: string | null = null
+      for (let page = 0; page < maxPages; page += 1) {
+        const url = new URL(start)
+        if (cursor) url.searchParams.set('cursor', cursor)
+        else url.searchParams.delete('cursor')
+        const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
+        if (!response.ok) {
+          if (required && page === 0) throw new Error(`jobicy returned ${response.status}`)
+          break
+        }
+        const body = (await response.json()) as {
+          jobs?: Record<string, unknown>[]
+          nextCursor?: string | null
+          hasMore?: boolean
+        }
+        const jobs = body.jobs ?? []
+        let fresh = 0
+        for (const item of jobs) {
+          const mapped = jobicyPosting(item)
+          if (!mapped || seen.has(mapped.id)) continue
+          seen.add(mapped.id)
+          fresh += 1
+          postings.push(mapped.posting)
+        }
+        cursor = typeof body.nextCursor === 'string' && body.nextCursor ? body.nextCursor : null
+        if (!cursor || body.hasMore === false || !jobs.length || fresh === 0) break
+      }
+    }
+
+    await walk(base, 4, true)
+
+    // Jobicy's `tag` filter searches job titles. On the global feed only,
+    // top up explicitly titled contract/freelance work and dedupe it into
+    // the same source. Structured jobType on the main walk catches the rest.
+    if (source.id === 'jobicy' && base.hostname.endsWith('jobicy.com')) {
+      for (const tag of ['contract', 'freelance']) {
+        const targeted = new URL(base)
+        targeted.searchParams.set('tag', tag)
+        targeted.searchParams.delete('cursor')
+        try {
+          await walk(targeted, 2, false)
+        } catch {
+          // Keep the main Jobicy feed if a title top-up is unavailable.
+        }
+      }
+    }
+    return postings
+  },
+}
 
 /** Workable: { jobs: [{ shortcode, title, company, url, location, description }] }. */
 export const workable = jsonBoard('workable', 'workable', (body) => {
@@ -342,6 +502,14 @@ export const hnHiring: SourceParser = {
       const parts = text.split('|').map((part) => part.trim())
       if (parts.length < 2 || !parts[0] || !parts[1]) continue
       if (text.length > 4000) continue
+      const jobType =
+        parts
+          .slice(2)
+          .find((part) =>
+            /^(?:contract|contractor|freelance|full[-\s]?time|part[-\s]?time|temporary|internship)$/i.test(
+              part,
+            ),
+          ) ?? ''
       postings.push(
         posting(
           `hn-${comment.id}`,
@@ -350,7 +518,7 @@ export const hnHiring: SourceParser = {
           `https://news.ycombinator.com/item?id=${comment.id}`,
           parts[2] ? parts[2].slice(0, 120) : 'Remote',
           text.slice(0, 12000),
-          { remote: /remote/i.test(text) },
+          { remote: /remote/i.test(text), jobType },
         ),
       )
       if (postings.length >= 250) break

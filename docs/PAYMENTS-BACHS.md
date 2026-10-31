@@ -55,11 +55,16 @@ founding place.
    prices on FJ are the final amounts customers should pay. With
    `customer_pays`, Bachs adds its processing fee on top of those prices.
 6. Open **Developer Portal → API keys**.
-7. Create a live secret key named `FJ production checkout`.
+7. Create a live secret key named `FJ production checkout`, or open the live
+   key FJ already uses and choose **Edit scopes**. Editing scopes does not
+   change the key and takes effect immediately, so the GitHub secret does not
+   need to be replaced and FJ does not need a redeploy for a scope-only fix.
 8. Give that key only:
    - `payments:write` (shown by Bachs as **Create & charge**)
-   - `customers:write`
+   - `customers:write` (the Customers create/update permission)
 9. Do not give the checkout key `payouts:write`. FJ checkout does not need it.
+   FJ can fall back to Bachs guest checkout if `customers:write` is missing,
+   but no code can create a checkout without `payments:write`.
 10. Open **Developer Portal → Webhooks** and create a live destination for:
 
     `https://fj-find-jobs.pages.dev/api/billing/webhook`
@@ -109,9 +114,13 @@ Do not announce payments from the presence of a buy button alone. First:
    provider is `bachs`.
 3. In the deployment log, open **Check Bachs checkout settings safely**. It
    should show at least one NGN payment method enabled. A manually dispatched
-   deployment can also switch on `bachs_checkout_probe`. That creates one
-   unpaid checkout to prove that Bachs accepts FJ's checkout request. It does
-   not charge anybody.
+   deployment can switch on `bachs_checkout_probe`; a push whose head commit
+   message contains `[bachs-probe]` does the same. The probe tries FJ's
+   current checkout first, then account-default, single-method, guest and
+   minimal variants, stopping at the first unpaid checkout Bachs accepts.
+   GitHub annotations give only the environment, enabled methods, fee
+   preference, HTTP status, stable error code, field names and request id.
+   The probe does not charge anybody.
 4. Use your own FJ account and make one small real purchase.
 5. Confirm the payment is in Bachs.
 6. Confirm the webhook destination shows a successful delivery.
@@ -132,17 +141,26 @@ customer to test this for you.
 2. Do not keep clicking Buy. First open the plan page and use **Check payment**
    if money may have left the bank.
 3. In Bachs, check live mode, open account tasks, checkout settings and the
-   API key scopes. The key needs `payments:write` and `customers:write`.
-4. In **Developer Portal → Logs**, find the failed checkout request. Bachs
+   API key scopes. The recommended key scopes are `payments:write` and
+   `customers:write`; `payments:write` is the minimum needed to create and
+   read back FJ's one-time checkouts. HTTP 403 with code `FORBIDDEN` means
+   the key is valid but lacks the scope for that operation. Checkout settings
+   can still load with that key, so enabled NGN methods alone do not prove
+   the key can create a checkout.
+4. To repair an existing live key, open **Developer Portal → API keys**, open
+   the key, choose **Edit scopes**, enable **Payments → Create & charge** and
+   the Customers create/update permission, then save. Do not rotate the key
+   for a scope-only repair.
+5. In **Developer Portal → Logs**, find the failed checkout request. Bachs
    gives a stable error code and request id there. FJ server logs keep only
    those safe fields for the same reason. Do not copy a secret key or a full
    request body into chat or a GitHub issue.
-5. If the error says the account or a payment method needs attention, fix it in
+6. If the error says the account or a payment method needs attention, fix it in
    Bachs first. Code cannot switch on a corridor or finish account review.
-6. Run the deployment manually with `bachs_checkout_probe` switched on. If the
-   probe succeeds, Bachs accepts the same basic checkout shape FJ sends. If it
-   fails, its log line gives the Bachs status, stable error code, field names
-   and request id.
+7. Run the probe with `bachs_checkout_probe` or a `[bachs-probe]` head commit
+   message. If a variant succeeds, Bachs accepts that checkout shape. If all
+   variants fail, the GitHub annotations give the Bachs status, stable error
+   code, field names and request id for the variants shown.
 
 ## What happens if something goes wrong
 

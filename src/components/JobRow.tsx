@@ -1,6 +1,7 @@
 import { Bookmark, BookmarkCheck, Flag } from 'lucide-react'
 import type { ScoredJob } from '../shared/types'
-import { formatRange, formatRelativeTime } from '../shared/format'
+import { formatRange, formatRelativeTime, PERIOD_LABELS } from '../shared/format'
+import { opportunityBadge, opportunityOf } from '../shared/opportunities'
 import { roleFamilyLabel, workModeLabel } from '../shared/taxonomy'
 import type { SalaryView } from '../lib/ranking'
 import { MatchRing } from './MatchRing'
@@ -43,6 +44,8 @@ export function JobRow({
   cautionBannerEnabled = false,
 }: JobRowProps) {
   const { job, score } = scored
+  const opportunity = opportunityOf(job)
+  const gigBadge = opportunity.opportunityType === 'gig' ? opportunityBadge(job) : ''
   const hasProfile = scored.components.some((component) => component.applicable)
   const hasPay = salary.max > 0 || salary.min > 0
   return (
@@ -78,24 +81,21 @@ export function JobRow({
             {job.verification === 'verified' && (
               <span className="chip chip--ok jobrow__badge">Verified</span>
             )}
+            {gigBadge && <span className="chip chip--gig jobrow__badge">{gigBadge}</span>}
             {job.locationLabel ? ` · ${job.locationLabel}` : ''}
           </span>
           <span className="jobrow__meta">
             {job.roleFamily !== 'unknown' && <span>{roleFamilyLabel(job.roleFamily)}</span>}
             {job.workMode !== 'unknown' && <span>{workModeLabel(job.workMode)}</span>}
             {job.postedAt && <span>{formatRelativeTime(job.postedAt)}</span>}
+            {job.sourceName && <span>Source: {job.sourceName}</span>}
             {job.jobStatus === 'closed' && <span>Closed</span>}
           </span>
           {hasPay && (
             <span className="jobrow__salary">
               {salary.converted ? '≈ ' : ''}
               {formatRange(salary.min, salary.max, salary.currency)}
-              <span>
-                {' '}
-                {salary.period === 'unknown'
-                  ? '(period not stated)'
-                  : `/${salary.period === 'year' ? 'yr' : salary.period === 'month' ? 'mo' : 'hr'}`}
-              </span>
+              <span> {PERIOD_LABELS[salary.period]}</span>
             </span>
           )}
         </span>

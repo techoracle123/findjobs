@@ -7,6 +7,7 @@ import type {
   ScoredJob,
 } from './types'
 import { matchSkills } from './skills'
+import { matchesOpportunityPreference, opportunityOf } from './opportunities'
 
 /**
  * Score weights, per the product spec. They are intentionally not a flat
@@ -14,11 +15,12 @@ import { matchSkills } from './skills'
  * "useful" one.
  */
 export const SCORE_WEIGHTS: Record<ScoreComponentKey, number> = {
-  requiredSkills: 48,
-  usefulSkills: 14,
-  roleFamily: 18,
-  seniority: 10,
-  workMode: 10,
+  requiredSkills: 44,
+  usefulSkills: 13,
+  roleFamily: 17,
+  seniority: 9,
+  workMode: 9,
+  opportunityType: 8,
 }
 
 export const ELIGIBILITY_ORDER: Record<EligibilityTier, number> = {
@@ -191,6 +193,35 @@ export function scoreJob(job: Job, profile: Profile): ScoredJob {
           : 'Add a preferred work mode',
     matched: modeMatched ? [job.workMode] : [],
     missing: modeApplicable && !modeMatched ? [job.workMode] : [],
+  })
+
+  const preferredOpportunities = (profile.opportunityTypes ?? []).filter(
+    (type) => type === 'job' || type === 'gig',
+  )
+  const opportunityApplicable = preferredOpportunities.length === 1
+  const opportunityMatched =
+    opportunityApplicable && matchesOpportunityPreference(job, preferredOpportunities)
+  const opportunity = opportunityOf(job)
+  components.push({
+    key: 'opportunityType',
+    label: 'Jobs or gigs',
+    weight: SCORE_WEIGHTS.opportunityType,
+    earned: opportunityMatched ? SCORE_WEIGHTS.opportunityType : 0,
+    applicable: opportunityApplicable,
+    detail: !opportunityApplicable
+      ? 'Choose jobs, gigs and contracts, or both in your profile'
+      : opportunityMatched
+        ? preferredOpportunities[0] === 'gig'
+          ? 'Matches your gigs and contracts choice'
+          : 'Matches your jobs choice'
+        : preferredOpportunities[0] === 'gig'
+          ? 'This is not classified as a gig or contract'
+          : 'This is classified as a gig or contract',
+    matched: opportunityMatched ? [opportunity.engagementLabel || opportunity.opportunityType] : [],
+    missing:
+      opportunityApplicable && !opportunityMatched
+        ? [opportunity.engagementLabel || opportunity.opportunityType]
+        : [],
   })
 
   const applicableWeight = components

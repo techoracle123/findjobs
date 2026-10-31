@@ -1,6 +1,7 @@
 import { CalendarClock, Trash2 } from 'lucide-react'
 import type { ApplicationStage, Job, ProTrialState, SavedApplication } from '../shared/types'
-import { formatRange } from '../shared/format'
+import { formatRange, PERIOD_LABELS } from '../shared/format'
+import { opportunityBadge, opportunityOf } from '../shared/opportunities'
 
 interface SavedPanelProps {
   saved: SavedApplication[]
@@ -46,7 +47,8 @@ export function SavedPanel({
         <div className="empty">
           <p className="empty__title">Nothing saved yet</p>
           <p>
-            Save a job you like and come back to it here. Sign in to keep your list across devices.
+            Save a job or gig you like and come back to it here. Sign in to keep your list across
+            devices.
           </p>
         </div>
       </div>
@@ -87,7 +89,8 @@ export function SavedPanel({
       </div>
       <div className="panel__body stack">
         <p className="panel__note">
-          Saving jobs and marking them as applied is free. Pro adds more stages and follow up dates.
+          Saving jobs and gigs and marking them as applied is free. Pro adds more stages and follow
+          up dates.
         </p>
         {due.length ? (
           <p className="banner banner--info" role="status">
@@ -132,9 +135,15 @@ export function SavedPanel({
                         Follow up {dateValue(entry.followUpAt)}
                       </span>
                     ) : null}
+                    {job && opportunityOf(job).opportunityType === 'gig' ? (
+                      <span className="chip chip--gig">{opportunityBadge(job)}</span>
+                    ) : null}
                     {job ? (
                       <span className="chip chip--plain">
-                        {formatRange(job.salaryMin, job.salaryMax, job.salaryCurrency)}
+                        {formatRange(job.salaryMin, job.salaryMax, job.salaryCurrency)}{' '}
+                        {job.salaryMin > 0 || job.salaryMax > 0
+                          ? PERIOD_LABELS[job.salaryPeriod]
+                          : ''}
                       </span>
                     ) : null}
                   </div>

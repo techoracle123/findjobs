@@ -286,45 +286,99 @@ export class BachsProvider implements PaymentProvider {
       })
     }
     const email = cleanCustomerEmail(request.email)
-    if (!email) {
-      throw new BillingProviderError({
-        failure: 'provider_validation',
-        message: 'The account email is not valid for checkout.',
-      })
-    }
     const currency = request.currency.toUpperCase()
     const reference =
       request.reference ?? `fj_${request.userId}_${request.plan}_${crypto.randomUUID()}`
-    let session: CheckoutSessionCreated
-    try {
-      session = await this.client.checkoutSessions.create(
-        {
-          // Keep this to the documented raw-price shape. When a customer is
-          // supplied, customer_creation does not apply, and the checkout
-          // currency already comes from pricing.currency.
-          pricing: {
-            currency,
-            amount: toDecimalString(toKobo(amount)), // decimal string, never a float
+    const baseIdempotencyKey = request.idempotencyKey ?? reference
+
+    // Bachs hosted checkout can collect buyer details when `customer` is
+    // omitted. Start with the prefilled customer and explicit NGN methods.
+    // Only after a definitive refusal that identifies one of those optional
+    // choices do we try the less restrictive equivalent for the same saved
+    // FJ attempt. This means a live key with payments access does not also
+    // need customer-directory access just to open a one-time checkout, and
+    // an explicit method restriction cannot block an otherwise valid sale.
+    // A timeout or 5xx is never retried under a different shape because its
+    // outcome may be uncertain.
+    let includeCustomer = email !== null
+    let restrictToNgnMethods = currency === 'NGN'
+    let session: CheckoutSessionCreated | null = null
+    let lastFailure: BillingProviderError | null = null
+
+    for (let attempt = 0; attempt < 4 && !session; attempt += 1) {
+      const idempotencyKey =
+        attempt === 0
+          ? baseIdempotencyKey
+          : `${baseIdempotencyKey}-${includeCustomer ? 'customer' : 'guest'}-${
+              restrictToNgnMethods ? 'ngn-methods' : 'account-defaults'
+            }`
+      try {
+        session = await this.client.checkoutSessions.create(
+          {
+            // Keep this to the documented raw-price shape. The checkout
+            // currency already comes from pricing.currency.
+            pricing: {
+              currency,
+              amount: toDecimalString(toKobo(amount)), // decimal string, never a float
+            },
+            reference,
+            customer:
+              includeCustomer && email
+                ? {
+                    email,
+                    name: bachsCustomerName(request.name),
+                  }
+                : undefined,
+            customer_creation: includeCustomer ? undefined : 'if_required',
+            payment_method_types: restrictToNgnMethods
+              ? ['NGN_CARD', 'NGN_BANK_TRANSFER']
+              : undefined,
+            success_url: publicHttpsUrl(request.successUrl ?? request.returnUrl),
+            cancel_url: publicHttpsUrl(request.cancelUrl ?? request.returnUrl),
+            metadata: {
+              ...(request.metadata ?? {}),
+              user_id: request.userId,
+              plan: request.plan,
+            },
+            expires_in_minutes: 60,
           },
-          reference,
-          customer: {
-            email,
-            name: bachsCustomerName(request.name),
-          },
-          payment_method_types: currency === 'NGN' ? ['NGN_CARD', 'NGN_BANK_TRANSFER'] : undefined,
-          success_url: publicHttpsUrl(request.successUrl ?? request.returnUrl),
-          cancel_url: publicHttpsUrl(request.cancelUrl ?? request.returnUrl),
-          metadata: {
-            ...(request.metadata ?? {}),
-            user_id: request.userId,
-            plan: request.plan,
-          },
-          expires_in_minutes: 60,
-        },
-        { idempotencyKey: request.idempotencyKey ?? reference },
+          { idempotencyKey },
+        )
+      } catch (error) {
+        const failure = toBillingProviderError(error, 'Bachs could not create the checkout.')
+        lastFailure = failure
+        const customerFieldRejected = failure.fieldNames.some(
+          (field) =>
+            field === 'customer' || field.startsWith('customer.') || field.startsWith('customer_'),
+        )
+        if (
+          includeCustomer &&
+          (failure.httpStatus === 403 ||
+            failure.providerCode === 'FORBIDDEN' ||
+            customerFieldRejected)
+        ) {
+          includeCustomer = false
+          continue
+        }
+        if (
+          restrictToNgnMethods &&
+          failure.providerCode === 'CHECKOUT_RESTRICTION_LEAVES_NO_PAYMENT_METHOD'
+        ) {
+          restrictToNgnMethods = false
+          continue
+        }
+        throw failure
+      }
+    }
+
+    if (!session) {
+      throw (
+        lastFailure ??
+        new BillingProviderError({
+          failure: 'provider_rejected',
+          message: 'Bachs could not create the checkout.',
+        })
       )
-    } catch (error) {
-      throw toBillingProviderError(error, 'Bachs could not create the checkout.')
     }
     const checkoutUrl = publicHttpsUrl(session.checkout_url)
     if (!session.checkout_id || !checkoutUrl) {

@@ -45,6 +45,7 @@ const EMPTY_PROFILE: Profile = {
   targetSeniority: [],
   preferredWorkModes: [],
   workCountry: '',
+  opportunityTypes: [],
 }
 
 export interface UseAccount {

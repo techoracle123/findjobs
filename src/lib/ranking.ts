@@ -1,6 +1,7 @@
 import type {
   EligibilityTier,
   Job,
+  OpportunityFilter,
   RatesPayload,
   SalaryPeriod,
   ScoredJob,
@@ -9,12 +10,14 @@ import type {
 import { bucketByPeriod, convertAmount } from '../shared/format'
 import { roleFamilyLabel } from '../shared/taxonomy'
 import { compareScoredJobs } from '../shared/scoring'
+import { matchesOpportunityFilter, opportunityOf } from '../shared/opportunities'
 
 export interface Filters {
   query: string
   /** City/state free text from the Where field. */
   location?: string
   country?: string
+  opportunityType?: OpportunityFilter
   workModes: string[]
   seniorities: string[]
   roleFamilies: string[]
@@ -30,6 +33,7 @@ export const DEFAULT_FILTERS: Filters = {
   query: '',
   location: '',
   country: '',
+  opportunityType: 'all',
   workModes: [],
   seniorities: [],
   roleFamilies: [],
@@ -109,6 +113,9 @@ function matchesQuery(job: Job, query: string): boolean {
     job.locationLabel,
     job.roleFamily,
     roleFamilyLabel(job.roleFamily),
+    opportunityOf(job).engagementLabel,
+    opportunityOf(job).projectDuration ?? '',
+    opportunityOf(job).opportunityType === 'gig' ? 'gig contract freelance project' : 'job',
     ...job.requiredSkills,
     ...job.usefulSkills,
   ]
@@ -122,6 +129,7 @@ export function filterJobs(scored: ScoredJob[], filters: Filters): ScoredJob[] {
   return scored.filter((entry) => {
     const { job } = entry
     if (!matchesQuery(job, filters.query)) return false
+    if (!matchesOpportunityFilter(job, filters.opportunityType)) return false
     if (filters.country && job.locationCountry !== filters.country) return false
     if (filters.workModes.length > 0 && !filters.workModes.includes(job.workMode)) return false
     if (filters.seniorities.length > 0 && !filters.seniorities.includes(job.seniority)) return false

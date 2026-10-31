@@ -11,6 +11,7 @@ import { COUNTRIES } from '../../shared/countries'
 import type { RawPosting, RawSalary } from './types'
 import { specialistRole } from '../../shared/specialisms'
 import { qualityPass } from '../quality'
+import { classifyOpportunity } from '../../shared/opportunities'
 import { cleanJobText } from './html'
 
 const SENIORITY_RANK: Record<string, number> = {
@@ -187,11 +188,19 @@ export function extractSalary(text: string, country = ''): RawSalary | null {
   )
   const period: SalaryPeriod = /per\s*hour|\/\s*h(?:r|our)?\b|hourly|stunde/i.test(context)
     ? 'hour'
-    : /per\s*month|monthly|\/\s*(?:mo|month)\b|monat|par mois/i.test(context)
-      ? 'month'
-      : /per\s*year|annually|annual|\/\s*yr\b|per annum|jahr|par an\b/i.test(context)
-        ? 'year'
-        : 'unknown'
+    : /per\s*fortnight|fortnightly|every\s*(?:two|2)\s*weeks/i.test(context)
+      ? 'fortnight'
+      : /per\s*week|weekly|\/\s*(?:wk|week)\b/i.test(context)
+        ? 'week'
+        : /per\s*month|monthly|\/\s*(?:mo|month)\b|monat|par mois/i.test(context)
+          ? 'month'
+          : /per\s*year|annually|annual|\/\s*yr\b|per annum|jahr|par an\b/i.test(context)
+            ? 'year'
+            : /per\s*project|for\s+(?:the|this)\s+project|project\s+(?:fee|budget|price)|fixed\s+(?:price|fee|budget)/i.test(
+                  context,
+                )
+              ? 'project'
+              : 'unknown'
   const number = (digits: string, suffix?: string): number => {
     const cleaned = digits.replace(/[,.](?=\d{3}(?:[,.]|$))/g, '').replace(',', '.')
     return Number(cleaned) * (suffix ? 1000 : 1)
@@ -250,11 +259,19 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
       : false
 
   const closed = raw.closed || expired
+  const cleanedDescription = cleanJobText(raw.description).slice(0, 16000)
+  const opportunity = classifyOpportunity({
+    jobType: raw.jobType,
+    tags: raw.tags,
+    title: raw.title,
+    description: cleanedDescription,
+    salaryPeriod: salary?.period,
+  })
 
   const { patch } = qualityPass({
     title: raw.title,
     company: raw.company,
-    description: cleanJobText(raw.description).slice(0, 16000),
+    description: cleanedDescription,
     applyUrl: raw.applyUrl || raw.url,
     sourceUrl: raw.url,
     tags: raw.tags,
@@ -275,7 +292,12 @@ export function normalizePosting(raw: RawPosting, context: NormaliseContext): No
     roleFamily: specialistRole(raw.title) || inferRoleFamily(raw.title, raw.tags, raw.description),
     locationCountry: patch.quality.location.country || countryHint,
     locationLabel: raw.location.trim(),
-    description: cleanJobText(raw.description).slice(0, 16000),
+    opportunityType: opportunity.opportunityType,
+    engagementType: opportunity.engagementType,
+    engagementLabel: opportunity.engagementLabel,
+    engagementBasis: opportunity.engagementBasis,
+    ...(opportunity.projectDuration ? { projectDuration: opportunity.projectDuration } : {}),
+    description: cleanedDescription,
     // The quality pass owns the required/useful split (it merges these same
     // tag/text skills with section- and cue-based evidence). Overwriting it
     // here was why production rows carried zero required skills.
