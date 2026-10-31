@@ -207,7 +207,7 @@ export function PricingPage() {
       ...FAQ.map((item) => (item.q === 'When can I pay?' ? { ...item, a: paymentAnswer } : item)),
       {
         q: 'Will my plan renew by itself?',
-        a: 'No. Each naira payment buys one month or one year. FJ will not charge you again by itself. If you want more time, you pay again before or after the end date in your account.',
+        a: 'No. Each naira payment buys one month or one year. FJ will not charge you again unless you choose to pay. If you want more time, you pay again before or after the end date in your account.',
       },
       {
         q: 'What if I pay and Pro does not turn on?',
