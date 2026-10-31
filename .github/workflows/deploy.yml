@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       bachs_checkout_probe:
-        description: 'Create one unpaid Bachs checkout to test live checkout creation'
+        description: 'Try unpaid Bachs checkout variants to test live checkout creation'
         required: false
         default: false
         type: boolean
@@ -89,7 +89,7 @@ jobs:
       - name: Check Bachs checkout settings safely
         env:
           BACHS_SECRET_KEY: ${{ secrets.BACHS_SECRET_KEY }}
-          BACHS_DIAGNOSTIC_CREATE_CHECKOUT: ${{ github.event_name == 'workflow_dispatch' && inputs.bachs_checkout_probe && '1' || '0' }}
+          BACHS_DIAGNOSTIC_CREATE_CHECKOUT: ${{ ((github.event_name == 'workflow_dispatch' && inputs.bachs_checkout_probe) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[bachs-probe]'))) && '1' || '0' }}
         run: node scripts/check-bachs.mjs
       - name: Provision database and queue, migrate, and deploy
         env:
