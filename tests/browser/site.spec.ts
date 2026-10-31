@@ -238,7 +238,9 @@ test('pricing is linked in the header and the page loads', async ({ page }) => {
   await page.goto('/')
   await page.locator('.topnav').getByRole('link', { name: 'Pricing' }).click()
   await expect(page).toHaveURL(/\/pricing$/)
-  await expect(page.getByRole('heading', { name: 'Simple pricing' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Free to find and apply. Pro to apply stronger.' }),
+  ).toBeVisible()
   const pricingTable = page.locator('.pricing-table')
   await expect(page.locator('.pricing-cards')).toContainText('Pro for Graduates')
   await expect(page.locator('.pricing-cards')).toContainText('₦5,000')
@@ -269,7 +271,9 @@ test('homepage and pricing explain Phase 2 cleanly at phone, tablet and desktop 
     await page.screenshot({ path: testInfo.outputPath(`phase2-home-${width}.png`) })
 
     await page.goto('/pricing')
-    await expect(page.getByRole('heading', { name: 'Simple pricing' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Free to find and apply. Pro to apply stronger.' }),
+    ).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Try Pro free for 3 days' })).toBeVisible()
     await expect(page.locator('.pricing-table')).toContainText('Saved master CV')
     await expect(page.locator('.pricing-table')).toContainText('Smart Telegram alerts')
