@@ -27,6 +27,8 @@ on:
       - wrangler*.jsonc
       - package*.json
       - index.html
+      - playwright.config.ts
+      - tests/browser/**
 
 permissions:
   contents: read
