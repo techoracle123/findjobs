@@ -455,7 +455,10 @@ export default function App() {
               : {
                   ...entry,
                   status: 'applied',
-                  stage: entry.stage && entry.stage !== 'saved' ? entry.stage : 'applied',
+                  stage:
+                    entry.stage && ['applied', 'interview', 'offer', 'closed'].includes(entry.stage)
+                      ? entry.stage
+                      : 'applied',
                   appliedAt: entry.appliedAt || new Date().toISOString(),
                 }
             : entry,

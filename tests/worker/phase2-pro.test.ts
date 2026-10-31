@@ -498,6 +498,15 @@ describe('advert checks, best matches and skill gaps', () => {
 
 describe('pipeline and smart alert account gates', () => {
   it('downgrades free advanced stages and smart alerts without taking away the basic records', async () => {
+    expect(
+      (
+        await request('/api/account/saved', 'POST', FREE, {
+          jobId: JOB_IDS[0],
+          status: 'saved',
+          stage: 'saved',
+        })
+      ).status,
+    ).toBe(200)
     const savedResponse = await request('/api/account/saved', 'POST', FREE, {
       jobId: JOB_IDS[0],
       status: 'applied',
@@ -594,6 +603,22 @@ describe('pipeline and smart alert account gates', () => {
       kind: 'smart',
       minScore: 55,
       currency: 'NGN',
+    })
+
+    const expiredStageResponse = await request('/api/account/saved', 'POST', PACK, {
+      jobId: JOB_IDS[1],
+      status: 'applied',
+      stage: 'offer',
+      followUpAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+    })
+    expect(await expiredStageResponse.json()).toMatchObject({ ok: true, proRequired: true })
+    const savedAfterExpiry = (await (await request('/api/account/saved', 'GET', PACK)).json()) as {
+      saved: { jobId: string; status: string; stage: string; followUpAt?: string }[]
+    }
+    expect(savedAfterExpiry.saved.find((entry) => entry.jobId === JOB_IDS[1])).toMatchObject({
+      status: 'applied',
+      stage: 'interview',
+      followUpAt: follow,
     })
   })
 })

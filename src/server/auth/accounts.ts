@@ -209,10 +209,23 @@ export async function setSaved(
     .bind(userId, jobId)
     .first<{ stage: string | null; follow_up_at: string | null }>()
     .catch(() => null)
-  const stage =
+  const requestedStage =
     extra?.stage ??
     (current?.stage as ApplicationStage | null) ??
     (status === 'applied' ? 'applied' : 'saved')
+  // Status is the coarse saved/applied flag and stage is the detailed
+  // pipeline position. Keep them describing the same point in the journey:
+  // an applied record cannot still be merely saved/preparing, while an
+  // existing interview/offer/closed stage remains readable after access ends.
+  const stage: ApplicationStage =
+    status === 'applied' && (requestedStage === 'saved' || requestedStage === 'preparing')
+      ? 'applied'
+      : requestedStage
+  const effectiveStatus: 'saved' | 'applied' = ['applied', 'interview', 'offer', 'closed'].includes(
+    stage,
+  )
+    ? 'applied'
+    : 'saved'
   const followUpAt =
     extra && 'followUpAt' in extra ? extra.followUpAt : (current?.follow_up_at ?? null)
   const save = db
@@ -222,10 +235,10 @@ export async function setSaved(
        ON CONFLICT(user_id, job_id) DO UPDATE SET status = ?3, stage = ?4, follow_up_at = ?5,
          note = COALESCE(?6, saved_jobs.note), updated_at = ?7`,
     )
-    .bind(userId, jobId, status, stage, followUpAt, note ?? null, now)
+    .bind(userId, jobId, effectiveStatus, stage, followUpAt, note ?? null, now)
 
   const statements = [save]
-  if (status === 'applied')
+  if (effectiveStatus === 'applied')
     statements.push(
       db
         .prepare(
