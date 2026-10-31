@@ -1,13 +1,16 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../env'
 import { monthPeriod } from '../../shared/activity'
-import type { Profile } from '../../shared/types'
+import type { AlertPreference, ApplicationStage, Profile } from '../../shared/types'
+import { WORK_MODES } from '../../shared/taxonomy'
 import {
   createAlert,
   deleteAccount,
   deleteAlert,
   exportAccount,
+  getEntitlements,
   getProfile,
+  getSubscription,
   listAlerts,
   listSaved,
   loadAccount,
@@ -26,8 +29,63 @@ import {
   unauthorized,
 } from '../http'
 import { logger } from '../logging'
+import { getTrialState } from '../phase2'
+import { planEntitlements, subscriptionHasFeature } from '../billing/types'
 
 export const accountRoutes = new Hono<AppEnv>()
+
+async function hasPhase2Access(db: D1Database, userId: string, feature: string): Promise<boolean> {
+  const [entitlements, subscription, trial] = await Promise.all([
+    getEntitlements(db, userId),
+    getSubscription(db, userId),
+    getTrialState(db, userId),
+  ])
+  return (
+    trial.status === 'active' ||
+    entitlements.includes(feature) ||
+    subscriptionHasFeature(
+      subscription,
+      subscription ? planEntitlements(subscription.plan) : [],
+      feature,
+    )
+  )
+}
+
+function normaliseAlertSettings(
+  body: Record<string, unknown>,
+  smartAllowed: boolean,
+): Partial<AlertPreference> {
+  if (body.kind !== 'smart' || !smartAllowed) return { kind: 'keyword' }
+  const minScoreRaw = Number(body.minScore)
+  const currency = typeof body.currency === 'string' ? body.currency.trim().toUpperCase() : ''
+  return {
+    kind: 'smart',
+    ...(Number.isFinite(minScoreRaw)
+      ? { minScore: Math.max(0, Math.min(100, Math.round(minScoreRaw))) }
+      : {}),
+    countries: stringList(body.countries, 10)
+      .map((code) => code.toUpperCase())
+      .filter((code) => /^[A-Z]{2}$/.test(code)),
+    workModes: stringList(body.workModes, 4).filter((mode) =>
+      (WORK_MODES as readonly string[]).includes(mode),
+    ) as AlertPreference['workModes'],
+    salaryOnly: body.salaryOnly === true,
+    ...(/^[A-Z]{3}$/.test(currency) ? { currency } : {}),
+    ...(typeof body.exclude === 'string' && body.exclude.trim()
+      ? { exclude: body.exclude.trim().slice(0, 200) }
+      : {}),
+    companies: stringList(body.companies, 10).map((company) => company.slice(0, 80)),
+  }
+}
+
+const APPLICATION_STAGES: ApplicationStage[] = [
+  'saved',
+  'preparing',
+  'applied',
+  'interview',
+  'offer',
+  'closed',
+]
 
 function normaliseProfile(input: unknown): Profile {
   const raw = (input ?? {}) as Partial<Profile>
@@ -129,10 +187,39 @@ accountRoutes.post('/account/saved', async (c) => {
   const jobId = typeof body.jobId === 'string' ? body.jobId.trim() : ''
   if (!jobId) return badRequest(c, 'jobId is required')
 
-  const status = body.status === 'applied' ? 'applied' : 'saved'
+  const requestedStage = APPLICATION_STAGES.includes(body.stage as ApplicationStage)
+    ? (body.stage as ApplicationStage)
+    : undefined
+  const advanced = Boolean(
+    (requestedStage && !['saved', 'applied'].includes(requestedStage)) ||
+    (body.followUpAt !== undefined && body.followUpAt !== null),
+  )
+  const pipelineAllowed = advanced
+    ? await hasPhase2Access(c.env.DB, user.id, 'application_pipeline')
+    : false
+  const stage = advanced && !pipelineAllowed ? undefined : requestedStage
+  const status =
+    stage && ['applied', 'interview', 'offer', 'closed'].includes(stage)
+      ? 'applied'
+      : stage
+        ? 'saved'
+        : body.status === 'applied'
+          ? 'applied'
+          : 'saved'
   const note = typeof body.note === 'string' ? body.note.slice(0, 500) : undefined
-  await setSaved(c.env.DB, user.id, jobId, status, note)
-  return c.json({ ok: true })
+  const followUpAt =
+    advanced && !pipelineAllowed
+      ? undefined
+      : typeof body.followUpAt === 'string' && Number.isFinite(Date.parse(body.followUpAt))
+        ? new Date(body.followUpAt).toISOString()
+        : body.followUpAt === null
+          ? null
+          : undefined
+  await setSaved(c.env.DB, user.id, jobId, status, note, undefined, {
+    ...(stage ? { stage } : {}),
+    ...(followUpAt !== undefined ? { followUpAt } : {}),
+  })
+  return c.json({ ok: true, ...(advanced && !pipelineAllowed ? { proRequired: true } : {}) })
 })
 
 accountRoutes.delete('/account/saved/:jobId', async (c) => {
@@ -171,6 +258,7 @@ accountRoutes.post('/account/alerts', async (c) => {
     query: typeof body.query === 'string' ? body.query.trim().slice(0, 200) : '',
     channels: stringList(body.channels, 5),
     enabled: false,
+    ...normaliseAlertSettings(body, await hasPhase2Access(c.env.DB, user.id, 'smart_alerts')),
   }
   await createAlert(c.env.DB, user.id, alert)
   return c.json({ alert })
@@ -187,6 +275,25 @@ accountRoutes.patch('/account/alerts/:id', async (c) => {
   if (typeof body.query === 'string') patch.query = body.query.trim().slice(0, 200)
   if (Array.isArray(body.channels)) patch.channels = stringList(body.channels, 5)
   if (typeof body.enabled === 'boolean') patch.enabled = body.enabled
+  if (
+    [
+      'kind',
+      'minScore',
+      'countries',
+      'workModes',
+      'salaryOnly',
+      'currency',
+      'exclude',
+      'companies',
+    ].some((key) => key in body)
+  ) {
+    // Preserve an existing smart alert's stored settings after trial/Pro ends.
+    // Delivery falls back to basic keywords while access is inactive; a
+    // routine enable/pause patch must not silently erase the settings.
+    if (await hasPhase2Access(c.env.DB, user.id, 'smart_alerts')) {
+      Object.assign(patch, normaliseAlertSettings(body, true))
+    }
+  }
 
   await updateAlert(c.env.DB, user.id, c.req.param('id'), patch)
   return c.json({ ok: true })

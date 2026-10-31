@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Bookmark, BookmarkCheck, ExternalLink, Flag, Send } from 'lucide-react'
-import type { Profile, RatesPayload, ScoredJob } from '../shared/types'
+import type { Profile, ProTrialState, RatesPayload, ScoredJob } from '../shared/types'
 import { formatRange, formatRelativeTime, PERIOD_LABELS } from '../shared/format'
 import { roleFamilyLabel, seniorityLabel, workModeLabel } from '../shared/taxonomy'
 import { applyLinkOf, isClosed } from '../shared/verification'
@@ -9,6 +9,7 @@ import { recordApplyClick } from '../lib/api'
 import { copy } from '../shared/copy'
 import { ReportDialog } from './ReportDialog'
 import { LeavingWarning } from './LeavingWarning'
+import { ProTools } from './ProTools'
 import type { SalaryView } from '../lib/ranking'
 
 interface JobDetailProps {
@@ -21,9 +22,10 @@ interface JobDetailProps {
   applied: boolean
   onSave: () => void
   onApply: () => void
-  onFastApply?: () => Promise<void>
   cautionBannerEnabled?: boolean
-  applyQuota?: { remaining: number; unlimited: boolean; resetsAt: string } | null
+  proEnabled?: boolean
+  trial?: ProTrialState
+  onRefreshAccount?: () => Promise<void> | void
 }
 
 export function JobDetail({
@@ -36,14 +38,13 @@ export function JobDetail({
   applied,
   onSave,
   onApply,
-  onFastApply,
-  applyQuota,
+  proEnabled = false,
+  trial,
+  onRefreshAccount,
   cautionBannerEnabled = false,
 }: JobDetailProps) {
-  const [fastApplying, setFastApplying] = useState(false)
   const [reporting, setReporting] = useState(false)
   const [leaving, setLeaving] = useState(false)
-  const [fastMessage, setFastMessage] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
 
   if (!scored || !salary) return null
   const { job } = scored
@@ -71,27 +72,6 @@ export function JobDetail({
             This listing has closed. It is kept here for your saved-job records.
           </p>
         )}
-        {fastMessage && (
-          <p
-            className={`banner ${fastMessage.tone === 'ok' ? 'banner--info' : 'banner--demo'}`}
-            role="status"
-          >
-            {fastMessage.text}
-          </p>
-        )}
-        {!closed &&
-          job.applyMode === 'onsite' &&
-          applyQuota &&
-          !applyQuota.unlimited &&
-          applyQuota.remaining <= 0 && (
-            <div className="banner banner--info" role="status">
-              <p>
-                You’ve used all 5 free applications today.{' '}
-                <a href="/dashboard?tab=plan">Upgrade to Pro for unlimited — ₦10,000/month</a>. You
-                can still apply directly on the employer’s site — that’s always free.
-              </p>
-            </div>
-          )}
         {job.moderationState === 'caution' && cautionBannerEnabled && (
           <p className="banner banner--demo" role="status">
             {copy('trust.caution')}
@@ -101,7 +81,7 @@ export function JobDetail({
           <p className="leaving-line">{copy('trust.thirdParty')}</p>
         )}
         <div className="btnrow job-actions">
-          {!closed && applyUrl && job.applyMode !== 'onsite' && (
+          {!closed && applyUrl && (
             <a
               className="btn btn--primary"
               href={applyUrl}
@@ -118,44 +98,11 @@ export function JobDetail({
               Apply for this role <ExternalLink size={14} />
             </a>
           )}
-          {!closed && job.applyMode === 'onsite' && (
-            <button
-              className="btn btn--primary"
-              type="button"
-              data-testid="fast-apply"
-              disabled={
-                fastApplying ||
-                Boolean(applyQuota && !applyQuota.unlimited && applyQuota.remaining <= 0)
-              }
-              onClick={async () => {
-                setFastApplying(true)
-                setFastMessage(null)
-                try {
-                  await onFastApply?.()
-                  setFastMessage({
-                    tone: 'ok',
-                    text: 'Your application has been sent to the employer.',
-                  })
-                } catch (error) {
-                  setFastMessage({
-                    tone: 'warn',
-                    text:
-                      error instanceof Error
-                        ? error.message
-                        : 'Your application could not be sent.',
-                  })
-                } finally {
-                  setFastApplying(false)
-                }
-              }}
-            >
-              <Send size={14} /> {fastApplying ? 'Sending…' : 'Fast Apply'}
-            </button>
-          )}
-          {!closed && job.applyMode === 'onsite' && applyUrl && (
-            <a className="btn" href={applyUrl} target="_blank" rel="noopener noreferrer">
-              Apply on employer site <ExternalLink size={13} />
-            </a>
+          {!closed && !applyUrl && (
+            <p className="field__hint">
+              FJ cannot submit this application for you. Open the original post from the source link
+              below and apply there.
+            </p>
           )}
           <button className="btn" type="button" onClick={onSave}>
             {saved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
@@ -222,6 +169,13 @@ export function JobDetail({
             </div>
           </section>
         )}
+        <ProTools
+          key={job.id}
+          job={job}
+          proEnabled={proEnabled}
+          trial={trial}
+          onRefresh={onRefreshAccount}
+        />
         <section className="detail-section">
           <div className="section-heading">
             <h2>Before you apply</h2>
@@ -229,7 +183,7 @@ export function JobDetail({
           <ul className="application-tips">
             <li>Read the full role description and check the location and work type.</li>
             <li>Confirm the employer and role on the employer's own website.</li>
-            <li>Tailor your CV to the skills named in this listing — truthfully.</li>
+            <li>Use the skills in this advert in your CV if they are true for you.</li>
             <li>Never pay anyone for a job, an interview, or an application.</li>
           </ul>
         </section>

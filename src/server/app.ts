@@ -18,6 +18,7 @@ import { sourceRoutes } from './routes/sources'
 import { billingRoutes } from './routes/billing'
 import { telegramRoutes } from './routes/telegram'
 import { insightRoutes } from './routes/insights'
+import { proRoutes } from './routes/pro'
 import { applyRoutes } from './routes/apply'
 import { adminRoutes } from './routes/admin'
 import { authRoutes } from './routes/auth'
@@ -123,7 +124,7 @@ app.get('/api/auth/status', async (c) => {
 // forwards to the sign-in page; no external sign-in service plays any part.
 app.get('/api/auth/login', async (c) => {
   const returnTo = c.req.query('returnTo') || '/jobs'
-  const safe = /^\/(?:dashboard|profile|jobs(?:\/[A-Za-z0-9_-]+)?)?$/.test(returnTo)
+  const safe = /^\/(?:dashboard|profile|pricing|jobs(?:\/[A-Za-z0-9_-]+)?)?$/.test(returnTo)
     ? returnTo
     : '/jobs'
   return c.redirect(`/auth/login?returnTo=${encodeURIComponent(safe)}`)
@@ -591,6 +592,7 @@ app.get('/api/rates', async (c) => {
 })
 
 app.route('/api', insightRoutes)
+app.route('/api', proRoutes)
 app.route('/api', applyRoutes)
 app.route('/api', adminRoutes)
 app.route('/api', trustRoutes)

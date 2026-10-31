@@ -17,7 +17,9 @@
     // When it is not set it is inferred from whichever key is present.
     "BILLING_PROVIDER": "",
     "BILLING_CURRENCY": "NGN",
-    "BILLING_PRICE_PRO": "10000",
+    "BILLING_PRICE_PRO": "5000",
+    "BILLING_PRICE_GRADUATE": "3000",
+    "BILLING_PRICE_ANNUAL": "40000",
     "TELEGRAM_BOT_USERNAME": "",
     // How many AI calls one account and the whole service may make in a day.
     "AI_DAILY_LIMIT": "20",

@@ -1,9 +1,9 @@
 /**
  * Email sending for account messages (password reset links, sign-in codes).
- * One interface so the provider can be
- * swapped in one file. Resend is used via plain REST — no vendor SDK in the
- * bundle. When no key is configured the console provider logs the code,
- * which is what local development and tests use.
+ * One interface so the provider can be swapped in one file. Providers are
+ * called through plain REST, with no vendor SDK in the bundle. When no key is
+ * configured the console provider logs the message, which is what local
+ * development and tests use.
  */
 export interface EmailMessage {
   to: string
@@ -52,12 +52,119 @@ export class ResendProvider implements EmailProvider {
   }
 }
 
-/** Picks the provider from the environment; console when nothing is set. */
-export function emailProviderFromEnv(env: {
+export interface SenderAddress {
+  name: string
+  email: string
+}
+
+const EMAIL_PATTERN = /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/
+
+/**
+ * Reads either a plain address (`fj@example.com`) or the display form
+ * (`FJ - Find Jobs <fj@example.com>`). The no-domain Brevo setup stores the
+ * verified Gmail address on its own, so both forms must work.
+ */
+export function parseSenderAddress(
+  value: string | undefined,
+  fallbackName = 'FJ - Find Jobs',
+): SenderAddress | null {
+  const raw = value?.trim()
+  if (!raw) return null
+  const bracketed = raw.match(/<([^<>]+)>/)
+  const email = (bracketed?.[1] ?? raw).trim().toLowerCase()
+  if (!EMAIL_PATTERN.test(email)) return null
+  const name = bracketed
+    ? raw.slice(0, bracketed.index).trim().replace(/^"|"$/g, '').replace(/[<>]/g, '').slice(0, 80)
+    : ''
+  return { name: name || fallbackName, email }
+}
+
+export interface EmailEnv {
+  BREVO_API_KEY?: string
+  BREVO_SENDER_EMAIL?: string
   RESEND_API_KEY?: string
   EMAIL_FROM?: string
   OTP_FROM?: string
-}): EmailProvider {
+}
+
+function senderFromEnv(env: EmailEnv): SenderAddress | null {
+  return (
+    parseSenderAddress(env.EMAIL_FROM) ??
+    parseSenderAddress(env.BREVO_SENDER_EMAIL) ??
+    parseSenderAddress(env.OTP_FROM)
+  )
+}
+
+/** Brevo sends over HTTPS from one verified sender address; no DNS is needed. */
+export class BrevoProvider implements EmailProvider {
+  readonly name = 'brevo'
+  private readonly fetchFn: typeof fetch
+
+  constructor(
+    private readonly apiKey: string,
+    private readonly sender: SenderAddress,
+    fetchFn: typeof fetch = fetch,
+  ) {
+    // The platform's native fetch must be called as a plain function, not as
+    // `this.fetchFn(...)`: in the hosted runtime that method-style call is
+    // rejected with "Illegal invocation" before any request is made. Wrap it
+    // once here so the provider can never call it with the wrong receiver.
+    this.fetchFn = ((input, init) => fetchFn(input, init)) as typeof fetch
+  }
+
+  private safeErrorDetail(value: unknown, message: EmailMessage): string {
+    return String(value ?? '')
+      .replaceAll(this.apiKey, '[redacted]')
+      .replaceAll(message.to, '[redacted]')
+      .replaceAll(this.sender.email, '[redacted]')
+      .replace(/[\r\n]+/g, ' ')
+      .trim()
+      .slice(0, 180)
+  }
+
+  async send(message: EmailMessage): Promise<{ id: string }> {
+    const response = await this.fetchFn('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': this.apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: this.sender,
+        to: [{ email: message.to }],
+        subject: message.subject,
+        textContent: message.text,
+        ...(message.html ? { htmlContent: message.html } : {}),
+      }),
+    })
+    if (!response.ok) {
+      const errorBody = (await response.json().catch(() => ({}))) as {
+        code?: unknown
+        message?: unknown
+      }
+      const code = this.safeErrorDetail(errorBody.code, message)
+      const detail = this.safeErrorDetail(errorBody.message, message)
+      const suffix = [code, detail].filter(Boolean).join(':')
+      throw new Error(`email_send_failed_${response.status}${suffix ? `:${suffix}` : ''}`)
+    }
+    const body = (await response.json().catch(() => ({}))) as { messageId?: string }
+    return { id: body.messageId ?? 'sent' }
+  }
+}
+
+export function hasConfiguredEmailProvider(env: EmailEnv): boolean {
+  return Boolean((env.BREVO_API_KEY && senderFromEnv(env)) || env.RESEND_API_KEY)
+}
+
+/**
+ * Picks the provider from the environment; console when nothing is set.
+ * Brevo wins when its key and verified sender are both present because that
+ * is the no-domain setup. Removing the Brevo key falls back to Resend.
+ */
+export function emailProviderFromEnv(env: EmailEnv): EmailProvider {
+  const sender = senderFromEnv(env)
+  if (env.BREVO_API_KEY && sender) return new BrevoProvider(env.BREVO_API_KEY, sender)
   if (env.RESEND_API_KEY) {
     return new ResendProvider(
       env.RESEND_API_KEY,

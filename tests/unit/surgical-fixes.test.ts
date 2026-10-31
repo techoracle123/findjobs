@@ -13,7 +13,13 @@ import { scamScore } from '../../src/server/trust'
 import { planCatalogue } from '../../src/server/billing/pricing'
 import { readConfig } from '../../src/server/config'
 import { pageBody } from '../../src/server/seo'
-import { emailProviderFromEnv, otpEmail } from '../../src/server/email/provider'
+import {
+  BrevoProvider,
+  emailProviderFromEnv,
+  hasConfiguredEmailProvider,
+  otpEmail,
+  parseSenderAddress,
+} from '../../src/server/email/provider'
 
 describe('robots.txt handling (2b)', () => {
   const fetchWith = (status: number) =>
@@ -155,20 +161,54 @@ describe('plan catalogue (3.2, 3.3, 3.4)', () => {
   const plans = planCatalogue(readConfig({}))
   const byId = (id: string) => plans.find((plan) => plan.id === id)
 
-  it('prices pro at 10000, graduate at 3000, annual at 100000', () => {
-    expect(byId('pro')?.price.amount).toBe(10000)
+  it('shows founding prices now and the disclosed standard prices later', () => {
+    expect(byId('pro')?.price.amount).toBe(5000)
+    expect(byId('pro')?.standardAmount).toBe(10000)
+    expect(byId('pro')?.founding).toBe(true)
     expect(byId('pro_graduate')?.price.amount).toBe(3000)
-    expect(byId('pro_annual')?.price.amount).toBe(100000)
+    expect(byId('pro_annual')?.price.amount).toBe(40000)
+    expect(byId('pro_annual')?.standardAmount).toBe(60000)
+    expect(byId('pro_annual')?.monthlyEquivalent).toBe(3333)
     expect(byId('pro_annual')?.interval).toBe('year')
+    expect(byId('pro')?.trialDays).toBe(3)
   })
 
   it('alerts are on the free tier and off the paywall pitch', () => {
     expect(byId('free')?.entitlements).toContain('alerts')
   })
 
-  it('lists an employer waitlist plan without inventing a price', () => {
+  it('uses plain plan names and gives every Pro plan the same real tools', () => {
+    expect(byId('free')?.displayLabel).toBe('Free')
+    expect(byId('pro')?.displayLabel).toBe('Pro Monthly')
+    expect(byId('pro_annual')?.displayLabel).toBe('Pro Yearly')
+    expect(byId('pro_graduate')?.displayLabel).toBe('Pro for Graduates')
+    for (const feature of [
+      'prepared_applications',
+      'cv_check',
+      'cv_analysis',
+      'interview_prep',
+      'salary_guide',
+      'advert_check',
+      'smart_shortlist',
+      'smart_alerts',
+      'application_pipeline',
+      'skill_plan',
+    ]) {
+      expect(byId('pro')?.entitlements).toContain(feature)
+      expect(byId('pro_annual')?.entitlements).toContain(feature)
+      expect(byId('pro_graduate')?.entitlements).toContain(feature)
+      expect(byId('free')?.entitlements).not.toContain(feature)
+    }
+    for (const hollow of ['unlimited_fast_apply', 'weekly_digest', 'verified_source_badges']) {
+      expect(byId('pro')?.entitlements).not.toContain(hollow)
+    }
+  })
+
+  it('lists employer interest only, without inventing a price or posting entitlement', () => {
+    expect(byId('employer')?.label).toBe('Employer interest')
     expect(byId('employer')?.interval).toBe('waitlist')
     expect(byId('employer')?.price.amount).toBe(0)
+    expect(byId('employer')?.entitlements).toEqual(['employer_interest'])
   })
 })
 
@@ -337,5 +377,103 @@ describe('crawler bodies (3.1) and email (1)', () => {
     expect(
       emailProviderFromEnv({ RESEND_API_KEY: 're_test', OTP_FROM: 'FJ <no-reply@x.dev>' }).name,
     ).toBe('resend')
+  })
+
+  it('uses Brevo with a verified Gmail sender and no domain setup', async () => {
+    expect(parseSenderAddress('fjfindjobs@gmail.com')).toEqual({
+      name: 'FJ - Find Jobs',
+      email: 'fjfindjobs@gmail.com',
+    })
+    expect(parseSenderAddress('FJ - Find Jobs <fjfindjobs@gmail.com>')).toEqual({
+      name: 'FJ - Find Jobs',
+      email: 'fjfindjobs@gmail.com',
+    })
+    expect(
+      hasConfiguredEmailProvider({
+        BREVO_API_KEY: 'brevo-test',
+        EMAIL_FROM: 'fjfindjobs@gmail.com',
+      }),
+    ).toBe(true)
+    expect(hasConfiguredEmailProvider({ BREVO_API_KEY: 'brevo-test' })).toBe(false)
+    expect(
+      emailProviderFromEnv({ BREVO_API_KEY: 'brevo-test', EMAIL_FROM: 'fjfindjobs@gmail.com' })
+        .name,
+    ).toBe('brevo')
+    expect(
+      readConfig({ BREVO_API_KEY: 'brevo-test', EMAIL_FROM: 'fjfindjobs@gmail.com' }),
+    ).toMatchObject({ emailConfigured: true })
+
+    const captured: { request: { url: string; init: RequestInit } | null } = { request: null }
+    const fetchFn = (async (url: string, init: RequestInit) => {
+      captured.request = { url, init }
+      return new Response(JSON.stringify({ messageId: 'brevo-123' }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as typeof fetch
+    const provider = new BrevoProvider(
+      'brevo-test',
+      { name: 'FJ - Find Jobs', email: 'fjfindjobs@gmail.com' },
+      fetchFn,
+    )
+    await expect(
+      provider.send({ to: 'user@example.com', subject: 'Reset', text: 'Reset link' }),
+    ).resolves.toEqual({ id: 'brevo-123' })
+    expect(captured.request?.url).toBe('https://api.brevo.com/v3/smtp/email')
+    expect(captured.request?.init.headers).toMatchObject({ 'api-key': 'brevo-test' })
+    expect(JSON.parse(String(captured.request?.init.body))).toMatchObject({
+      sender: { name: 'FJ - Find Jobs', email: 'fjfindjobs@gmail.com' },
+      to: [{ email: 'user@example.com' }],
+      subject: 'Reset',
+      textContent: 'Reset link',
+    })
+  })
+
+  it('calls a receiver-sensitive platform fetch as a plain function', async () => {
+    const receiverSensitiveFetch = function (
+      this: unknown,
+      _url: string,
+      _init?: RequestInit,
+    ): Promise<Response> {
+      if (this !== undefined) throw new TypeError('Illegal invocation')
+      return Promise.resolve(
+        new Response(JSON.stringify({ messageId: 'brevo-plain-fetch' }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    } as unknown as typeof fetch
+    const provider = new BrevoProvider(
+      'brevo-test',
+      { name: 'FJ - Find Jobs', email: 'fjfindjobs@gmail.com' },
+      receiverSensitiveFetch,
+    )
+
+    await expect(
+      provider.send({ to: 'user@example.com', subject: 'Reset', text: 'Reset link' }),
+    ).resolves.toEqual({ id: 'brevo-plain-fetch' })
+  })
+
+  it('keeps the safe provider error detail without leaking addresses or the key', async () => {
+    const fetchFn = (async () =>
+      new Response(
+        JSON.stringify({
+          code: 'unauthorized',
+          message: 'Key not found brevo-test for user@example.com from fjfindjobs@gmail.com',
+        }),
+        { status: 401, headers: { 'content-type': 'application/json' } },
+      )) as typeof fetch
+    const provider = new BrevoProvider(
+      'brevo-test',
+      { name: 'FJ - Find Jobs', email: 'fjfindjobs@gmail.com' },
+      fetchFn,
+    )
+
+    await expect(
+      provider.send({ to: 'user@example.com', subject: 'Reset', text: 'Reset link' }),
+    ).rejects.toThrow('email_send_failed_401:unauthorized:Key not found [redacted]')
+    await expect(
+      provider.send({ to: 'user@example.com', subject: 'Reset', text: 'Reset link' }),
+    ).rejects.not.toThrow('user@example.com')
   })
 })

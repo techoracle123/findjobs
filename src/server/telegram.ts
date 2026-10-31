@@ -146,7 +146,7 @@ export function formatAlertMessage(job: {
   salaryMax: number
   salaryCurrency: string
 }): string {
-  const lines = [`${job.title} — ${job.company}`, `${job.locationLabel}`]
+  const lines = [`${job.title} at ${job.company}`, `${job.locationLabel}`]
   if (job.salaryMax > 0) {
     lines.push(`${job.salaryMin}–${job.salaryMax} ${job.salaryCurrency}`)
   }

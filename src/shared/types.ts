@@ -152,12 +152,17 @@ export interface CvSuggestion {
   notes: string[]
 }
 
+export type ApplicationStage = 'saved' | 'preparing' | 'applied' | 'interview' | 'offer' | 'closed'
+
 export interface SavedApplication {
   jobId: string
   savedAt: string
   status: 'saved' | 'applied'
+  /** Fuller Pro pipeline stage. Older records are treated as saved/applied. */
+  stage?: ApplicationStage
   appliedAt?: string
   note?: string
+  followUpAt?: string
 }
 
 export interface AlertPreference {
@@ -166,6 +171,15 @@ export interface AlertPreference {
   query: string
   channels: string[]
   enabled: boolean
+  /** Pro smart-alert settings. Basic keyword alerts leave these unset. */
+  kind?: 'keyword' | 'smart'
+  minScore?: number
+  countries?: string[]
+  workModes?: WorkMode[]
+  salaryOnly?: boolean
+  currency?: string
+  exclude?: string
+  companies?: string[]
 }
 
 export interface ApplicationTip {
@@ -183,4 +197,227 @@ export interface JobTranslation {
   translated: boolean
   available: boolean
   message?: string
+}
+
+/** Facts a Pro member saves once and reuses across applications. */
+export interface ApplicationAnswers {
+  fullName: string
+  phone: string
+  location: string
+  portfolioUrl: string
+  linkedinUrl: string
+  summary: string
+  whyFit: string
+  achievement: string
+  availability: string
+  salaryExpectation: string
+  workPermission: string
+}
+
+export interface PreparedAnswer {
+  question: string
+  answer: string
+}
+
+export interface PreparedApplication {
+  jobId: string
+  generatedAt: string
+  subject: string
+  coverLetter: string
+  emailBody: string
+  recipientEmail: string | null
+  mailtoUrl: string | null
+  answers: PreparedAnswer[]
+  checklist: string[]
+  missingInfo: string[]
+}
+
+export interface CvCheckResult {
+  basis: 'cv-and-profile' | 'profile'
+  requiredMatched: string[]
+  requiredMissing: string[]
+  usefulMatched: string[]
+  usefulMissing: string[]
+  requiredPercent: number | null
+  overallPercent: number | null
+  actions: string[]
+  fitNotes: string[]
+  message: string
+  /** Short lines from the supplied CV that evidence matched skills. */
+  evidence?: { skill: string; line: string }[]
+  /** Copy-ready summary built only from profile/CV skills already evidenced. */
+  tailoredSummary?: string
+}
+
+export interface InterviewQuestion {
+  question: string
+  prepare: string
+}
+
+export interface InterviewPrep {
+  intro: string
+  questions: InterviewQuestion[]
+  examplesToPrepare: string[]
+  questionsToAsk: string[]
+  checklist: string[]
+}
+
+export interface SalaryGuideResult {
+  available: boolean
+  message: string
+  sampleCount: number
+  scope: string
+  currency: string | null
+  period: SalaryPeriod | null
+  medianMidpoint: number | null
+  lowerQuartileMidpoint: number | null
+  upperQuartileMidpoint: number | null
+  lowest: number | null
+  highest: number | null
+  updatedAt: string | null
+}
+
+/* ---------------- Phase 2: trial, graduate price and deeper Pro ---------------- */
+
+export interface ProTrialState {
+  status: 'not_started' | 'active' | 'expired'
+  startedAt: string | null
+  endsAt: string | null
+  cvAnalysesUsed: number
+  applicationPacksUsed: number
+  limits: {
+    days: number
+    cvAnalyses: number
+    applicationPacks: number
+  }
+}
+
+export type GraduateStatus =
+  'final_year' | 'recent_graduate' | 'nysc_current' | 'nysc_recent' | 'worker'
+
+export type FullTimeExperienceBand = 'none' | 'under_1_year' | '1_to_2_years' | 'over_2_years'
+
+export interface GraduateEligibilityInput {
+  status: GraduateStatus
+  educationMonth: string | null
+  nyscMonth: string | null
+  fullTimeExperience: FullTimeExperienceBand
+  declared: boolean
+}
+
+export interface GraduateEligibilityState extends GraduateEligibilityInput {
+  result: 'eligible' | 'not_eligible' | 'review'
+  reasons: string[]
+  flags: string[]
+  eligibleUntil: string | null
+  checkedAt: string
+  proofStatus: 'not_requested' | 'requested' | 'approved' | 'rejected'
+}
+
+export interface CvAnalysisSection {
+  title: string
+  rating: 'strong' | 'needs-work' | 'missing'
+  summary: string
+  evidence: string[]
+  actions: string[]
+}
+
+export interface CvWeakBullet {
+  original: string
+  suggestion: string
+  reason: string
+}
+
+export interface CvTargetRole {
+  roleFamily: string
+  label: string
+  matchingJobs: number
+  matchedSkills: string[]
+  missingSkills: string[]
+}
+
+export interface CvAnalysisReport {
+  generatedAt: string
+  fileName: string
+  wordCount: number
+  lineCount: number
+  estimatedPages: number
+  detectedSkills: string[]
+  roleFamilies: string[]
+  seniority: Seniority[]
+  summary: string
+  sections: CvAnalysisSection[]
+  strengths: string[]
+  priorityFixes: string[]
+  weakBullets: CvWeakBullet[]
+  missingEvidenceQuestions: string[]
+  targetRoles: CvTargetRole[]
+  timeline: {
+    years: number[]
+    educationYears: number[]
+    latestYear: number | null
+    notes: string[]
+  }
+  earlyCareerSignals: string[]
+}
+
+export interface MasterCv {
+  fileName: string
+  fileType: string
+  textHash: string
+  report: CvAnalysisReport
+  createdAt: string
+  updatedAt: string
+  /** Present only when the owner explicitly asks to download/export it. */
+  text?: string
+}
+
+export interface NigeriaEligibilityCheck {
+  status: 'nigeria-named' | 'worldwide-stated' | 'nigeria-not-named' | 'not-stated'
+  headline: string
+  evidence: string[]
+  countriesNamed: string[]
+  timeZones: string[]
+  workAuthorization: string[]
+  sponsorship: string[]
+  notes: string[]
+}
+
+export interface AdvertCheckResult {
+  checkedAt: string
+  riskLevel: 'warning-signs-found' | 'caution' | 'no-warning-signs-found'
+  riskScore: number
+  headline: string
+  signals: { label: string; detail: string; evidence?: string }[]
+  nigeria: NigeriaEligibilityCheck
+  missingInformation: string[]
+  nextSteps: string[]
+  salaryStated: boolean
+  deadlineText: string | null
+  contacts: { emails: string[]; links: string[] }
+}
+
+export interface BestMatch {
+  job: Job
+  score: number
+  tier: EligibilityTier
+  tierReason: string
+  matchedSkills: string[]
+  missingSkills: string[]
+  reasons: string[]
+}
+
+export interface SkillPlanItem {
+  skill: string
+  advertsAsking: number
+  week: number
+  action: string
+  proofToBuild: string
+}
+
+export interface SkillPlanResult {
+  available: boolean
+  message: string
+  sampleJobs: number
+  items: SkillPlanItem[]
 }

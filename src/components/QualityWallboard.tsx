@@ -77,7 +77,7 @@ export function QualityWallboard() {
           <section className="panel">
             <div className="panel__head">
               <h2 className="panel__title">
-                Completeness — {quality.date} · normalizer {quality.normalizerVersion}
+                Completeness: {quality.date} · normalizer {quality.normalizerVersion}
               </h2>
               <button className="btn btn--ghost btn--sm" type="button" onClick={() => void load()}>
                 <RefreshCw size={13} /> Refresh

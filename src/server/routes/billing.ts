@@ -15,6 +15,7 @@ import {
 } from '../auth/accounts'
 import { userIdFor } from '../auth/accounts'
 import { badRequest, readJson, requireUser, unauthorized } from '../http'
+import { getGraduateEligibility } from '../phase2'
 import { logger } from '../logging'
 
 export const billingRoutes = new Hono<AppEnv>()
@@ -26,10 +27,15 @@ billingRoutes.get('/billing/plans', (c) => {
     plans: planCatalogue(config).map((plan) => ({
       id: plan.id,
       label: plan.label,
+      displayLabel: plan.displayLabel,
       entitlements: [...plan.entitlements],
       price: plan.price,
       interval: plan.interval,
       audience: plan.audience,
+      monthlyEquivalent: plan.monthlyEquivalent,
+      founding: plan.founding,
+      standardAmount: plan.standardAmount,
+      trialDays: plan.trialDays,
     })),
     provider: provider.id,
     currency: config.billing.currency,
@@ -64,6 +70,32 @@ billingRoutes.post('/billing/checkout', async (c) => {
   const catalogue = planCatalogue(config)
   const entry = catalogue.find((candidate) => candidate.id === plan)
   if (!entry) return badRequest(c, `Unknown plan: ${plan}`)
+  if (entry.audience !== 'seeker' || entry.price.amount <= 0) {
+    return c.json(
+      {
+        error: 'plan_not_purchasable',
+        message:
+          'This plan cannot be bought. Free job search and employer-site applications remain available.',
+      },
+      400,
+    )
+  }
+  if (entry.id === 'pro_graduate') {
+    const graduate = await getGraduateEligibility(db, user.id)
+    const eligible =
+      graduate?.result === 'eligible' &&
+      (!graduate.eligibleUntil || Date.parse(graduate.eligibleUntil) > Date.now())
+    if (!eligible) {
+      return c.json(
+        {
+          error: 'graduate_eligibility_required',
+          message:
+            'Complete the graduate-price check first. Flagged checks must be reviewed before the discounted price can be used.',
+        },
+        403,
+      )
+    }
+  }
 
   const provider = providerFor(config)
   if (!hasRealProvider(config)) {

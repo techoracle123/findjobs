@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 const KEY = 'rolesignal:leaving-fj-ack'
 
 const FLAGS = [
-  'Never pay to apply — registration, training or “processing” fees are the classic scam.',
+  'Never pay to apply. Fees for forms, training or processing are a common scam.',
   'Never send your BVN, bank details or ID copies to a “recruiter” over chat.',
   'Check the employer’s official website and confirm the vacancy there before you apply.',
 ]

@@ -4,23 +4,32 @@ import { copy } from '../shared/copy'
 import type { CvSuggestion } from '../shared/types'
 import { suggestFromKeywords } from '../shared/cv-suggest'
 
+export interface ImportedCv {
+  text: string
+  fileName: string
+  fileType: string
+}
+
 interface CvImportProps {
   onApply: (suggestion: CvSuggestion) => void
+  /** Lets the separate Pro panel reuse text the person has already selected. */
+  onExtracted?: (cv: ImportedCv) => void
 }
 
 /**
- * CV upload that never leaves the device: the file is read in the browser,
- * skills are matched against the catalogue locally, and nothing is sent to
- * a server or any third party. The user reviews the detected skills and
- * chooses whether to apply them.
+ * Free CV import. The file is read in the browser and skills are matched
+ * locally; nothing leaves the device in this step. Pro's saved master CV is a
+ * separate action with its own permission checkbox. The user reviews the
+ * detected skills and chooses whether to apply them.
  */
-export function CvImport({ onApply }: CvImportProps) {
+export function CvImport({ onApply, onExtracted }: CvImportProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [suggestion, setSuggestion] = useState<CvSuggestion | null>(null)
   const [applied, setApplied] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
+  const [pastedText, setPastedText] = useState('')
 
   const handleFile = async (file: File) => {
     setError(null)
@@ -33,11 +42,29 @@ export function CvImport({ onApply }: CvImportProps) {
       const { extractCvText } = await import('../lib/cv/extract')
       const extracted = await extractCvText(file)
       setSuggestion(suggestFromKeywords(extracted.text))
+      onExtracted?.({
+        text: extracted.text,
+        fileName: file.name,
+        fileType: file.type || extracted.kind,
+      })
     } catch {
       setError(copy('cv.unreadable'))
     } finally {
       setBusy(false)
     }
+  }
+
+  const usePasted = () => {
+    const text = pastedText.trim()
+    if (text.length < 200) {
+      setError('Paste more of your CV so FJ has enough text to read.')
+      return
+    }
+    setError(null)
+    setApplied(false)
+    setFileName('Pasted CV text')
+    setSuggestion(suggestFromKeywords(text))
+    onExtracted?.({ text, fileName: 'Pasted CV', fileType: 'text/plain' })
   }
 
   return (
@@ -47,9 +74,9 @@ export function CvImport({ onApply }: CvImportProps) {
       </div>
       <div className="panel__body">
         <p className="panel__note">
-          Add a PDF, DOCX or TXT CV and we will fill in your skills and preferences automatically.
-          Your file is read on this device only — it is never uploaded or shared. Scanned-image PDFs
-          are not supported.
+          Add a PDF, DOCX or TXT CV. We will suggest skills from the text. This free tool reads the
+          file on your device. It does not save your CV. We cannot read a PDF that is only a
+          picture.
         </p>
         <input
           ref={inputRef}
@@ -71,7 +98,7 @@ export function CvImport({ onApply }: CvImportProps) {
             disabled={busy}
           >
             {busy ? <LoaderCircle size={14} className="icon-spin" /> : <Upload size={14} />}
-            {busy ? 'Reading your CV…' : 'Choose CV file'}
+            {busy ? 'Reading your CV...' : 'Choose CV file'}
           </button>
           {fileName && !busy && (
             <span className="field__hint" style={{ alignSelf: 'center' }}>
@@ -79,6 +106,22 @@ export function CvImport({ onApply }: CvImportProps) {
             </span>
           )}
         </div>
+
+        <details className="cv-paste">
+          <summary>If your CV will not read, paste the text</summary>
+          <label className="field">
+            Paste your CV text
+            <textarea
+              rows={8}
+              value={pastedText}
+              onChange={(event) => setPastedText(event.target.value)}
+              placeholder="Paste the words from your CV here"
+            />
+          </label>
+          <button type="button" className="btn btn--sm" onClick={usePasted}>
+            Use pasted CV text
+          </button>
+        </details>
 
         {error && (
           <div className="banner banner--demo" role="alert">

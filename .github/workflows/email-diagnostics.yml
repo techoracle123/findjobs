@@ -1,0 +1,43 @@
+name: Email provider diagnostics
+
+on:
+  push:
+    branches: [arena/6acbf55c-findjobs]
+    paths:
+      - .github/workflows/email-diagnostics.yml
+      - scripts/check-brevo-email.mjs
+  workflow_dispatch:
+    inputs:
+      send_test:
+        description: Send one harmless test email
+        required: true
+        default: true
+        type: boolean
+      recipient:
+        description: Optional test recipient; blank sends to the configured sender inbox
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/6acbf55c-findjobs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.3'
+      - name: Check Brevo account, sender, recent events and test send
+        env:
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          OTP_FROM: ${{ secrets.OTP_FROM }}
+          SEND_TEST: ${{ github.event_name == 'push' || inputs.send_test }}
+          TEST_RECIPIENT: ${{ github.event_name == 'workflow_dispatch' && inputs.recipient || '' }}
+        run: node scripts/check-brevo-email.mjs

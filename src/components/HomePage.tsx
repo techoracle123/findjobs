@@ -12,6 +12,8 @@ import {
   Wallet,
 } from 'lucide-react'
 import { Footer } from './Footer'
+import { SiteHeader } from './SiteHeader'
+import { FREE_FEATURES, PRO_FEATURES } from '../lib/pro-features'
 
 interface PublicStats {
   total: number
@@ -61,58 +63,19 @@ export function HomePage() {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <a className="brand" href="/" aria-label="FJ - Find Jobs">
-          <img className="brand__logo" src="/favicon.svg" alt="" width="36" height="36" />
-          <span>
-            FJ{' '}
-            <span className="brand__separator" aria-hidden="true">
-              —
-            </span>{' '}
-            Find Jobs
-          </span>
-        </a>
-        <nav className="topnav" aria-label="Primary">
-          <a href="/jobs">Jobs</a>
-          <a href="/pricing">Pricing</a>
-          <a href="/about">About</a>
-        </nav>
-        <div className="topbar__spacer" />
-        <div className="topbar__actions">
-          {signedIn ? (
-            <a className="btn btn--primary btn--sm" href="/jobs">
-              See your jobs
-            </a>
-          ) : (
-            <>
-              <a className="btn btn--ghost btn--sm" href="/auth/login?returnTo=%2Fjobs">
-                Sign in
-              </a>
-              <a
-                className="btn btn--primary btn--sm nav-signup"
-                href="/auth/signup?returnTo=%2Fjobs"
-              >
-                Sign up
-              </a>
-            </>
-          )}
-        </div>
-      </header>
+      <SiteHeader current="home" signedIn={signedIn} />
 
       <main className="content home">
         <section className="home-hero">
           <span className="eyebrow">Jobs in Nigeria. Remote jobs from abroad.</span>
           <h1>Thousands of job opportunities. All in one place.</h1>
           <p>
-            Looking for work should not mean opening ten different websites every day. We gather
-            real job adverts from many companies in Nigeria and from companies abroad that hire
-            people who work from home. We put them in one place. You come here, find the ones that
-            fit your skills, and apply.
+            We bring jobs from companies in Nigeria and companies abroad into one place. You do not
+            need to check many websites each day.
           </p>
           <p>
-            We present the opportunities to you. What you do with them is up to you. Some of these
-            jobs pay in naira. Some remote jobs pay in dollars, pounds or euros. When a company
-            publishes the salary, you will see it on the job before you apply.
+            Some jobs pay in naira. Some remote jobs pay in dollars, pounds or euros. If a company
+            states the pay, you will see it before you apply.
           </p>
           <div className="home-hero__actions">
             {signedIn ? (
@@ -131,8 +94,9 @@ export function HomePage() {
             )}
           </div>
           <p className="field__hint">
-            You need a free account to see the jobs. Creating one takes less than a minute, and it
-            lets us save your jobs and send you free alerts.
+            {signedIn
+              ? 'You are signed in. Your saved jobs and free alerts are in your account.'
+              : 'You need a free account to see the jobs. Creating one takes less than a minute, and it lets us save your jobs and send you free alerts.'}
           </p>
         </section>
 
@@ -206,6 +170,80 @@ export function HomePage() {
           </div>
         </section>
 
+        <section className="home-section" aria-labelledby="home-free-heading">
+          <p className="eyebrow">No card. No application limit.</p>
+          <h2 id="home-free-heading">Everything you need to find and apply is free</h2>
+          <p className="home-lead">
+            A free account lets you search, save and apply. We will not ask you to pay to finish an
+            application.
+          </p>
+          <div className="home-feature-grid">
+            {FREE_FEATURES.map((feature) => (
+              <article className="home-card" key={feature.id}>
+                <Check size={19} aria-hidden="true" />
+                <h3>{feature.title}</h3>
+                <p>{feature.what}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="home-section home-pro" aria-labelledby="home-pro-heading">
+          <p className="eyebrow">More help</p>
+          <h2 id="home-pro-heading">Pro helps you check and prepare</h2>
+          <p className="home-lead">
+            Finding jobs is only one part. You also need to know if people in Nigeria can apply, if
+            the advert looks safe, and if your CV matches the job. Pro helps with these checks.
+          </p>
+          <div className="home-feature-grid">
+            {PRO_FEATURES.map((feature) => (
+              <article className="home-card" key={feature.id}>
+                <h3>{feature.title}</h3>
+                <p>{feature.what}</p>
+                <p className="field__hint">{feature.why}</p>
+              </article>
+            ))}
+          </div>
+          <div className="home-trial-band">
+            <div>
+              <h3>Try it free for 3 days</h3>
+              <p>
+                Check one CV in full and prepare applications for three jobs. We do not ask for card
+                details. The trial ends on its own.
+              </p>
+            </div>
+            <a className="btn btn--primary" href="/pricing#trial-heading">
+              See how the trial works <ArrowRight size={17} aria-hidden="true" />
+            </a>
+          </div>
+          <div className="home-price-grid" aria-label="FJ prices">
+            <div>
+              <span>Free</span>
+              <strong>₦0</strong>
+              <p>Search, save, get alerts and apply free.</p>
+            </div>
+            <div>
+              <span>Pro Monthly</span>
+              <strong>₦5,000/month</strong>
+              <p>Founding price for the first 500 paying members.</p>
+            </div>
+            <div>
+              <span>Pro Yearly</span>
+              <strong>₦40,000/year</strong>
+              <p>Same tools for about ₦3,333 a month at the founding price.</p>
+            </div>
+            <div>
+              <span>Pro for Graduates</span>
+              <strong>₦3,000/month</strong>
+              <p>Same Pro tools for students, new graduates and corps members who qualify.</p>
+            </div>
+          </div>
+          <p className="field__hint">
+            Payments are not open yet. Prices are shown now so you can decide later.{' '}
+            <a href="/pricing">Compare plans or check the graduate price</a>.
+          </p>
+        </section>
+
         <section className="home-section">
           <h2>What kind of jobs are here?</h2>
           <div className="home-two">
@@ -224,7 +262,8 @@ export function HomePage() {
               <p>
                 Work from your home in Nigeria for a company in another country. Many of these
                 companies pay in dollars or other foreign currencies, which can mean much better pay
-                than the same work at home. The advert will say if people in Nigeria can apply.
+                than the same work at home. Always check the advert’s country, work-authorisation
+                and time-zone wording; “remote” does not always mean open from Nigeria.
               </p>
             </div>
           </div>
@@ -243,7 +282,7 @@ export function HomePage() {
               <span>
                 <strong>Your skills come first.</strong> The remote jobs that pay best ask for
                 skills like software work, data work, design, writing, video editing, accounting,
-                sales and customer support. The stronger your skill, the stronger your chances.
+                sales and customer support. Good skills give you a better chance.
               </span>
             </li>
             <li>
@@ -280,9 +319,8 @@ export function HomePage() {
             </li>
           </ul>
           <p className="home-lead">
-            Nobody can promise you a job, and you should run away from anybody who does. What we can
-            do is bring you real opportunities every day in one place, so your effort goes into
-            applying well instead of searching all over the internet.
+            Nobody can promise you a job. We bring jobs into one place so you can spend your time
+            applying well.
           </p>
         </section>
 
@@ -291,12 +329,10 @@ export function HomePage() {
           <div className="home-card home-card--wide">
             <ShieldCheck size={20} />
             <p>
-              A real employer will never ask you to pay money to get a job. Not for a form, not for
-              training, not for a uniform, not for anything. If a job asks you to pay, or asks for
-              your bank details before you are employed, stop and report it. Jobs on FJ come from
-              employers and public job boards. We do not employ you ourselves, and the final
-              application always happens with the company. Check every company well before you share
-              personal documents.
+              A real employer will not ask you to pay to get a job. Do not pay for a form, training
+              or uniform. Do not send bank details before you start work. The advert check in Pro
+              can check a job advert, but it does not approve a company. Check each company yourself
+              before you share personal documents.
             </p>
           </div>
         </section>

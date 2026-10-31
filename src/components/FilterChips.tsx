@@ -193,6 +193,11 @@ export function FilterChips({
                 key={family}
                 type="button"
                 className="combolist__item"
+                aria-label={
+                  counts
+                    ? `${ROLE_FAMILY_LABELS[family]}, ${(counts.professions[family] || 0).toLocaleString()} jobs`
+                    : ROLE_FAMILY_LABELS[family]
+                }
                 onClick={() => {
                   onChange({ ...filters, roleFamilies: [family] })
                   setOpen(null)

@@ -76,7 +76,7 @@ export function EligibilityPicker({ value, onChange }: EligibilityPickerProps) {
       <span className="field__hint">
         {value
           ? `Eligibility is checked against ${countryName(value)}.`
-          : 'No country set — eligibility cannot be checked yet.'}
+          : 'No country is set. We cannot check yet.'}
       </span>
     </div>
   )

@@ -24,8 +24,8 @@ export function kindOf(file: File): CvKind | null {
 }
 
 /**
- * Parses a CV entirely in the browser. Only the extracted text is sent to the
- * API for suggestions; the file itself is never uploaded or stored.
+ * Parses a CV entirely in the browser. The returned text stays local unless
+ * a later, separate Pro action sends it with the user's explicit consent.
  */
 export async function extractCvText(file: File): Promise<ExtractedCv> {
   const kind = kindOf(file)

@@ -30,7 +30,7 @@ function monogram(company: string): string {
 /**
  * One job card. Title, company and meta read top-to-bottom on the left;
  * salary sits under the meta; save/report live in one compact action
- * column on the right — everything in normal flow, nothing floating.
+ * column on the right, everything in normal flow, nothing floating.
  */
 export function JobRow({
   scored,

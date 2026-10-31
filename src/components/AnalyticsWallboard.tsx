@@ -32,7 +32,7 @@ export function AnalyticsWallboard() {
     <main className="wrap" id="main">
       <h1>Analytics</h1>
       <p className="lede">
-        This week, counted as totals only. No personal data is collected — no names, no emails, no
+        This week, counted as totals only. No personal data is collected. No names, no emails, no
         user ids.
       </p>
       {error && (

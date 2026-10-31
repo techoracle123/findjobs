@@ -65,7 +65,7 @@ describe('currency formatting', () => {
   })
 
   it('formats a range', () => {
-    expect(formatRange(80_000, 100_000, 'EUR')).toBe('€80k – €100k')
+    expect(formatRange(80_000, 100_000, 'EUR')).toBe('€80k to €100k')
   })
 
   it('describes a one-sided range', () => {
