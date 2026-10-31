@@ -809,10 +809,12 @@ test('filter combinations are shareable and survive reload', async ({ page }) =>
   expect(profession).toBeTruthy()
   await page.goto('/jobs')
   await page.getByRole('button', { name: /^Profession/ }).click()
-  await page
+  const professionLabel = roleFamilyLabel(profession!).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const professionOption = page
     .locator('.chip-popover')
-    .getByRole('button', { name: roleFamilyLabel(profession!), exact: true })
-    .click()
+    .getByRole('button', { name: new RegExp(`^${professionLabel}(?:,|\\s|$)`) })
+  await expect(professionOption).toBeVisible({ timeout: 20_000 })
+  await professionOption.click()
   await expect(page).toHaveURL(/role=/)
   const url = page.url()
   await expect(page.locator('.jobrow__title').first()).toBeVisible({ timeout: 20_000 })
