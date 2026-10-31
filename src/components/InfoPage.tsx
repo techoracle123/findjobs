@@ -8,15 +8,15 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
     body: (
       <>
         <p>
-          FJ Find Jobs helps people in Nigeria and around the world discover real job opportunities
-          across professions. We collect public listings from employer career pages and job boards,
-          clean them up, and link you to the original posting.
+          FJ Find Jobs helps people in Nigeria and around the world find real jobs in many types of
+          work. We collect public job adverts from company career pages and job boards. We put them
+          in one place and link to the original advert.
         </p>
         <p>
           FJ is not an employer or a recruiter. We do not approve companies or jobs. Finding jobs
           and applying on the company website are free. Pro tools can help you check an advert,
-          check your CV and prepare an application. Check the company and the first advert yourself
-          before you apply. Never pay to apply.
+          check your CV and prepare an application. Check the company and the original advert
+          yourself before you apply. Never pay to apply.
         </p>
         <p>We help you find jobs. You apply on the company website.</p>
       </>

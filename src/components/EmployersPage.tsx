@@ -35,8 +35,8 @@ export function EmployersPage() {
             at the source, it is removed here on the next refresh.
           </p>
           <p>
-            FJ never charges job seekers, never asks applicants for money on an employer&apos;s
-            behalf, and does not receive applications for collected vacancies.
+            FJ does not charge people to apply for these jobs. We do not ask applicants for money
+            for an employer. We do not receive applications for the jobs we collect.
           </p>
         </section>
 
