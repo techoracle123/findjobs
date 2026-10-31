@@ -7,7 +7,7 @@ import {
   Bookmark,
   CreditCard,
   RotateCw,
-  Sparkles,
+  Briefcase,
   UserRound,
 } from 'lucide-react'
 import type {
@@ -63,7 +63,7 @@ const DASHBOARD_TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'progress', label: 'Progress', icon: BarChart3 },
   { id: 'saved', label: 'Saved', icon: Bookmark },
   { id: 'alerts', label: 'Alerts', icon: Bell },
-  { id: 'tools', label: 'Pro tools', icon: Sparkles },
+  { id: 'tools', label: 'Pro tools', icon: Briefcase },
   { id: 'salary', label: 'Salary guide', icon: Banknote },
   { id: 'plan', label: 'Plan', icon: CreditCard },
 ]
@@ -319,7 +319,7 @@ export default function App() {
   useEffect(() => {
     document.title =
       jobPage && selectedId && knownJobs[selectedId]
-        ? `${knownJobs[selectedId].title} — FJ - Find Jobs`
+        ? `${knownJobs[selectedId].title} | FJ Find Jobs`
         : 'FJ - Find Jobs'
   }, [jobPage, selectedId, knownJobs])
 
@@ -551,12 +551,8 @@ export default function App() {
           }}
         >
           <img className="brand__logo" src="/favicon.svg" alt="" width="36" height="36" />
-          <span>
-            FJ{' '}
-            <span className="brand__separator" aria-hidden="true">
-              —
-            </span>{' '}
-            Find Jobs
+          <span className="brand__word">
+            <strong>FJ</strong> Find Jobs
           </span>
         </a>
 

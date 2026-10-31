@@ -74,10 +74,9 @@ export function CvImport({ onApply, onExtracted }: CvImportProps) {
       </div>
       <div className="panel__body">
         <p className="panel__note">
-          Add a PDF, DOCX or TXT CV and we will suggest skills and preferences from the text. This
-          free step reads the file on this device. It is not saved as your master CV unless you
-          later choose the separate Pro analysis and give permission. Scanned-image PDFs are not
-          supported.
+          Add a PDF, DOCX or TXT CV. We will suggest skills from the text. This free tool reads the
+          file on your device. It does not save your CV. We cannot read a PDF that is only a
+          picture.
         </p>
         <input
           ref={inputRef}
@@ -99,7 +98,7 @@ export function CvImport({ onApply, onExtracted }: CvImportProps) {
             disabled={busy}
           >
             {busy ? <LoaderCircle size={14} className="icon-spin" /> : <Upload size={14} />}
-            {busy ? 'Reading your CV…' : 'Choose CV file'}
+            {busy ? 'Reading your CV...' : 'Choose CV file'}
           </button>
           {fileName && !busy && (
             <span className="field__hint" style={{ alignSelf: 'center' }}>
@@ -109,7 +108,7 @@ export function CvImport({ onApply, onExtracted }: CvImportProps) {
         </div>
 
         <details className="cv-paste">
-          <summary>My CV is a scan or will not read — paste the text</summary>
+          <summary>If your CV will not read, paste the text</summary>
           <label className="field">
             Paste your CV text
             <textarea

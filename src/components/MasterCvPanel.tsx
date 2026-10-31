@@ -41,7 +41,7 @@ function downloadText(filename: string, text: string) {
 function reportAsText(cv: MasterCv): string {
   const report = cv.report
   const lines = [
-    'FJ detailed CV analysis',
+    'FJ CV check',
     `CV: ${cv.fileName}`,
     `Checked: ${fmtDateTime(report.generatedAt)}`,
     '',
@@ -72,7 +72,7 @@ function reportAsText(cv: MasterCv): string {
   for (const role of report.targetRoles) {
     lines.push(
       '',
-      `${role.label} — ${role.matchingJobs} matching adverts`,
+      `${role.label}: ${role.matchingJobs} matching adverts`,
       `Evidence found: ${role.matchedSkills.join(', ') || 'None yet'}`,
       `Missing: ${role.missingSkills.join(', ') || 'None in the main list'}`,
     )
@@ -163,9 +163,7 @@ export function MasterCvPanel({
       const body = await saveMasterCv({ ...source, consent })
       setCv(body.cv)
       setSavedText(null)
-      setNotice(
-        'Your detailed CV analysis is ready. The readable text is saved only in your FJ account.',
-      )
+      setNotice('Your CV check is ready. We saved the text in your FJ account.')
       // The report is already saved and visible. Refreshing trial counters in
       // the background must not keep the button saying "Analysing…" or turn a
       // successful save into an error if that later account read is slow.
@@ -174,8 +172,8 @@ export function MasterCvPanel({
     } catch {
       setError(
         trial.status === 'active' && trial.cvAnalysesUsed >= trial.limits.cvAnalyses
-          ? 'You have used the one full CV analysis in your free trial.'
-          : 'The CV could not be analysed just now. Check that the text is readable and try again.',
+          ? 'You have used the one CV check in your free trial.'
+          : 'We could not check the CV. Make sure the text can be read and try again.',
       )
     } finally {
       setBusy(false)
@@ -183,7 +181,7 @@ export function MasterCvPanel({
   }
 
   const remove = async () => {
-    if (!window.confirm('Delete your saved CV text and its analysis report from FJ?')) return
+    if (!window.confirm('Delete your saved CV text and report from FJ?')) return
     setBusy(true)
     try {
       await deleteMasterCv()
@@ -191,7 +189,7 @@ export function MasterCvPanel({
       setSavedText(null)
       setNotice('Your saved CV text and report have been deleted.')
     } catch {
-      setError('Your saved CV could not be deleted just now. Please try again.')
+      setError('We could not delete your saved CV. Please try again.')
     } finally {
       setBusy(false)
     }
@@ -207,7 +205,7 @@ export function MasterCvPanel({
       const body = await fetchMasterCv(true)
       setSavedText(body.cv?.text ?? '')
     } catch {
-      setError('The saved CV text could not be loaded just now.')
+      setError('We could not load the saved CV text. Please try again.')
     } finally {
       setBusy(false)
     }
@@ -220,36 +218,35 @@ export function MasterCvPanel({
     <section className="panel master-cv-panel" aria-labelledby="master-cv-heading">
       <div className="panel__head panel-head-row">
         <div>
-          <p className="eyebrow">Pro CV centre</p>
+          <p className="eyebrow">Pro</p>
           <h2 className="panel__title" id="master-cv-heading">
-            Your saved master CV
+            Your saved CV
           </h2>
         </div>
         <ShieldCheck size={22} aria-hidden="true" />
       </div>
       <div className="panel__body stack">
         <p className="panel__note">
-          A detailed review of the words in your CV: what is clear, what is missing, which bullets
-          need proof, and which skills real adverts keep asking for.
+          We check what is clear, what is missing and what you should fix first.
         </p>
         <p className="field__hint">
-          Free import stays on your device. This Pro step is separate: with your permission, FJ
-          saves the readable text and report so job checks can use them. The original PDF or DOCX
-          file is not kept. Nobody else receives your CV from this feature.
+          The free tool reads your CV on your device. This Pro tool is different. If you agree, FJ
+          saves the text and report in your account. We do not keep the PDF or DOCX file. We do not
+          send your CV to any company.
         </p>
 
-        {loading ? <p role="status">Loading your saved CV…</p> : null}
+        {loading ? <p role="status">Loading your saved CV...</p> : null}
 
         {!proEnabled && !cv ? (
           <div className="locked-box">
             <h3>
               {trial.status === 'not_started'
-                ? 'Start with one full analysis in the free trial'
-                : 'Detailed CV analysis is part of Pro'}
+                ? 'Check one CV in the free trial'
+                : 'CV check is part of Pro'}
             </h3>
             <p>
-              The 3-day trial includes one full CV analysis. It stays in your account after the
-              trial ends. Basic CV import above remains free.
+              The free trial includes one full CV check. The report stays in your account after the
+              trial ends. The free CV tool above still works.
             </p>
             <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
               {trial.status === 'not_started' ? 'Start the 3-day free trial' : 'See Pro plans'}
@@ -263,7 +260,7 @@ export function MasterCvPanel({
               ref={fileRef}
               className="visually-hidden"
               type="file"
-              aria-label="Choose CV for detailed analysis"
+              aria-label="Choose CV to check"
               accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
               onChange={(event) => {
                 const file = event.target.files?.[0]
@@ -279,7 +276,7 @@ export function MasterCvPanel({
                 onClick={() => fileRef.current?.click()}
               >
                 {busy ? <LoaderCircle size={15} className="icon-spin" /> : <Upload size={15} />}
-                {cv ? 'Choose a replacement CV' : 'Choose CV for analysis'}
+                {cv ? 'Choose another CV' : 'Choose CV'}
               </button>
               {pending ? (
                 <span className="field__hint">
@@ -295,7 +292,7 @@ export function MasterCvPanel({
                   rows={8}
                   value={pasted}
                   onChange={(event) => setPasted(event.target.value)}
-                  placeholder="Paste the complete words from your CV"
+                  placeholder="Paste all the words from your CV"
                 />
               </label>
             </details>
@@ -305,14 +302,13 @@ export function MasterCvPanel({
                 checked={consent}
                 onChange={(event) => setConsent(event.target.checked)}
               />{' '}
-              I agree that FJ may save the readable text from this CV and the analysis report in my
-              account. I understand the original file is not kept and I can delete the saved text at
-              any time.
+              I agree that FJ can save the text from this CV and the report in my account. I know FJ
+              will not keep the file. I can delete the saved text at any time.
             </label>
             {trial.status === 'active' ? (
               <p className="field__hint" role="status">
-                Trial: {Math.max(0, trial.limits.cvAnalyses - trial.cvAnalysesUsed)} full CV
-                analysis remaining. Re-checking the exact same text does not use another one.
+                Trial: {Math.max(0, trial.limits.cvAnalyses - trial.cvAnalysesUsed)} CV check left.
+                Checking the same text again does not use another one.
               </p>
             ) : null}
             <button
@@ -321,7 +317,7 @@ export function MasterCvPanel({
               disabled={busy || !consent || !canAnalyse || (!pending && !pasted.trim())}
               onClick={() => void save()}
             >
-              {busy ? 'Analysing…' : cv ? 'Analyse replacement CV' : 'Analyse my CV'}
+              {busy ? 'Checking...' : cv ? 'Check this CV' : 'Check my CV'}
             </button>
           </div>
         ) : null}
@@ -345,8 +341,8 @@ export function MasterCvPanel({
                   <FileText size={18} aria-hidden="true" /> {cv.fileName}
                 </h3>
                 <p className="muted">
-                  Saved text analysed {new Date(cv.report.generatedAt).toLocaleString()} ·{' '}
-                  {cv.report.wordCount} words · about {cv.report.estimatedPages} page
+                  Checked {fmtDateTime(cv.report.generatedAt)} · {cv.report.wordCount} words · about{' '}
+                  {cv.report.estimatedPages} page
                   {cv.report.estimatedPages === 1 ? '' : 's'}
                 </p>
               </div>
@@ -366,7 +362,7 @@ export function MasterCvPanel({
               <button
                 className="btn btn--sm"
                 type="button"
-                onClick={() => downloadText('fj-cv-analysis.txt', reportAsText(cv))}
+                onClick={() => downloadText('fj-cv-check.txt', reportAsText(cv))}
               >
                 <Download size={14} /> Download report
               </button>
@@ -409,7 +405,7 @@ export function MasterCvPanel({
             </div>
 
             <div>
-              <h3>What is already working</h3>
+              <h3>What looks good</h3>
               <ul className="plain-list">
                 {cv.report.strengths.map((item) => (
                   <li key={item}>{item}</li>

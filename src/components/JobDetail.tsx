@@ -183,7 +183,7 @@ export function JobDetail({
           <ul className="application-tips">
             <li>Read the full role description and check the location and work type.</li>
             <li>Confirm the employer and role on the employer's own website.</li>
-            <li>Tailor your CV to the skills named in this listing — truthfully.</li>
+            <li>Use the skills in this advert in your CV if they are true for you.</li>
             <li>Never pay anyone for a job, an interview, or an application.</li>
           </ul>
         </section>

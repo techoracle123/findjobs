@@ -75,7 +75,7 @@ export function PlanPanel({
             : 'Your one free 3-day Pro trial has already been used.',
       )
     } catch {
-      setNotice('The trial could not be started just now. Please try again.')
+      setNotice('The trial could not start. Please try again.')
     } finally {
       setBusy(null)
     }
@@ -87,7 +87,7 @@ export function PlanPanel({
       return
     }
     if (!billingEnabled) {
-      setNotice('Payments open in the next stage. Nothing can charge you today.')
+      setNotice('Payments are not open yet. We cannot charge you today.')
       return
     }
     setBusy(planId)
@@ -102,7 +102,7 @@ export function PlanPanel({
         window.location.href = session.url
       }
     } catch {
-      setNotice('That billing action could not be completed just now. Please try again.')
+      setNotice('That billing action could not be done. Please try again.')
     } finally {
       setBusy(null)
     }
@@ -116,7 +116,7 @@ export function PlanPanel({
       await onRefresh()
       setNotice('Your plan will end at the close of the period you have already paid for.')
     } catch {
-      setNotice('Your plan could not be cancelled just now. Please try again.')
+      setNotice('Your plan could not be cancelled. Please try again.')
     } finally {
       setBusy(null)
     }
@@ -127,7 +127,10 @@ export function PlanPanel({
     0,
     proTrial.limits.applicationPacks - proTrial.applicationPacksUsed,
   )
-  const shownPlans = plans.filter((plan) => (plan.audience ?? 'seeker') === 'seeker')
+  const planOrder = ['free', 'pro', 'pro_annual', 'pro_graduate']
+  const shownPlans = plans
+    .filter((plan) => (plan.audience ?? 'seeker') === 'seeker')
+    .sort((a, b) => planOrder.indexOf(a.id) - planOrder.indexOf(b.id))
 
   return (
     <section className="panel-page plan-panel" aria-label="Your plan">
@@ -139,13 +142,13 @@ export function PlanPanel({
             {proActive
               ? `Pro is active${subscription?.currentPeriodEnd ? ` until ${fmtDate(subscription.currentPeriodEnd)}` : ''}.`
               : trialActive
-                ? `Your free trial runs until ${fmtDate(proTrial.endsAt)}. It will stop by itself — no card was taken.`
-                : 'Everything you need to find jobs and apply on employer sites is free. Pro adds the tools below.'}
+                ? `Your free trial runs until ${fmtDate(proTrial.endsAt)}. It will stop on its own. We did not take card details.`
+                : 'You can find jobs and apply for free. Pro adds the tools below.'}
           </p>
         </div>
         <div className="plan-actions">
           <button className="btn btn-primary" type="button" onClick={onOpenPricing}>
-            See prices and full comparison
+            See prices
           </button>
         </div>
       </header>
@@ -163,12 +166,11 @@ export function PlanPanel({
       {signedIn && !proActive && proTrial.status === 'not_started' ? (
         <div className="trial-box">
           <div>
-            <p className="eyebrow">Try the work before you decide</p>
+            <p className="eyebrow">Free trial</p>
             <h3>3-day Pro free trial</h3>
             <p>
-              Use every Pro tool for 72 hours. The trial includes one full CV analysis and three
-              complete application packs. No card, no automatic charge and no change to free
-              employer-site applications.
+              Use all Pro tools for 3 days. Check one CV in full. Prepare applications for three
+              jobs. We do not ask for card details. There is no charge when the trial ends.
             </p>
           </div>
           <button
@@ -188,9 +190,9 @@ export function PlanPanel({
             <p className="eyebrow">Trial active</p>
             <h3>What is left in your trial</h3>
             <p>
-              {cvRemaining} full CV analysis and {packsRemaining} application pack
-              {packsRemaining === 1 ? '' : 's'} remaining. Generated CV reports and application
-              packs stay in your account after the trial ends.
+              You have {cvRemaining} CV check and {packsRemaining} job
+              {packsRemaining === 1 ? '' : 's'} left. Reports you create stay in your account after
+              the trial ends.
             </p>
           </div>
           <span className="status-pill">Ends {fmtDate(proTrial.endsAt)}</span>
@@ -201,9 +203,8 @@ export function PlanPanel({
         <div className="billing-box" role="status">
           <h3>Your free trial has ended</h3>
           <p className="muted">
-            Free search, saved jobs, basic alerts and employer-site applications continue as before.
-            Your generated CV report and application packs remain available. Card and bank-transfer
-            payments are opening in the next stage.
+            You can still search, save jobs, get basic alerts and apply for free. Reports you
+            created stay in your account. Payments are not open yet.
           </p>
         </div>
       ) : null}
@@ -213,10 +214,10 @@ export function PlanPanel({
           <h3>Pro for Graduates</h3>
           <p className="muted">
             {graduateEligibility.result === 'eligible'
-              ? 'You qualify for the ₦3,000 monthly graduate price when payments open. It includes the same Pro tools.'
+              ? 'You can use the ₦3,000 monthly graduate price when payments open. It has the same Pro tools.'
               : graduateEligibility.result === 'review'
-                ? 'Your graduate-price check needs review because one or more answers need clarification. Regular Pro and all Free features remain available.'
-                : 'The graduate price does not apply from your answers. Regular Pro has the same tools.'}
+                ? 'We need to check your answers. You can still use Free. Regular Pro will have the same tools.'
+                : 'This price does not fit your answers. Regular Pro has the same tools.'}
           </p>
         </div>
       ) : null}
@@ -230,12 +231,12 @@ export function PlanPanel({
       <div className="billing-box">
         <div className="inline-head">
           <h3>Prices</h3>
-          {!billingEnabled ? <span className="status-pill">Payments opening soon</span> : null}
+          {!billingEnabled ? <span className="status-pill">Payments not open yet</span> : null}
         </div>
         {!billingEnabled ? (
           <p className="muted">
-            <CreditCard size={14} /> No payment provider is active today, so nothing here can charge
-            you. Card and bank transfer arrive in the next stage.
+            <CreditCard size={14} /> Payments are not open yet. Nothing on this page can charge you.
+            Card and bank transfer payments will come later.
           </p>
         ) : null}
         <div className="plan-price-grid">
@@ -252,14 +253,11 @@ export function PlanPanel({
                 <p className="plan-price">{price(plan)}</p>
                 {plan.founding && plan.standardAmount && plan.standardAmount > plan.price.amount ? (
                   <p className="muted">
-                    Founding price. Later standard price: ₦{plan.standardAmount.toLocaleString()}.
+                    First price. Later price: ₦{plan.standardAmount.toLocaleString()}.
                   </p>
                 ) : null}
                 {plan.id === 'pro_graduate' ? (
-                  <p className="muted">
-                    Same Pro tools for eligible final-year students, recent graduates and corps
-                    members.
-                  </p>
+                  <p className="muted">Same Pro tools for people who qualify.</p>
                 ) : null}
                 {isCurrent ? <span className="status-pill status-open">Current</span> : null}
                 {paid ? (
@@ -274,9 +272,9 @@ export function PlanPanel({
                         <ExternalLink size={13} /> Manage billing
                       </>
                     ) : !billingEnabled ? (
-                      'Payments opening soon'
+                      'Payments not open yet'
                     ) : graduateLocked ? (
-                      'Check graduate eligibility first'
+                      'Check graduate price first'
                     ) : busy === plan.id ? (
                       'Opening…'
                     ) : (
@@ -321,12 +319,12 @@ export function PlanPanel({
 
         <article className="plan-column plan-column-pro">
           <p className="eyebrow">Pro</p>
-          <h3>Choose better and apply stronger</h3>
+          <h3>Check and prepare</h3>
           {PRO_FEATURES.map((feature) => (
             <div className="plan-feature" key={feature.id}>
               <strong>{feature.title}</strong>
               <span className={`status-pill ${hasFeature(feature.id) ? 'status-open' : ''}`}>
-                {hasFeature(feature.id) ? 'Unlocked' : 'Pro'}
+                {hasFeature(feature.id) ? 'Included' : 'Pro'}
               </span>
               <p>{feature.what}</p>
               <small>{feature.why}</small>
@@ -336,7 +334,7 @@ export function PlanPanel({
       </div>
 
       <div className="billing-box">
-        <h3>Plain limits</h3>
+        <h3>What FJ will not do</h3>
         <ul className="plain-list">
           {PRO_LIMITS.map((limit) => (
             <li key={limit}>{limit}</li>

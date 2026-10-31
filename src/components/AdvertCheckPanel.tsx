@@ -12,7 +12,7 @@ export function AdvertCheckResultView({ check }: { check: AdvertCheckResult }) {
         ? 'Use caution'
         : 'No warning signs found'
   const text = [
-    'FJ before-you-apply check',
+    'FJ advert check',
     check.headline,
     '',
     `Nigeria eligibility: ${check.nigeria.headline}`,
@@ -32,7 +32,7 @@ export function AdvertCheckResultView({ check }: { check: AdvertCheckResult }) {
   return (
     <div className="advert-check-result stack">
       <div className="inline-head">
-        <h3>Before-you-apply result</h3>
+        <h3>Advert check result</h3>
         <span
           className={`status-pill ${check.riskLevel === 'warning-signs-found' ? 'status-danger' : ''}`}
         >
@@ -195,7 +195,7 @@ export function AdvertCheckPanel({ proEnabled, trial, onOpenPlan }: AdvertCheckP
       const body = await runAdvertCheck({ title, company, location, url, text })
       setResult(body.check)
     } catch {
-      setError('The advert could not be checked just now. Paste more of the advert and try again.')
+      setError('We could not check the advert. Paste more of it and try again.')
     } finally {
       setBusy(false)
     }
@@ -214,21 +214,19 @@ export function AdvertCheckPanel({ proEnabled, trial, onOpenPlan }: AdvertCheckP
       </div>
       <div className="panel__body stack">
         <p className="panel__note">
-          Paste an advert from WhatsApp, Telegram, email, LinkedIn or another site. FJ checks
-          Nigeria eligibility, work-permission wording, fees, document requests and other visible
-          warning signs.
+          Paste an advert from WhatsApp, Telegram, email, LinkedIn or another site. FJ checks what
+          it says about Nigeria, work permission, fees and private documents.
         </p>
         <p className="field__hint">
-          The pasted advert is used for this check and is not saved. FJ cannot verify the employer;
-          it shows evidence so you can decide safely.
+          We use the advert for this check and do not save it. FJ does not approve companies. We
+          show what the advert says so you can decide.
         </p>
 
         {!proEnabled ? (
           <div className="locked-box">
             <h3>Check before you apply</h3>
             <p>
-              This tool is in Pro and in the free 3-day trial. Job adverts on FJ will also get a
-              before-you-apply button on each job page.
+              This tool is in Pro and in the free trial. You can also use it from each job page.
             </p>
             <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
               {trial.status === 'not_started' ? 'Start the free trial' : 'See Pro plans'}
@@ -274,7 +272,7 @@ export function AdvertCheckPanel({ proEnabled, trial, onOpenPlan }: AdvertCheckP
               </small>
             </label>
             <button className="btn btn--primary" type="submit" disabled={busy}>
-              <ClipboardCheck size={16} /> {busy ? 'Checking…' : 'Check this advert'}
+              <ClipboardCheck size={16} /> {busy ? 'Checking...' : 'Check this advert'}
             </button>
           </form>
         )}

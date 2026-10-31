@@ -13,6 +13,7 @@ describe('forwarding to FJ sign-in', () => {
     ['/jobs', '/auth/login?returnTo=%2Fjobs'],
     ['/profile', '/auth/login?returnTo=%2Fprofile'],
     ['/dashboard', '/auth/login?returnTo=%2Fdashboard'],
+    ['/pricing', '/auth/login?returnTo=%2Fpricing'],
     ['https://attacker.example', '/auth/login?returnTo=%2Fjobs'],
     ['//attacker.example', '/auth/login?returnTo=%2Fjobs'],
     ['/\\attacker.example', '/auth/login?returnTo=%2Fjobs'],

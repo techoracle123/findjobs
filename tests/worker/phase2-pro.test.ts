@@ -489,7 +489,7 @@ describe('advert checks, best matches and skill gaps', () => {
       matches: { job: { id: string }; matchedSkills: string[] }[]
     }
     expect(best.available).toBe(true)
-    expect(best.message).toContain('saved master CV')
+    expect(best.message).toContain('saved CV')
     const match = best.matches.find((item) => JOB_IDS.includes(item.job.id))
     expect(match).toBeTruthy()
     expect(match!.matchedSkills).toEqual(expect.arrayContaining(['CSS', 'GraphQL']))

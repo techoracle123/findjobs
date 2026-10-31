@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Footer } from './Footer'
+import { SiteHeader } from './SiteHeader'
 
 /**
  * Employer interest page. Direct posting is paused: there are no employer
@@ -12,11 +13,12 @@ export function EmployersPage() {
   const [company, setCompany] = useState('')
 
   useEffect(() => {
-    document.title = 'For employers — FJ - Find Jobs'
+    document.title = 'For employers. FJ Find Jobs'
   }, [])
 
   return (
-    <>
+    <div className="app">
+      <SiteHeader />
       <main className="wrap" id="main">
         <h1>Employer posting is not open</h1>
         <p className="lede">
@@ -97,7 +99,7 @@ export function EmployersPage() {
               <button className="btn btn--primary">Record my interest</button>
               {state === 'error' && (
                 <p className="banner banner--demo" role="status">
-                  Could not save that just now. Try again.
+                  We could not save that. Try again.
                 </p>
               )}
             </form>
@@ -110,6 +112,6 @@ export function EmployersPage() {
         </p>
       </main>
       <Footer />
-    </>
+    </div>
   )
 }

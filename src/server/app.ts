@@ -124,7 +124,7 @@ app.get('/api/auth/status', async (c) => {
 // forwards to the sign-in page; no external sign-in service plays any part.
 app.get('/api/auth/login', async (c) => {
   const returnTo = c.req.query('returnTo') || '/jobs'
-  const safe = /^\/(?:dashboard|profile|jobs(?:\/[A-Za-z0-9_-]+)?)?$/.test(returnTo)
+  const safe = /^\/(?:dashboard|profile|pricing|jobs(?:\/[A-Za-z0-9_-]+)?)?$/.test(returnTo)
     ? returnTo
     : '/jobs'
   return c.redirect(`/auth/login?returnTo=${encodeURIComponent(safe)}`)

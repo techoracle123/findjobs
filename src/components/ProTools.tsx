@@ -110,7 +110,7 @@ function downloadPack(prepared: PreparedApplication) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = 'fj-application-pack.txt'
+  link.download = 'fj-application.txt'
   document.body.appendChild(link)
   link.click()
   link.remove()
@@ -150,7 +150,7 @@ function PreparedView({
           {copied === 'cover' ? <Check size={14} /> : <Clipboard size={14} />} Copy cover letter
         </button>
         <button className="btn" type="button" onClick={() => downloadPack(prepared)}>
-          <Download size={14} /> Download full pack
+          <Download size={14} /> Download all
         </button>
         {prepared.mailtoUrl ? (
           <a className="btn" href={prepared.mailtoUrl}>
@@ -257,7 +257,7 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
         setLocked(!prepared)
         setMessage(detail ?? 'This tool is part of Pro. Applying on the employer site stays free.')
       } else {
-        setMessage(detail ?? 'That could not be finished just now. Please try again.')
+        setMessage(detail ?? 'We could not finish that. Please try again.')
       }
     } finally {
       setBusy(null)
@@ -282,14 +282,13 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       <section className="detail-section pro-tools" aria-label="Pro tools">
         <h2>More help with this application</h2>
         <p>
-          Pro checks whether this advert is open from Nigeria, prepares copy-ready application
-          answers, compares your saved CV with this exact advert, prepares you for interview
-          questions, and shows salary evidence from comparable adverts.
+          Pro can check if this job is open to people in Nigeria. It can compare your CV with the
+          job, help you prepare answers, and help you get ready for an interview.
         </p>
         <ul className="plain-list">
-          <li>One full CV analysis and three complete application packs are in the free trial.</li>
-          <li>No card is needed for the trial, and it ends by itself after 3 days.</li>
-          <li>Applying on the employer’s site stays free whether you use Pro or not.</li>
+          <li>The free trial includes one CV check and help for three jobs.</li>
+          <li>We do not ask for card details. The trial ends after 3 days.</li>
+          <li>You can always apply free on the company website.</li>
         </ul>
         <p>
           <Lock size={14} /> <a href="/pricing">Start the trial or compare Pro plans</a>
@@ -297,8 +296,8 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
         {message ? <p role="status">{message}</p> : null}
         {prepared ? (
           <>
-            <h3>Your saved pack for this job</h3>
-            <p className="field__hint">This pack remains yours to read, copy and download.</p>
+            <h3>Your saved work for this job</h3>
+            <p className="field__hint">You can still read, copy and download it.</p>
             <PreparedView prepared={prepared} copied={copied} onCopy={copy} />
           </>
         ) : null}
@@ -311,9 +310,8 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       <h2>Pro tools for this job</h2>
       {trialState?.status === 'active' ? (
         <p className="trial-inline" role="status">
-          Free trial active: {trialPacksLeft} of {trialState.limits.applicationPacks} job packs
-          left. A new job pack or detailed CV check for a new job uses one; preparing the same job
-          again does not.
+          Free trial: help for {trialPacksLeft} of {trialState.limits.applicationPacks} jobs is
+          left. A new job uses one. The same job does not use another.
         </p>
       ) : null}
       {message ? (
@@ -341,7 +339,7 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
             })
           }
         >
-          {busy === 'advert' ? 'Checking…' : 'Run before-you-apply check'}
+          {busy === 'advert' ? 'Checking...' : 'Check this advert'}
         </button>
         {advertCheck ? <AdvertCheckResultView check={advertCheck} /> : null}
       </div>
@@ -349,8 +347,8 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       <details className="pro-step">
         <summary>Your saved application answers</summary>
         <p className="field__hint">
-          Save these once. FJ uses only what you write here, your profile and your saved CV. It does
-          not invent experience for you.
+          Write your answers once. FJ uses your answers, your profile and your saved CV. FJ will not
+          make up work for you.
         </p>
         {ANSWER_FIELDS.map((field) => (
           <div className="field" key={field.key}>
@@ -399,11 +397,10 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       </details>
 
       <div className="pro-step">
-        <h3>2. Prepare the application pack</h3>
+        <h3>2. Prepare your application</h3>
         <p>
-          Create a cover letter and common answers for this job. Your saved master CV is used
-          automatically when you have one. Check every line, replace anything in square brackets,
-          then copy, download or send it yourself.
+          FJ will write a cover letter and common answers for this job. If you saved a CV, FJ will
+          use it. Read every line. Fill in anything in square brackets before you copy or send it.
         </p>
         <div className="btnrow">
           <button
@@ -431,10 +428,10 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
       </div>
 
       <div className="pro-step">
-        <h3>3. Compare your CV with this exact job</h3>
+        <h3>3. Compare your CV with this job</h3>
         <p>
-          Your saved master CV is used automatically. You may paste a different CV version here for
-          this one check; pasted text is not saved by this tool.
+          FJ will use your saved CV. You can paste a different CV here for this one check. We do not
+          save pasted text in this tool.
         </p>
         <div className="field">
           <label className="field__label" htmlFor="pro-cv-text">
@@ -446,7 +443,7 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
             rows={7}
             value={cvText}
             onChange={(event) => setCvText(event.target.value)}
-            placeholder="Leave empty to use your saved master CV or profile."
+            placeholder="Leave this empty to use your saved CV or profile."
           />
         </div>
         <button

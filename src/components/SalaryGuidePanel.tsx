@@ -215,7 +215,7 @@ export function SalaryGuidePanel({ profile, countries, proEnabled }: SalaryGuide
         >
           {busy ? 'Checking…' : 'Show salary guide'}
         </button>
-        {failed && <p role="status">The salary guide could not load just now. Please try again.</p>}
+        {failed && <p role="status">We could not load the pay guide. Please try again.</p>}
         {guide &&
           (guide.available ? (
             <div>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bell, Link2, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Bell, Link2, Plus, Trash2 } from 'lucide-react'
 import type { AlertPreference, ProTrialState, WorkMode } from '../shared/types'
 
 interface AlertsPanelProps {
@@ -47,7 +47,7 @@ function SmartFields({
 }) {
   return (
     <fieldset className="smart-fields" disabled={disabled}>
-      <legend>Smart filters</legend>
+      <legend>More filters</legend>
       <div className="form-grid">
         <label className="field">
           Minimum fit score
@@ -242,9 +242,8 @@ export function AlertsPanel({
       </div>
       <div className="panel__body stack">
         <p className="panel__note">
-          A free keyword alert tells you when a new job matches your words. Pro smart alerts can
-          also require a profile fit score, country, work type, stated pay or currency, watched
-          companies, and words to exclude.
+          A free alert tells you when a new job matches your words. With Pro, you can also choose a
+          score, country, work type, pay, companies and words to avoid.
         </p>
 
         {!signedIn ? (
@@ -304,8 +303,7 @@ export function AlertsPanel({
                     ) : null}
                     {alert.kind === 'smart' && !proEnabled ? (
                       <p className="field__hint">
-                        Smart filters are paused because Pro/trial is not active. The basic keyword
-                        alert still works.
+                        The extra filters are off because Pro is not on. The free alert still works.
                       </p>
                     ) : null}
                     <div className="chiprow">
@@ -313,7 +311,7 @@ export function AlertsPanel({
                         {alert.enabled ? 'Enabled' : 'Disabled'}
                       </span>
                       <span className="chip chip--plain">
-                        {alert.kind === 'smart' ? 'Smart alert' : 'Free keyword alert'}
+                        {alert.kind === 'smart' ? 'Alert with filters' : 'Free alert'}
                       </span>
                       <span className="chip chip--plain">Telegram</span>
                     </div>
@@ -344,7 +342,7 @@ export function AlertsPanel({
                 </div>
                 {alert.kind === 'smart' ? (
                   <details>
-                    <summary>Edit smart filters</summary>
+                    <summary>Edit filters</summary>
                     <SmartFields
                       prefix={alert.id}
                       settings={alert}
@@ -397,7 +395,7 @@ export function AlertsPanel({
                 onChange={() => setKind('keyword')}
               />
               <span>
-                <strong>Free keyword alert</strong>
+                <strong>Free alert</strong>
                 <small>Simple and always free.</small>
               </span>
             </label>
@@ -409,10 +407,8 @@ export function AlertsPanel({
                 onChange={() => setKind('smart')}
               />
               <span>
-                <strong>
-                  <Sparkles size={14} /> Pro smart alert
-                </strong>
-                <small>Fit score, country, pay, company and exclusion filters.</small>
+                <strong>Pro alert with filters</strong>
+                <small>Choose score, country, pay, company and words to avoid.</small>
               </span>
             </label>
           </fieldset>
@@ -423,8 +419,8 @@ export function AlertsPanel({
                 <div className="locked-box">
                   <h4>Fewer, better alerts</h4>
                   <p>
-                    Smart alerts are available in the free 3-day trial and Pro. Your free keyword
-                    alerts are not affected.
+                    Alerts with filters are in the free trial and Pro. Your free alerts will not
+                    change.
                   </p>
                   <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
                     {trial.status === 'not_started' ? 'Start the free trial' : 'See Pro plans'}

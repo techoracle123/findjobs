@@ -80,7 +80,7 @@ export function formatRange(min: number, max: number, currency: string): string 
   if (!min && !max) return 'Not disclosed'
   if (!min) return `up to ${formatAmount(max, currency)}`
   if (!max) return `from ${formatAmount(min, currency)}`
-  return `${formatAmount(min, currency)} – ${formatAmount(max, currency)}`
+  return `${formatAmount(min, currency)} to ${formatAmount(max, currency)}`
 }
 
 export function formatRelativeTime(iso: string, now: number = Date.now()): string {

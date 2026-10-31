@@ -12,8 +12,8 @@ export function Footer() {
         <a href="/contact">Contact</a>
       </nav>
       <p>
-        FJ shares opportunities. We are not employers, never charge job seekers, and never ask you
-        to pay to apply. Always verify the original listing before applying.
+        FJ is not an employer. We never ask you to pay to apply for a job. Check the company and the
+        original advert before you apply.
       </p>
     </footer>
   )

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, ListChecks, Sparkles } from 'lucide-react'
+import { ArrowRight, ListChecks } from 'lucide-react'
 import { fetchBestMatches, fetchSkillPlan } from '../lib/api'
 import type { BestMatch, Job, ProTrialState, SkillPlanResult } from '../shared/types'
 
@@ -17,7 +17,7 @@ function salaryLine(job: Job): string {
   if (!(job.salaryMin > 0 || job.salaryMax > 0)) return 'Pay not stated'
   const amount = (value: number) => value.toLocaleString('en-NG')
   if (job.salaryMin > 0 && job.salaryMax > job.salaryMin)
-    return `${job.salaryCurrency} ${amount(job.salaryMin)}–${amount(job.salaryMax)} / ${job.salaryPeriod}`
+    return `${job.salaryCurrency} ${amount(job.salaryMin)} to ${amount(job.salaryMax)} / ${job.salaryPeriod}`
   return `${job.salaryCurrency} ${amount(job.salaryMax || job.salaryMin)} / ${job.salaryPeriod}`
 }
 
@@ -78,7 +78,7 @@ export function ProInsightsPanel({
     try {
       setBest(await fetchBestMatches(12))
     } catch {
-      setError('Best matches could not be loaded just now. Please try again.')
+      setError('We could not load your best matches. Please try again.')
     } finally {
       setBusy(null)
     }
@@ -90,7 +90,7 @@ export function ProInsightsPanel({
     try {
       setPlan((await fetchSkillPlan()).plan)
     } catch {
-      setError('Your skill-gap plan could not be loaded just now. Please try again.')
+      setError('We could not load the skills list. Please try again.')
     } finally {
       setBusy(null)
     }
@@ -104,28 +104,27 @@ export function ProInsightsPanel({
     <section className="panel" aria-labelledby="pro-insights-heading">
       <div className="panel__head panel-head-row">
         <div>
-          <p className="eyebrow">Start with the strongest work</p>
+          <p className="eyebrow">Pro</p>
           <h2 className="panel__title" id="pro-insights-heading">
-            Best matches and skill gaps
+            Best matches and skills to learn
           </h2>
         </div>
-        <Sparkles size={22} aria-hidden="true" />
       </div>
       <div className="panel__body stack">
         <p className="panel__note">
-          Your current strongest adverts, ranked with reasons. Then see which missing skills keep
-          appearing so you know what to learn or prove next.
+          See the jobs that fit you best. Then see which skills keep coming up so you know what to
+          learn next.
         </p>
 
         {!proEnabled ? (
           <div className="locked-box">
-            <h3>Stop reading thousands of unsuitable adverts</h3>
+            <h3>Start with jobs that fit you</h3>
             <p>
-              Pro ranks the full current job list against your profile and saved CV, explains the
-              top matches, and turns repeated missing skills into a practical four-week plan.
+              Pro checks the job list against your profile and saved CV. It shows your best matches
+              and the skills you may need to learn.
             </p>
             <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
-              {trial.status === 'not_started' ? 'Try it in the free 3-day trial' : 'See Pro plans'}
+              {trial.status === 'not_started' ? 'Try it free for 3 days' : 'See Pro plans'}
             </button>
           </div>
         ) : (
@@ -145,8 +144,7 @@ export function ProInsightsPanel({
                 disabled={busy === 'plan'}
                 onClick={() => void loadPlan()}
               >
-                <ListChecks size={15} />{' '}
-                {busy === 'plan' ? 'Building plan…' : 'Show repeated skill gaps'}
+                <ListChecks size={15} /> {busy === 'plan' ? 'Working...' : 'Show skills to learn'}
               </button>
             </div>
             {error ? (
@@ -183,9 +181,11 @@ export function ProInsightsPanel({
 
             {plan ? (
               <div className="skill-plan stack">
-                <h3>Your repeated skill-gap plan</h3>
+                <h3>Skills to learn</h3>
                 <p>{plan.message}</p>
-                <p className="muted">Based on {plan.sampleJobs} relevant current adverts.</p>
+                <p className="muted">
+                  Based on {plan.sampleJobs} current jobs that fit your search.
+                </p>
                 {plan.items.length ? (
                   <div className="week-grid">
                     {[1, 2, 3, 4].map((week) => {
@@ -202,7 +202,7 @@ export function ProInsightsPanel({
                               </div>
                               <p>{item.action}</p>
                               <p>
-                                <strong>Proof to build:</strong> {item.proofToBuild}
+                                <strong>Work to show:</strong> {item.proofToBuild}
                               </p>
                             </div>
                           ))}
@@ -211,7 +211,7 @@ export function ProInsightsPanel({
                     })}
                   </div>
                 ) : (
-                  <p>No repeated missing skill stands out in the current sample.</p>
+                  <p>No skill came up again and again in these jobs.</p>
                 )}
                 <p className="field__hint">
                   Add a skill to your CV only when you can show real work, training or a project

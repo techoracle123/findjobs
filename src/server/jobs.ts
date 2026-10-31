@@ -166,7 +166,7 @@ export async function listJobs(
     return {
       jobs: [],
       source: 'd1',
-      warning: 'We could not load jobs just now. Please try again shortly.',
+      warning: 'We could not load jobs. Please try again.',
     }
   }
 }

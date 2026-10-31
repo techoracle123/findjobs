@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { ArrowRight, Check, ShieldCheck } from 'lucide-react'
 import { Footer } from './Footer'
+import { SiteHeader } from './SiteHeader'
 import {
   fetchProAccess,
   startProTrial,
@@ -32,80 +34,87 @@ interface PlansPayload {
 const FAQ = [
   {
     q: 'Do I have to pay to apply for a job?',
-    a: 'No. Search, opening jobs and applying on the employer’s own website are free and unlimited. Pro never puts an application button behind a paywall.',
+    a: 'No. You can search jobs, open jobs and apply on the company website for free. There is no limit.',
   },
   {
-    q: 'What does the 3-day free trial include?',
-    a: 'Every Pro tool for 72 hours, including one full CV analysis and complete application packs for three jobs. That three-job allowance is shared: the first application pack or detailed CV-to-job check for a new job uses one. Using both for the same job, or regenerating that job’s pack, does not use another. No card is taken, so the trial simply ends by itself.',
+    q: 'What do I get in the free trial?',
+    a: 'You get all Pro tools for 3 days. You can check one CV in full. You can prepare applications for three jobs. If you compare your CV with a new job first, that job counts as one of the three. You can prepare the same job again without using another one. We do not ask for card details.',
   },
   {
     q: 'Are Pro Monthly and Pro Yearly different?',
-    a: 'No. They include exactly the same tools. Yearly simply costs less over the year.',
+    a: 'No. The tools are the same. Yearly costs less for each month.',
   },
   {
     q: 'Who can use Pro for Graduates?',
-    a: 'Final-year students, people who finished tertiary education within the last 24 months, current corps members, and people who finished NYSC within the last 12 months — provided you have under two years of full-time paid work.',
+    a: 'You must be in final year, have finished school in the last 24 months, be serving now, or have finished NYSC in the last 12 months. You must also have less than two years of full time paid work.',
   },
   {
-    q: 'How is the graduate price checked?',
-    a: 'You answer month-and-year questions and make a declaration. FJ also checks whether the answers conflict with your profile or CV. Clear cases are decided automatically. Conflicts go to review. FJ does not ask for your age, BVN or NIN.',
+    q: 'How do you check the graduate price?',
+    a: 'You give the month and year for school or NYSC. You also confirm that your answers are true. FJ checks if the answers match your profile or CV. Clear answers get a result at once. Answers that do not match need a review. We do not ask for your age, BVN or NIN.',
   },
   {
-    q: 'What CV does FJ save?',
-    a: 'Free CV import reads the file on your device for basic suggestions. Pro is different: only after you give permission, FJ saves the readable text and analysis report. The original PDF or DOCX file is not kept. You can download or delete the saved text from your account.',
+    q: 'What happens to my CV?',
+    a: 'The free CV tool reads your file on your device. It does not save the file. For the Pro CV check, FJ saves the text from your CV only if you agree. FJ does not keep the PDF or DOCX file. You can see, download, replace or delete the saved text.',
   },
   {
-    q: 'Will FJ write experience into my CV?',
-    a: 'No. FJ never adds an employer, qualification, date, tool, project or number that is not in your information. Weak bullets are shown as evidence-based starting points for you to make true and specific.',
+    q: 'Will FJ add things to my CV?',
+    a: 'No. FJ will not add a company, school, date, tool, project or number that is not in your details.',
   },
   {
-    q: 'Does the advert check mean an employer is verified?',
-    a: 'No. It shows what the advert itself says about Nigeria eligibility and visible warning signs such as fees, personal-document requests or messaging-only contact. No warning signs found is not approval. Always check the employer independently.',
+    q: 'Does the advert check mean the company is safe?',
+    a: 'No. The check shows what the advert says. It can show warning signs such as a request for money or personal documents. It does not approve a company. Check the company yourself.',
   },
   {
-    q: 'Does FJ apply for me or guarantee an interview?',
-    a: 'No. FJ prepares your application and helps you choose suitable roles. You review everything and apply yourself on the employer’s site. Nobody can honestly guarantee an interview or a job.',
+    q: 'Will FJ apply for me?',
+    a: 'No. FJ helps you prepare. You read the work, make changes if you need to, and apply on the company website. FJ does not promise an interview or a job.',
   },
   {
     q: 'When can I pay?',
-    a: 'Card and bank-transfer payments are the next stage. Until then, prices are shown clearly and the free trial is available, but no payment is taken. Join the email list below to hear when payments open.',
+    a: 'Payments are not open yet. We are setting up card and bank transfer payments. You can use Free now and try Pro free for 3 days.',
   },
   {
-    q: 'What is the founding price?',
-    a: 'The first 500 people who pay will get Pro Monthly at ₦5,000 or Pro Yearly at ₦40,000, locked for 12 months. After that cohort, the standard prices will be ₦10,000 monthly and ₦60,000 yearly. Pro for Graduates is ₦3,000 monthly.',
+    q: 'What is the first price?',
+    a: 'The first 500 people who pay can use Pro Monthly for ₦5,000 or Pro Yearly for ₦40,000. That price stays the same for 12 months. The later price will be ₦10,000 each month or ₦60,000 each year. Pro for Graduates is ₦3,000 each month.',
   },
 ]
 
-const USE_CASES = [
-  {
-    title: 'You keep applying and hear nothing',
-    text: 'Start with the detailed CV analysis, then compare your CV with each exact advert before you send another general application.',
-  },
-  {
-    title: 'You want remote work from Nigeria',
-    text: 'Use the before-you-apply check to see whether Nigeria is actually eligible, what work-authorisation words say, and whether time-zone limits are stated.',
-  },
-  {
-    title: 'You are a fresh graduate or corps member',
-    text: 'Turn NYSC, internships, SIWES, volunteer work and projects into clearer evidence — then use the repeated skill-gap plan to decide what to build next.',
-  },
-  {
-    title: 'You see job adverts on WhatsApp or Telegram',
-    text: 'Paste the advert before you send documents or money. The check highlights fees, ID requests, messaging-only contact and other visible danger signs.',
-  },
-  {
-    title: 'You are only browsing occasionally',
-    text: 'Stay on Free. Search, save jobs, use basic alerts and apply on employer sites without spending anything.',
-  },
-]
+const PLAN_ORDER = ['free', 'pro', 'pro_annual', 'pro_graduate']
+
+const PLAN_POINTS: Record<string, string[]> = {
+  free: ['Search all jobs', 'Apply free', 'Save jobs', 'Free Telegram alerts'],
+  pro: ['All Pro tools', 'Check your CV', 'Prepare applications', 'Pay each month'],
+  pro_annual: ['All Pro tools', 'Check your CV', 'Prepare applications', 'Lower cost each month'],
+  pro_graduate: [
+    'All Pro tools',
+    'Lower monthly price',
+    'For people who qualify',
+    'Check before you pay',
+  ],
+}
 
 function money(amount: number): string {
   return `₦${amount.toLocaleString('en-NG')}`
 }
 
-function priceLine(plan: PlanRow): string {
-  if (plan.interval === 'free' || plan.price.amount === 0) return 'Free forever'
-  return `${money(plan.price.amount)} / ${plan.interval === 'year' ? 'year' : 'month'}`
+function planName(plan: PlanRow): string {
+  return plan.displayLabel ?? plan.label
+}
+
+function planIntro(plan: PlanRow): string {
+  if (plan.id === 'free') return 'For finding jobs and applying.'
+  if (plan.id === 'pro_graduate')
+    return 'For students, new graduates and corps members who qualify.'
+  if (plan.interval === 'year') return 'For a longer job search.'
+  return 'For a short job search.'
+}
+
+function IncludedMark() {
+  return (
+    <span className="pricing-check" aria-label="Included">
+      <Check size={17} aria-hidden="true" />
+      <span className="visually-hidden">Included</span>
+    </span>
+  )
 }
 
 interface GraduateForm {
@@ -125,8 +134,8 @@ const EMPTY_GRADUATE: GraduateForm = {
 }
 
 /**
- * Pricing and product education. Prices come from the server catalogue; the
- * trial and graduate check work now, while real-money checkout opens later.
+ * Prices, the free trial and the graduate check. Real payments are not open
+ * yet, so nothing on this page takes money from a user.
  */
 export function PricingPage() {
   const [plans, setPlans] = useState<PlansPayload | null>(null)
@@ -141,7 +150,7 @@ export function PricingPage() {
   const [graduateError, setGraduateError] = useState('')
 
   useEffect(() => {
-    document.title = 'Pricing — FJ - Find Jobs'
+    document.title = 'Pricing. FJ Find Jobs'
     const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')
     const link = canonical ?? Object.assign(document.createElement('link'), { rel: 'canonical' })
     link.href = 'https://fj-find-jobs.pages.dev/pricing'
@@ -168,7 +177,10 @@ export function PricingPage() {
   }, [])
 
   const seekerPlans = useMemo(
-    () => (plans?.plans ?? []).filter((plan) => plan.audience === 'seeker'),
+    () =>
+      (plans?.plans ?? [])
+        .filter((plan) => plan.audience === 'seeker')
+        .sort((a, b) => PLAN_ORDER.indexOf(a.id) - PLAN_ORDER.indexOf(b.id)),
     [plans],
   )
 
@@ -181,14 +193,73 @@ export function PricingPage() {
       if (next) setAccess(next)
       setTrialNotice(
         result.trial.status === 'active'
-          ? 'Your 3-day Pro trial is active. Go to your dashboard to analyse your CV or open a job and prepare an application.'
-          : 'Your one free trial has already been used. Free job search and applications continue.',
+          ? 'Your free trial is on. Go to your dashboard to check your CV. You can also open a job and prepare your application.'
+          : 'You have used your free trial. You can still search and apply for free.',
       )
     } catch {
-      setTrialNotice('The trial could not be started just now. Please try again.')
+      setTrialNotice('We could not start the trial. Please try again.')
     } finally {
       setTrialBusy(false)
     }
+  }
+
+  const trialAction = (className = 'btn btn--primary pricing-main-cta') => {
+    if (!access) {
+      return (
+        <a className={className} href="/auth/signup?returnTo=%2Fpricing">
+          Create a free account
+        </a>
+      )
+    }
+    if (access.paid) {
+      return (
+        <a className={className} href="/dashboard?tab=plan">
+          Open your plan
+        </a>
+      )
+    }
+    if (access.trial.status === 'active') {
+      return (
+        <a className={className} href="/dashboard?tab=plan">
+          Open Pro tools
+        </a>
+      )
+    }
+    if (access.trial.status === 'not_started') {
+      return (
+        <button
+          className={className}
+          type="button"
+          disabled={trialBusy}
+          onClick={() => void startTrial()}
+        >
+          {trialBusy ? 'Starting...' : 'Start free trial'}
+        </button>
+      )
+    }
+    return (
+      <a className={className} href="#payments-opening-soon">
+        Join the list
+      </a>
+    )
+  }
+
+  const planAction = (plan: PlanRow) => {
+    if (plan.id === 'free') {
+      return access
+        ? { href: '/jobs', label: 'See jobs' }
+        : { href: '/auth/signup?returnTo=%2Fjobs', label: 'Create free account' }
+    }
+    if (plan.id === 'pro_graduate') {
+      return { href: '#graduate-check', label: 'Check if you qualify' }
+    }
+    if (access?.paid) return { href: '/dashboard?tab=plan', label: 'Open your plan' }
+    if (access?.trial.status === 'active') {
+      return { href: '/dashboard?tab=plan', label: 'Open Pro tools' }
+    }
+    if (access?.trial.status === 'not_started') return { href: '#trial', label: 'Try Pro free' }
+    if (access) return { href: '#payments-opening-soon', label: 'Join the list' }
+    return { href: '/auth/signup?returnTo=%2Fpricing', label: 'Create free account' }
   }
 
   const submitGraduate = async (event: FormEvent) => {
@@ -207,7 +278,7 @@ export function PricingPage() {
       const result = await submitGraduateEligibility(input)
       setGraduateResult(result.graduate)
     } catch {
-      setGraduateError('The graduate check could not be completed just now. Please try again.')
+      setGraduateError('We could not finish the check. Please try again.')
     } finally {
       setGraduateBusy(false)
     }
@@ -222,124 +293,182 @@ export function PricingPage() {
   const needsNyscMonth = ['nysc_current', 'nysc_recent'].includes(graduateForm.status)
 
   return (
-    <>
+    <div className="app pricing-shell">
+      <SiteHeader current="pricing" />
       <main className="wrap pricing-page" id="main">
-        <p className="eyebrow">Pricing in plain English</p>
-        <h1>Free to find and apply. Pro to apply stronger.</h1>
-        <p className="lede">
-          FJ never charges you to see a public job or apply on the employer’s own website. Pro is
-          for the work around the application: checking your CV against real adverts, preparing a
-          stronger pack, avoiding unsuitable or suspicious roles, and following through.
-        </p>
-
-        <section className="pricing-hero-card" aria-labelledby="trial-heading">
-          <div>
-            <p className="eyebrow">No card needed</p>
-            <h2 id="trial-heading">Try Pro free for 3 days</h2>
-            <p>
-              One full CV analysis, three complete application packs, advert checks, best matches,
-              smart alerts, salary evidence and interview preparation. It ends automatically.
-            </p>
-          </div>
-          {access ? (
-            access.paid ? (
-              <a className="btn btn--primary merge-cta" href="/dashboard?tab=plan">
-                Pro is active — open your plan
-              </a>
-            ) : access.trial.status === 'active' ? (
-              <a className="btn btn--primary merge-cta" href="/dashboard?tab=plan">
-                Trial active — open your Pro tools
-              </a>
-            ) : access.trial.status === 'not_started' ? (
-              <button
-                className="btn btn--primary merge-cta"
-                type="button"
-                disabled={trialBusy}
-                onClick={() => void startTrial()}
-              >
-                {trialBusy ? 'Starting…' : 'Start my free 3-day trial'}
-              </button>
-            ) : (
-              <a className="btn btn--primary merge-cta" href="#payments-opening-soon">
-                Trial used — join the payment-opening list
-              </a>
-            )
-          ) : (
-            <a className="btn btn--primary merge-cta" href="/auth/signup?returnTo=%2Fpricing">
-              Create a free account to start the trial
+        <section className="pricing-hero" aria-labelledby="pricing-heading">
+          <p className="eyebrow">Pricing</p>
+          <h1 id="pricing-heading">Simple pricing</h1>
+          <p className="lede">
+            Finding a job and applying are free. Pro helps you check your CV, check the advert and
+            prepare your application.
+          </p>
+          <div className="pricing-hero-actions">
+            {trialAction()}
+            <a className="btn pricing-secondary-cta" href="#compare">
+              Compare plans
             </a>
-          )}
+          </div>
           {trialNotice ? (
-            <p className="form-notice" role="status">
+            <p className="form-notice pricing-hero-notice" role="status">
               {trialNotice}
             </p>
           ) : null}
+          <ul className="pricing-points" aria-label="Good to know">
+            <li>
+              <Check size={16} aria-hidden="true" /> Applying stays free
+            </li>
+            <li>
+              <Check size={16} aria-hidden="true" /> No card for the trial
+            </li>
+            <li>
+              <Check size={16} aria-hidden="true" /> Payments are not open yet
+            </li>
+          </ul>
+          <nav className="pricing-quick-links" aria-label="On this page">
+            <a href="#plans">Plans</a>
+            <a href="#compare">Compare</a>
+            <a href="#graduate-check">Graduate price</a>
+            <a href="#questions">Questions</a>
+          </nav>
         </section>
 
-        <section aria-labelledby="plans-heading">
-          <h2 id="plans-heading">Choose how long you want the tools</h2>
-          <p>
-            Monthly, Yearly and Graduate are the same Pro service. Only the price and who can use it
-            are different.
-          </p>
+        <section className="pricing-hero-card" id="trial" aria-labelledby="trial-heading">
+          <div>
+            <p className="eyebrow">Free trial</p>
+            <h2 id="trial-heading">Try Pro free for 3 days</h2>
+            <ul className="pricing-trial-list">
+              <li>
+                <Check size={16} aria-hidden="true" /> Check one CV in full
+              </li>
+              <li>
+                <Check size={16} aria-hidden="true" /> Prepare applications for three jobs
+              </li>
+              <li>
+                <Check size={16} aria-hidden="true" /> The trial ends on its own
+              </li>
+            </ul>
+          </div>
+          <div className="pricing-trial-action">
+            {trialAction('btn btn--primary pricing-main-cta')}
+            <p>No card details. No charge.</p>
+          </div>
+        </section>
+
+        <section id="plans" aria-labelledby="plans-heading">
+          <div className="pricing-section-head">
+            <div>
+              <p className="eyebrow">Plans</p>
+              <h2 id="plans-heading">Choose a plan</h2>
+            </div>
+            <p>Pro Monthly, Pro Yearly and Pro for Graduates have the same tools.</p>
+          </div>
+
           <div className="pricing-cards">
-            {seekerPlans.map((plan) => (
-              <article
-                className={`pricing-card ${plan.id === 'pro_annual' ? 'pricing-card-featured' : ''}`}
-                key={plan.id}
-              >
-                <p className="eyebrow">{plan.displayLabel ?? plan.label}</p>
-                <p className="pricing-card-price">{priceLine(plan)}</p>
-                {plan.monthlyEquivalent && plan.interval === 'year' ? (
-                  <p className="muted">About {money(Math.round(plan.monthlyEquivalent))} a month</p>
-                ) : null}
-                {plan.founding && plan.standardAmount && plan.standardAmount > plan.price.amount ? (
-                  <p>
-                    <strong>Founding price</strong> for the first 500 paying members, locked for 12
-                    months. Later standard price: {money(plan.standardAmount)}.
+            {seekerPlans.map((plan) => {
+              const action = planAction(plan)
+              const featured = plan.id === 'pro_annual'
+              return (
+                <article
+                  className={`pricing-card ${featured ? 'pricing-card-featured' : ''} ${
+                    plan.id === 'pro_graduate' ? 'pricing-card-graduate' : ''
+                  }`}
+                  key={plan.id}
+                >
+                  {featured ? <span className="pricing-badge">Best value</span> : null}
+                  {plan.id === 'pro_graduate' ? (
+                    <span className="pricing-badge pricing-badge-light">Lower price</span>
+                  ) : null}
+                  <h3>{planName(plan)}</h3>
+                  <p className="pricing-card-intro">{planIntro(plan)}</p>
+                  <p className="pricing-card-price">
+                    <span>{plan.price.amount === 0 ? '₦0' : money(plan.price.amount)}</span>
+                    <small>
+                      {plan.price.amount === 0
+                        ? 'free forever'
+                        : plan.interval === 'year'
+                          ? '/ year'
+                          : '/ month'}
+                    </small>
                   </p>
-                ) : null}
-                {plan.id === 'free' ? (
-                  <p>Search, save, alert and apply on employer sites. No card and no time limit.</p>
-                ) : plan.id === 'pro_graduate' ? (
-                  <p>
-                    Same Pro tools at a lower monthly price for people who pass the graduate check
-                    below.
-                  </p>
-                ) : plan.interval === 'year' ? (
-                  <p>
-                    Best value if you expect a longer job search or want the tools ready all year.
-                  </p>
-                ) : (
-                  <p>Flexible month-by-month access while you are actively applying.</p>
-                )}
-              </article>
-            ))}
+                  {plan.monthlyEquivalent && plan.interval === 'year' ? (
+                    <p className="pricing-card-note">
+                      About {money(Math.round(plan.monthlyEquivalent))} each month
+                    </p>
+                  ) : null}
+                  {plan.founding &&
+                  plan.standardAmount &&
+                  plan.standardAmount > plan.price.amount ? (
+                    <p className="pricing-card-note">
+                      First price for the first 500 people who pay. It stays the same for 12 months.
+                      Later price: {money(plan.standardAmount)}.
+                    </p>
+                  ) : null}
+                  <ul className="pricing-card-list">
+                    {(PLAN_POINTS[plan.id] ?? []).map((point) => (
+                      <li key={point}>
+                        <Check size={15} aria-hidden="true" /> {point}
+                      </li>
+                    ))}
+                  </ul>
+                  <a className="btn pricing-card-cta" href={action.href}>
+                    {action.label} <ArrowRight size={16} aria-hidden="true" />
+                  </a>
+                </article>
+              )
+            })}
           </div>
-          {!plans ? <p role="status">Loading current prices…</p> : null}
+          {!plans ? <p role="status">Loading prices...</p> : null}
+          <p className="pricing-under-note">
+            Prices are in naira. Payments are not open yet. The buttons on this page do not take
+            money.
+          </p>
         </section>
 
-        <section aria-labelledby="use-case-heading">
-          <h2 id="use-case-heading">Is Pro worth it for you?</h2>
-          <div className="pricing-use-cases">
-            {USE_CASES.map((item) => (
-              <article key={item.title}>
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
-              </article>
-            ))}
+        <section aria-labelledby="choose-heading">
+          <div className="pricing-section-head">
+            <div>
+              <p className="eyebrow">Help me choose</p>
+              <h2 id="choose-heading">Which plan fits you?</h2>
+            </div>
+          </div>
+          <div className="pricing-choice-grid">
+            <article>
+              <h3>Stay on Free</h3>
+              <p>Choose Free if you only want to search for jobs and apply.</p>
+            </article>
+            <article>
+              <h3>Try Pro</h3>
+              <p>Try Pro if you want help to check your CV and prepare each application.</p>
+            </article>
+            <article>
+              <h3>Choose Yearly</h3>
+              <p>Choose Yearly if your job search may take many months.</p>
+            </article>
+            <article>
+              <h3>Check the graduate price</h3>
+              <p>
+                Check below if you are in final year, finished school not long ago, or are serving.
+              </p>
+            </article>
           </div>
         </section>
 
-        <section aria-labelledby="compare-heading">
-          <h2 id="compare-heading">Everything included</h2>
-          <div className="table-wrap">
+        <section id="compare" aria-labelledby="compare-heading">
+          <div className="pricing-section-head">
+            <div>
+              <p className="eyebrow">Compare</p>
+              <h2 id="compare-heading">What you get</h2>
+            </div>
+            <p>The free trial has all Pro tools. Two parts have a limit.</p>
+          </div>
+          <div className="table-wrap pricing-table-wrap">
             <table className="table pricing-table">
               <thead>
                 <tr>
                   <th scope="col">Feature</th>
                   <th scope="col">Free</th>
-                  <th scope="col">3-day trial</th>
+                  <th scope="col">Free trial</th>
                   <th scope="col">Pro</th>
                 </tr>
               </thead>
@@ -350,9 +479,15 @@ export function PricingPage() {
                       {feature.title}
                       <span>{feature.what}</span>
                     </th>
-                    <td>Yes</td>
-                    <td>Yes</td>
-                    <td>Yes</td>
+                    <td data-label="Free">
+                      <IncludedMark />
+                    </td>
+                    <td data-label="Free trial">
+                      <IncludedMark />
+                    </td>
+                    <td data-label="Pro">
+                      <IncludedMark />
+                    </td>
                   </tr>
                 ))}
                 {PRO_FEATURES.map((feature) => (
@@ -361,195 +496,221 @@ export function PricingPage() {
                       {feature.title}
                       <span>{feature.what}</span>
                     </th>
-                    <td>—</td>
-                    <td>
-                      {feature.id === 'cv_analysis'
-                        ? '1 analysis'
-                        : feature.id === 'prepared_applications' || feature.id === 'cv_check'
-                          ? '3 jobs, shared'
-                          : 'Yes'}
+                    <td data-label="Free">
+                      <span className="pricing-no">No</span>
                     </td>
-                    <td>Yes</td>
+                    <td data-label="Free trial">
+                      {feature.id === 'cv_analysis' ? (
+                        '1 CV check'
+                      ) : feature.id === 'prepared_applications' || feature.id === 'cv_check' ? (
+                        '3 jobs shared'
+                      ) : (
+                        <IncludedMark />
+                      )}
+                    </td>
+                    <td data-label="Pro">
+                      <IncludedMark />
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </section>
-
-        <section className="pricing-feature-detail" aria-labelledby="pro-detail-heading">
-          <h2 id="pro-detail-heading">What each Pro tool actually does</h2>
-          {PRO_FEATURES.map((feature) => (
-            <details key={feature.id}>
-              <summary>{feature.title}</summary>
-              <p>{feature.what}</p>
-              <p>
-                <strong>Why it matters:</strong> {feature.why}
-              </p>
-            </details>
-          ))}
-        </section>
-
-        <section className="graduate-check" aria-labelledby="graduate-heading">
-          <h2 id="graduate-heading">Check the ₦3,000 graduate price</h2>
-          <p>
-            Pro for Graduates is for final-year students, recent graduates and current or recent
-            corps members with under two years of full-time paid work. It contains exactly the same
-            Pro tools.
+          <p className="pricing-under-note">
+            The three job limit is shared. If you compare your CV with a new job, that job counts.
+            If you then prepare an application for the same job, it does not count again.
           </p>
-          {!access ? (
-            <p>
-              <a className="btn btn--primary" href="/auth/signup?returnTo=%2Fpricing">
-                Create a free account to check
-              </a>{' '}
-              You can also sign in if you already have an account.
-            </p>
-          ) : (
-            <form onSubmit={(event) => void submitGraduate(event)}>
-              <div className="form-grid">
-                <label className="field">
-                  Which best describes you?
-                  <select
-                    required
-                    value={graduateForm.status}
-                    onChange={(event) =>
-                      setGraduateForm((current) => ({
-                        ...current,
-                        status: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">Choose one</option>
-                    <option value="final_year">I am in my final year</option>
-                    <option value="recent_graduate">I recently finished school</option>
-                    <option value="nysc_current">I am currently serving (NYSC)</option>
-                    <option value="nysc_recent">I recently finished NYSC</option>
-                    <option value="worker">None of these</option>
-                  </select>
-                </label>
-                <label className="field">
-                  Full-time paid work since school
-                  <select
-                    required
-                    value={graduateForm.fullTimeExperience}
-                    onChange={(event) =>
-                      setGraduateForm((current) => ({
-                        ...current,
-                        fullTimeExperience: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">Choose one</option>
-                    <option value="none">None</option>
-                    <option value="under_1_year">Under 1 year</option>
-                    <option value="1_to_2_years">1 year to under 2 years</option>
-                    <option value="over_2_years">2 years or more</option>
-                  </select>
-                </label>
-                {needsEducationMonth ? (
-                  <label className="field">
-                    Month you finished or expect to finish
-                    <input
-                      type="month"
-                      required
-                      value={graduateForm.educationMonth}
-                      onChange={(event) =>
-                        setGraduateForm((current) => ({
-                          ...current,
-                          educationMonth: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                ) : null}
-                {needsNyscMonth ? (
-                  <label className="field">
-                    NYSC completion month
-                    <input
-                      type="month"
-                      value={graduateForm.nyscMonth}
-                      onChange={(event) =>
-                        setGraduateForm((current) => ({
-                          ...current,
-                          nyscMonth: event.target.value,
-                        }))
-                      }
-                    />
-                    <small>For current corps members, use the expected completion month.</small>
-                  </label>
-                ) : null}
-              </div>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={graduateForm.declared}
-                  onChange={(event) =>
-                    setGraduateForm((current) => ({ ...current, declared: event.target.checked }))
-                  }
-                />{' '}
-                I confirm these answers are true. I understand FJ may ask for proof before the
-                graduate price is used.
-              </label>
-              <button className="btn btn--primary" type="submit" disabled={graduateBusy}>
-                {graduateBusy ? 'Checking…' : 'Check my graduate price'}
-              </button>
-              {graduateError ? (
-                <p className="banner banner--demo" role="alert">
-                  {graduateError}
-                </p>
-              ) : null}
-            </form>
-          )}
-          {graduateResult ? (
-            <div className="graduate-result" role="status">
-              <h3>
-                {graduateResult.result === 'eligible'
-                  ? 'You qualify for Pro for Graduates'
-                  : graduateResult.result === 'review'
-                    ? 'Your check needs review'
-                    : 'The graduate price does not apply'}
-              </h3>
-              <ul className="plain-list">
-                {graduateResult.reasons.map((reason) => (
-                  <li key={reason}>{reason}</li>
-                ))}
-                {graduateResult.flags.map((flag) => (
-                  <li key={flag}>{flag}</li>
-                ))}
+        </section>
+
+        <section className="graduate-check" id="graduate-check" aria-labelledby="graduate-heading">
+          <div className="pricing-two-col">
+            <div>
+              <p className="eyebrow">Graduate price</p>
+              <h2 id="graduate-heading">Pro for ₦3,000 each month</h2>
+              <p>This price is for people who meet all of these rules:</p>
+              <ul className="pricing-rule-list">
+                <li>
+                  <Check size={16} aria-hidden="true" /> You are in final year, or you finished
+                  school in the last 24 months.
+                </li>
+                <li>
+                  <Check size={16} aria-hidden="true" /> Or you are serving now, or you finished
+                  NYSC in the last 12 months.
+                </li>
+                <li>
+                  <Check size={16} aria-hidden="true" /> You have less than two years of full time
+                  paid work.
+                </li>
               </ul>
-              <p>
-                {graduateResult.result === 'eligible'
-                  ? 'When payments open, your price will be ₦3,000 a month for the full Pro service. You can start the free 3-day trial now.'
-                  : graduateResult.result === 'review'
-                    ? 'Do not send BVN, NIN or a full identity document. FJ will tell you exactly what acceptable proof is needed before payment opens.'
-                    : 'Regular Pro Monthly and Pro Yearly contain the same tools.'}
+              <p className="pricing-privacy-note">
+                We do not ask for your age, BVN or NIN. Do not send those to FJ.
               </p>
             </div>
-          ) : null}
+
+            <div className="pricing-form-card">
+              {!access ? (
+                <div className="pricing-signup-box">
+                  <h3>First, create a free account</h3>
+                  <p>Then come back to this page and answer four short questions.</p>
+                  <a className="btn btn--primary" href="/auth/signup?returnTo=%2Fpricing">
+                    Create a free account
+                  </a>
+                  <p>
+                    Already have an account? <a href="/auth/login?returnTo=%2Fpricing">Sign in</a>
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={(event) => void submitGraduate(event)}>
+                  <div className="form-grid">
+                    <label className="field">
+                      Choose the one that fits you
+                      <select
+                        required
+                        value={graduateForm.status}
+                        onChange={(event) =>
+                          setGraduateForm((current) => ({
+                            ...current,
+                            status: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Choose one</option>
+                        <option value="final_year">I am in final year</option>
+                        <option value="recent_graduate">I finished school not long ago</option>
+                        <option value="nysc_current">I am serving now</option>
+                        <option value="nysc_recent">I finished NYSC not long ago</option>
+                        <option value="worker">None of these</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      Full time paid work since school
+                      <select
+                        required
+                        value={graduateForm.fullTimeExperience}
+                        onChange={(event) =>
+                          setGraduateForm((current) => ({
+                            ...current,
+                            fullTimeExperience: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Choose one</option>
+                        <option value="none">None</option>
+                        <option value="under_1_year">Less than 1 year</option>
+                        <option value="1_to_2_years">1 year to less than 2 years</option>
+                        <option value="over_2_years">2 years or more</option>
+                      </select>
+                    </label>
+                    {needsEducationMonth ? (
+                      <label className="field">
+                        Month you finished school, or will finish
+                        <input
+                          type="month"
+                          required
+                          value={graduateForm.educationMonth}
+                          onChange={(event) =>
+                            setGraduateForm((current) => ({
+                              ...current,
+                              educationMonth: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    ) : null}
+                    {needsNyscMonth ? (
+                      <label className="field">
+                        Month you finished NYSC, or will finish
+                        <input
+                          type="month"
+                          value={graduateForm.nyscMonth}
+                          onChange={(event) =>
+                            setGraduateForm((current) => ({
+                              ...current,
+                              nyscMonth: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+                  <label className="checkbox-field">
+                    <input
+                      type="checkbox"
+                      checked={graduateForm.declared}
+                      onChange={(event) =>
+                        setGraduateForm((current) => ({
+                          ...current,
+                          declared: event.target.checked,
+                        }))
+                      }
+                    />{' '}
+                    I confirm that these answers are true.
+                  </label>
+                  <button className="btn btn--primary" type="submit" disabled={graduateBusy}>
+                    {graduateBusy ? 'Checking...' : 'Check my price'}
+                  </button>
+                  {graduateError ? (
+                    <p className="banner banner--demo" role="alert">
+                      {graduateError}
+                    </p>
+                  ) : null}
+                </form>
+              )}
+
+              {graduateResult ? (
+                <div className="graduate-result" role="status">
+                  <h3>
+                    {graduateResult.result === 'eligible'
+                      ? 'You can use the graduate price'
+                      : graduateResult.result === 'review'
+                        ? 'We need to check your answers'
+                        : 'This price does not fit your answers'}
+                  </h3>
+                  <ul className="plain-list">
+                    {graduateResult.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                    {graduateResult.flags.map((flag) => (
+                      <li key={flag}>{flag}</li>
+                    ))}
+                  </ul>
+                  <p>
+                    {graduateResult.result === 'eligible'
+                      ? 'When payments open, your price will be ₦3,000 each month. You can start the free trial now.'
+                      : graduateResult.result === 'review'
+                        ? 'Do not send your BVN, NIN or identity card. We will say what we need before payments open.'
+                        : 'Pro Monthly and Pro Yearly have the same tools.'}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </section>
 
-        <section aria-labelledby="limits-heading">
-          <h2 id="limits-heading">What Pro does not do</h2>
-          <ul className="plain-list">
-            {PRO_LIMITS.map((limit) => (
-              <li key={limit}>{limit}</li>
-            ))}
-          </ul>
+        <section className="pricing-note-panel" aria-labelledby="limits-heading">
+          <ShieldCheck size={22} aria-hidden="true" />
+          <div>
+            <h2 id="limits-heading">What FJ will not do</h2>
+            <ul className="plain-list pricing-limit-list">
+              {PRO_LIMITS.map((limit) => (
+                <li key={limit}>{limit}</li>
+              ))}
+            </ul>
+          </div>
         </section>
 
         {plans && !plans.billingEnabled ? (
-          <section
-            className="waitlist"
-            id="payments-opening-soon"
-            aria-label="Payments opening soon"
-          >
-            <h2>Payments open in the next stage</h2>
-            <p>
-              Card and bank-transfer checkout is being prepared. No money is taken today. Leave your
-              email and we will tell you when the founding prices can be claimed.
-            </p>
+          <section className="waitlist pricing-waitlist" id="payments-opening-soon">
+            <div>
+              <p className="eyebrow">Payments</p>
+              <h2>Payments are not open yet</h2>
+              <p>
+                We are setting up card and bank transfer payments. We will not take money today.
+                Leave your email and we will tell you when payments open.
+              </p>
+            </div>
             {waitlist === 'done' ? (
-              <p role="status">Thank you. We will email you when paid plans open.</p>
+              <p role="status">Thank you. We will email you when payments open.</p>
             ) : (
               <form
                 onSubmit={(event) => {
@@ -574,12 +735,13 @@ export function PricingPage() {
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     autoComplete="email"
+                    placeholder="you@example.com"
                   />
                 </label>
-                <button className="btn btn--primary">Tell me when payments open</button>
+                <button className="btn btn--primary">Email me when payments open</button>
                 {waitlist === 'error' ? (
                   <p className="banner banner--demo" role="status">
-                    Could not save that just now. Try again.
+                    We could not save your email. Please try again.
                   </p>
                 ) : null}
               </form>
@@ -587,32 +749,37 @@ export function PricingPage() {
           </section>
         ) : null}
 
-        <section aria-label="For employers">
-          <h2>Hiring?</h2>
-          <p>
-            Employer accounts and direct job posting are paused, so there is no employer price to
-            pay. Vacancies on your public careers page or an established job board may be collected
-            automatically at no cost.
-          </p>
-          <p>
-            <a href="/employers">Read how this works or record employer interest</a>
-          </p>
+        <section className="pricing-employer" aria-labelledby="employers-heading">
+          <div>
+            <h2 id="employers-heading">For employers</h2>
+            <p>
+              Employer accounts and direct job posting are paused. There is no employer plan to buy.
+            </p>
+          </div>
+          <a className="btn" href="/employers">
+            Read more
+          </a>
         </section>
 
-        <section aria-label="Pricing questions">
-          <h2>Common questions</h2>
-          {FAQ.map((item) => (
-            <details key={item.q}>
-              <summary>{item.q}</summary>
-              <p>{item.a}</p>
-            </details>
-          ))}
+        <section id="questions" aria-labelledby="questions-heading">
+          <div className="pricing-section-head">
+            <div>
+              <p className="eyebrow">Questions</p>
+              <h2 id="questions-heading">Common questions</h2>
+            </div>
+          </div>
+          <div className="pricing-faq">
+            {FAQ.map((item) => (
+              <details key={item.q}>
+                <summary>{item.q}</summary>
+                <p>{item.a}</p>
+              </details>
+            ))}
+          </div>
         </section>
 
-        <p className="field__hint">
-          FJ is not an employer. We do not own, verify or endorse any listing, and we never
-          guarantee employment. Always check the original post yourself. Never pay anyone for a job
-          or an application.
+        <p className="pricing-safety-note">
+          FJ is not an employer. Check each job and company yourself. Never pay anyone to get a job.
         </p>
         <script
           type="application/ld+json"
@@ -630,6 +797,6 @@ export function PricingPage() {
         />
       </main>
       <Footer />
-    </>
+    </div>
   )
 }

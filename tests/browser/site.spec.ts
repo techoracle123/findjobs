@@ -92,15 +92,13 @@ test('homepage explains the platform in plain words and sends people to sign up'
     page.getByRole('heading', { name: 'What decides if you get the job?' }),
   ).toBeVisible()
   await expect(page.locator('body')).toContainText('pay in dollars')
-  await expect(page.locator('body')).toContainText('never ask you to pay money to get a job')
-  await expect(
-    page.getByRole('heading', { name: 'Pro helps you choose better and apply stronger' }),
-  ).toBeVisible()
+  await expect(page.locator('body')).toContainText('will not ask you to pay to get a job')
+  await expect(page.getByRole('heading', { name: 'Pro helps you check and prepare' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Try it free for 3 days' })).toBeVisible()
   await expect(page.locator('.home-price-grid')).toContainText('₦5,000/month')
   await expect(page.locator('.home-price-grid')).toContainText('₦40,000/year')
   await expect(page.locator('.home-price-grid')).toContainText('₦3,000/month')
-  await expect(page.locator('body')).toContainText('Payments open in the next stage')
+  await expect(page.locator('body')).toContainText('Payments are not open yet')
   await page
     .getByRole('link', { name: /Create a free account/ })
     .first()
@@ -238,22 +236,26 @@ test('pricing is linked in the header and the page loads', async ({ page }) => {
   await page.goto('/')
   await page.locator('.topnav').getByRole('link', { name: 'Pricing' }).click()
   await expect(page).toHaveURL(/\/pricing$/)
-  await expect(
-    page.getByRole('heading', { name: 'Free to find and apply. Pro to apply stronger.' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Simple pricing' })).toBeVisible()
+  const pricingNav = page.locator('.site-header .topnav')
+  await expect(pricingNav.getByRole('link', { name: 'Jobs' })).toBeVisible()
+  await expect(pricingNav.getByRole('link', { name: 'Pricing' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  await expect(pricingNav.getByRole('link', { name: 'About' })).toBeVisible()
   const pricingTable = page.locator('.pricing-table')
   await expect(page.locator('.pricing-cards')).toContainText('Pro for Graduates')
   await expect(page.locator('.pricing-cards')).toContainText('₦5,000')
   await expect(page.locator('.pricing-cards')).toContainText('₦40,000')
   await expect(page.locator('.pricing-cards')).toContainText('₦3,000')
-  await expect(pricingTable.getByText('Complete application packs')).toBeVisible()
-  await expect(pricingTable.getByText('CV-to-job comparison')).toBeVisible()
-  await expect(pricingTable.getByText('Before-you-apply check')).toBeVisible()
+  await expect(pricingTable.getByText('Prepare your application')).toBeVisible()
+  await expect(pricingTable.getByText('Compare your CV with a job')).toBeVisible()
+  await expect(pricingTable.getByText('Check a job advert')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Try Pro free for 3 days' })).toBeVisible()
-  await expect(page.locator('body')).toContainText(
-    'One full CV analysis, three complete application packs',
-  )
-  await expect(page.getByRole('heading', { name: 'Payments open in the next stage' })).toBeVisible()
+  await expect(page.locator('body')).toContainText('Check one CV in full')
+  await expect(page.locator('body')).toContainText('Prepare applications for three jobs')
+  await expect(page.getByRole('heading', { name: 'Payments are not open yet' })).toBeVisible()
   await expect(page.getByText(/Employer accounts and direct job posting are paused/)).toBeVisible()
   await expect(page.getByText(/Desk\+/)).toHaveCount(0)
 })
@@ -273,12 +275,13 @@ test('homepage and pricing explain Phase 2 cleanly at phone, tablet and desktop 
     await page.screenshot({ path: testInfo.outputPath(`phase2-home-${width}.png`) })
 
     await page.goto('/pricing')
+    await expect(page.getByRole('heading', { name: 'Simple pricing' })).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'Free to find and apply. Pro to apply stronger.' }),
+      page.locator('.site-header .topnav').getByRole('link', { name: 'Pricing' }),
     ).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Try Pro free for 3 days' })).toBeVisible()
-    await expect(page.locator('.pricing-table')).toContainText('Saved master CV')
-    await expect(page.locator('.pricing-table')).toContainText('Smart Telegram alerts')
+    await expect(page.locator('.pricing-table')).toContainText('Save and check your CV')
+    await expect(page.locator('.pricing-table')).toContainText('Telegram alerts with filters')
     await expectNoHorizontalOverflow(page)
     await page.screenshot({ path: testInfo.outputPath(`phase2-pricing-${width}.png`) })
   }
@@ -385,8 +388,10 @@ NYSC completed in 2024.`
   await signUp(page)
   await page.goto('/dashboard?tab=plan')
   await expect(page.getByRole('heading', { name: '3-day Pro free trial' })).toBeVisible()
-  await expect(page.locator('body')).toContainText('No card, no automatic charge')
-  await expect(page.locator('body')).toContainText('No payment provider is active today')
+  await expect(page.locator('body')).toContainText('We do not ask for card details')
+  await expect(page.locator('body')).toContainText(
+    'Payments are not open yet. Nothing on this page can charge you.',
+  )
   await writeAndWait(page, '/api/pro/trial/start', 'POST', () =>
     page.getByRole('button', { name: 'Start my 3-day free trial' }).click(),
   )
@@ -396,12 +401,12 @@ NYSC completed in 2024.`
 
   await page.goto('/profile')
   const masterCv = page.locator('.master-cv-panel')
-  await expect(masterCv.getByRole('heading', { name: 'Your saved master CV' })).toBeVisible()
+  await expect(masterCv.getByRole('heading', { name: 'Your saved CV' })).toBeVisible()
   await masterCv.getByText('Paste CV text instead').click()
   await masterCv.getByLabel('CV text').fill(sampleCv)
-  await masterCv.getByLabel(/I agree that FJ may save/).check()
+  await masterCv.getByLabel(/I agree that FJ can save/).check()
   await writeAndWait(page, '/api/pro/cv', 'PUT', () =>
-    masterCv.getByRole('button', { name: 'Analyse my CV' }).click(),
+    masterCv.getByRole('button', { name: 'Check my CV' }).click(),
   )
   await expect(masterCv.getByRole('heading', { name: 'Fix these first' })).toBeVisible()
   await expect(masterCv.getByRole('button', { name: 'View saved text' })).toBeVisible()
@@ -416,7 +421,7 @@ NYSC completed in 2024.`
   await expect(page.getByText(/left today|Fast Apply/)).toHaveCount(0)
   await expect(page.getByRole('link', { name: /Apply for this role/ })).toBeVisible()
   const proTools = page.locator('.pro-tools')
-  await proTools.getByRole('button', { name: 'Run before-you-apply check' }).click()
+  await proTools.getByRole('button', { name: 'Check this advert' }).click()
   await expect(proTools).toContainText('not employer verification')
   await proTools.getByRole('button', { name: 'Prepare application' }).click()
   await expect(proTools.getByRole('button', { name: 'Copy cover letter' })).toBeVisible()
@@ -449,7 +454,7 @@ NYSC completed in 2024.`
   await page.goto('/dashboard?tab=alerts')
   await page.getByLabel('Alert name').fill('Smart frontend')
   await page.getByLabel('Keywords').fill('frontend')
-  await page.getByLabel(/Pro smart alert/).check()
+  await page.getByLabel(/Pro alert with filters/).check()
   await page.getByLabel('Minimum fit score').selectOption('55')
   await page.getByLabel('Countries (two-letter codes)').fill('NG')
   await page.getByLabel('Remote', { exact: true }).check()
@@ -463,16 +468,18 @@ NYSC completed in 2024.`
   await expect(smartAlert).toContainText('pay stated')
   await page.reload()
   await expect(page.locator('.alert-card', { hasText: 'Smart frontend' })).toContainText(
-    'Smart alert',
+    'Alert with filters',
   )
   await expectNoHorizontalOverflow(page)
   await page.screenshot({ path: testInfo.outputPath('phase2-smart-alert-1280.png') })
 
   await page.goto('/dashboard?tab=tools')
-  await expect(page.getByRole('heading', { name: 'Best matches and skill gaps' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Best matches and skills to learn' }),
+  ).toBeVisible()
   await expect(page.locator('.best-match-card').first()).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('button', { name: 'Show repeated skill gaps' }).click()
-  await expect(page.getByRole('heading', { name: 'Your repeated skill-gap plan' })).toBeVisible()
+  await page.getByRole('button', { name: 'Show skills to learn' }).click()
+  await expect(page.getByRole('heading', { name: 'Skills to learn' })).toBeVisible()
   await page
     .getByLabel('Full advert text')
     .fill(
@@ -488,7 +495,9 @@ NYSC completed in 2024.`
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Best matches and skill gaps' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Best matches and skills to learn' }),
+  ).toBeVisible()
   await expectNoHorizontalOverflow(page)
   await page.screenshot({ path: testInfo.outputPath('phase2-dashboard-tools-390.png') })
 })

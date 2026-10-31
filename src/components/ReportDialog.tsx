@@ -83,7 +83,7 @@ export function ReportDialog({ jobId, onClose }: { jobId: string; onClose: () =>
             </div>
             {state === 'error' && (
               <p className="banner banner--demo" role="alert">
-                We could not send the report just now. Please try again.
+                We could not send the report. Please try again.
               </p>
             )}
             <button

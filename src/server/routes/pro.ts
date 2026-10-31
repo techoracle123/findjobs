@@ -201,7 +201,7 @@ async function enforceTrialPack(
       error: 'trial_limit_reached',
       trial: await getTrialState(gate.db, gate.user.id),
       message:
-        'You have used the three complete application packs in your free trial. Applying on the employer site stays free.',
+        'You have used help for three jobs in your free trial. You can still apply free on the company website.',
       upgradeUrl: '/pricing',
     },
     403,
@@ -363,7 +363,7 @@ proRoutes.put('/pro/cv', async (c) => {
       {
         error: 'trial_limit_reached',
         trial: await getTrialState(gate.db, gate.user.id),
-        message: 'You have used the one full CV analysis in your free trial.',
+        message: 'You have used the one CV check in your free trial.',
         upgradeUrl: '/pricing',
       },
       403,
@@ -469,7 +469,7 @@ proRoutes.get('/pro/best-matches', async (c) => {
   return c.json({
     available: true,
     message: cv
-      ? 'Ranked from your profile and saved master CV, with eligible roles kept ahead of restricted ones.'
+      ? 'We used your profile and saved CV. Jobs open to you come first.'
       : 'Ranked from your profile, with eligible roles kept ahead of restricted ones.',
     totalJobs: jobs.length,
     updatedAt,

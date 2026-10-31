@@ -87,8 +87,7 @@ export function SavedPanel({
       </div>
       <div className="panel__body stack">
         <p className="panel__note">
-          Saved and applied tracking is free. Pro adds preparing, interview, offer and closed stages
-          plus follow-up dates.
+          Saving jobs and marking them as applied is free. Pro adds more stages and follow up dates.
         </p>
         {due.length ? (
           <p className="banner banner--info" role="status">
@@ -99,8 +98,8 @@ export function SavedPanel({
         {!proEnabled ? (
           <div className="locked-box compact">
             <p>
-              Want the full pipeline? The 3-day trial and Pro unlock every stage and follow-up date.
-              Existing saved/applied records remain available.
+              Want more stages? The free trial and Pro add preparing, interview, offer and closed.
+              Your saved jobs will stay here.
             </p>
             <button className="btn btn--sm" type="button" onClick={onOpenPlan}>
               {trial.status === 'not_started' ? 'Start free trial' : 'See Pro plans'}

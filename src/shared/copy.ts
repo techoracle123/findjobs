@@ -6,7 +6,7 @@
 
 export type MessageClass = 'USER_ACTION' | 'DEGRADED' | 'INTERNAL'
 
-/** USER_ACTION: the user can fix it now — show inline with a next step. */
+/** USER_ACTION: the user can fix it now, show inline with a next step. */
 export const USER_ACTION: MessageClass = 'USER_ACTION'
 /** DEGRADED: the app still works; something is stale. Quiet and dismissible. */
 export const DEGRADED: MessageClass = 'DEGRADED'
@@ -18,7 +18,7 @@ export interface CopyEntry {
   text: string
   className: MessageClass
   where: string
-  /** Legal or mandated disclosure — named parties are allowed here only. */
+  /** Legal or mandated disclosure, named parties are allowed here only. */
   legal?: boolean
 }
 
@@ -26,7 +26,7 @@ const entries: CopyEntry[] = [
   // ── Sync (USER_ACTION at the element, never a page-top alert) ──
   {
     id: 'sync.pending',
-    text: 'Not saved yet — we’ll keep trying.',
+    text: 'Not saved yet. We will keep trying.',
     className: USER_ACTION,
     where: 'Save/apply controls',
   },
@@ -52,13 +52,13 @@ const entries: CopyEntry[] = [
   },
   {
     id: 'auth.sendFailed',
-    text: 'We couldn’t send the code just now. Please try again in a minute.',
+    text: 'We couldn’t send the code. Please try again in a minute.',
     className: USER_ACTION,
     where: 'Auth pages',
   },
   {
     id: 'auth.rateLimited',
-    text: 'Too many codes requested. Wait about 10 minutes, then try again — and check your spam folder for the last one.',
+    text: 'Too many codes requested. Wait about 10 minutes, then try again. Check your spam folder for the last one.',
     className: USER_ACTION,
     where: 'Auth pages',
   },
@@ -108,7 +108,7 @@ const entries: CopyEntry[] = [
   // ── Reads and writes (USER_ACTION with a retry) ──
   {
     id: 'jobs.unavailable',
-    text: 'We couldn’t load jobs just now. Please try again.',
+    text: 'We couldn’t load jobs. Please try again.',
     className: USER_ACTION,
     where: 'Browse page',
   },
@@ -138,13 +138,13 @@ const entries: CopyEntry[] = [
   },
   {
     id: 'cv.suggestFailed',
-    text: 'We couldn’t prepare suggestions just now. Please try again.',
+    text: 'We couldn’t prepare suggestions. Please try again.',
     className: USER_ACTION,
     where: 'CV import',
   },
   {
     id: 'advice.failed',
-    text: 'We couldn’t prepare advice just now. Please try again.',
+    text: 'We couldn’t prepare advice. Please try again.',
     className: USER_ACTION,
     where: 'Job detail',
   },
@@ -168,7 +168,7 @@ const entries: CopyEntry[] = [
   },
   {
     id: 'report.failed',
-    text: 'We couldn’t send the report just now. Please try again.',
+    text: 'We couldn’t send the report. Please try again.',
     className: USER_ACTION,
     where: 'Report dialog',
   },
@@ -180,7 +180,7 @@ const entries: CopyEntry[] = [
   },
   {
     id: 'telegram.failed',
-    text: 'We couldn’t open Telegram just now. Please try again.',
+    text: 'We couldn’t open Telegram. Please try again.',
     className: USER_ACTION,
     where: 'Alerts panel',
   },
