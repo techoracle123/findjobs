@@ -632,6 +632,7 @@ test('UI controls with no backing data stay hidden unless admin override', async
   if (facets.coverage.salary < 0.6) await expect(page.locator('#sort option')).toHaveCount(2)
   // The admin override always exposes every control for testing.
   await page.goto('/jobs?adminControls=1')
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
   expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
   expect(await page.getByRole('button', { name: /Verified only/ }).count()).toBeGreaterThanOrEqual(
     1,
