@@ -5,13 +5,38 @@ import { franc } from 'franc-min'
 const base = process.env.LIVE_SITE_URL
 if (!base?.startsWith('https://'))
   throw new Error('LIVE_SITE_URL must be the deployed HTTPS origin.')
+// Job data sits behind a free account; sign up a throwaway one for checks.
+// This also proves the production sign-up path works end to end.
+let sessionCookie = ''
 async function json(path) {
   const response = await fetch(`${base}${path}`, {
-    headers: process.env.HEALTH_CHECK_KEY ? { 'X-Health-Key': process.env.HEALTH_CHECK_KEY } : {},
+    headers: {
+      ...(process.env.HEALTH_CHECK_KEY ? { 'X-Health-Key': process.env.HEALTH_CHECK_KEY } : {}),
+      ...(sessionCookie ? { Cookie: sessionCookie } : {}),
+    },
     signal: AbortSignal.timeout(30000),
   })
   if (!response.ok) throw new Error(`Live check failed: ${path} returned ${response.status}`)
   return response.json()
+}
+{
+  const signup = await fetch(`${base}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Live Check',
+      email: `live-check-${Date.now()}@example.com`,
+      password: 'live check password',
+    }),
+    signal: AbortSignal.timeout(30000),
+  })
+  if (!signup.ok) throw new Error(`Live check sign-up failed: ${signup.status}`)
+  sessionCookie = (signup.headers.get('set-cookie') ?? '').split(';')[0]
+  if (!sessionCookie.startsWith('fj_session='))
+    throw new Error('Live check sign-up set no session.')
+  const locked = await fetch(`${base}/api/jobs?limit=1`, { signal: AbortSignal.timeout(30000) })
+  if (locked.status !== 401)
+    throw new Error(`Jobs must refuse anonymous reads, got ${locked.status}`)
 }
 const health = await json('/api/health')
 const rates = await json('/api/rates')

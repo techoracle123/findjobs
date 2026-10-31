@@ -23,7 +23,7 @@ async function post(
 
 beforeAll(async () => {
   // The demo seed lives in migration 0002; make sure it is present.
-  const count = await SELF.fetch(`${BASE}/api/jobs`)
+  const count = await SELF.fetch(`${BASE}/api/jobs`, { headers: DEV })
   expect(count.status).toBe(200)
 })
 
@@ -49,28 +49,30 @@ describe('health and jobs', () => {
   })
 
   it('lists the seeded roles', async () => {
-    const response = await get('/api/jobs')
+    const response = await get('/api/jobs', DEV)
     expect(response.status).toBe(200)
     const body = (await response.json()) as { jobs: unknown[] }
     expect(body.jobs.length).toBeGreaterThan(0)
   })
 
   it('returns a single role', async () => {
-    const response = await get('/api/jobs/demo-0001')
+    const response = await get('/api/jobs/demo-0001', DEV)
     expect(response.status).toBe(200)
     const body = (await response.json()) as { job: { id: string } }
     expect(body.job.id).toBe('demo-0001')
   })
 
   it('404s an unknown role', async () => {
-    const response = await get('/api/jobs/does-not-exist')
+    const response = await get('/api/jobs/does-not-exist', DEV)
     expect(response.status).toBe(404)
   })
 
   it('scores a profile against the feed', async () => {
-    const response = await post('/api/score', {
-      profile: { skills: ['Go'], targetRoleFamilies: ['backend'] },
-    })
+    const response = await post(
+      '/api/score',
+      { profile: { skills: ['Go'], targetRoleFamilies: ['backend'] } },
+      DEV,
+    )
     expect(response.status).toBe(200)
     const body = (await response.json()) as { scored: { score: number; job: { id: string } }[] }
     expect(body.scored.length).toBeGreaterThan(0)

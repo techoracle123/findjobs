@@ -22,6 +22,7 @@ import m0019 from '../../migrations/0019_moderation.sql?raw'
 import m0020 from '../../migrations/0020_auth_sessions.sql?raw'
 import m0021 from '../../migrations/0021_employers.sql?raw'
 import m0022 from '../../migrations/0022_promo_affiliates.sql?raw'
+import m0023 from '../../migrations/0023_password_auth.sql?raw'
 import m0015 from '../../migrations/0015_public_read_indexes.sql?raw'
 
 /**
@@ -54,6 +55,7 @@ const MIGRATIONS = [
   m0020,
   m0021,
   m0022,
+  m0023,
 ]
 
 /**

@@ -33,7 +33,7 @@ async function makeOrg(headers: Record<string, string>, name: string): Promise<s
 }
 
 beforeAll(async () => {
-  expect((await get('/api/jobs')).status).toBe(200)
+  expect((await get('/api/jobs', ALICE)).status).toBe(200)
 })
 
 describe('employer organisations (Prompt 9)', () => {

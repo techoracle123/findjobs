@@ -1,16 +1,20 @@
 /**
- * Own passwordless sign-in (Prompt 18). Six-digit codes by email, rolling
- * sessions, device list with revocation. Access identities keep working in
- * parallel for one release (§E migration).
+ * FJ's own sign-in. Email and password is the main flow (sign up, sign in,
+ * forgot password by emailed reset link). The older six-digit email code
+ * endpoints stay available so nobody mid-journey is stranded. Sessions are
+ * rolling, the device list supports revocation, and no external sign-in
+ * service is involved anywhere.
  */
 import { Hono } from 'hono'
 import type { AppEnv } from '../env'
 import { requireUser, unauthorized, readJson, type AppContext } from '../http'
 import { enforceRateLimit } from '../ratelimit'
-import { emailProviderFromEnv, otpEmail } from '../email/provider'
+import { emailProviderFromEnv, otpEmail, passwordResetEmail } from '../email/provider'
 import { upsertUser } from '../auth/accounts'
+import { burnPasswordTime, hashPassword, passwordProblem, verifyPassword } from '../auth/passwords'
 
 const OTP_TTL_MS = 10 * 60_000
+const RESET_TTL_MS = 60 * 60_000
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days rolling
 const IDLE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days idle
 const MAX_ATTEMPTS = 5
@@ -82,6 +86,192 @@ function publicUser(email: string) {
   return { email, id: email }
 }
 
+const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+/** Creates a session row and sets the cookie. Shared by every sign-in path. */
+async function startSession(c: AppContext, db: D1Database, userId: string): Promise<void> {
+  const now = Date.now()
+  const token = crypto.randomUUID() + crypto.randomUUID()
+  await db
+    .prepare(
+      `INSERT INTO auth_sessions (id, user_id, token_hash, user_agent, created_at, last_seen_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      crypto.randomUUID(),
+      userId,
+      hash(token),
+      (c.req.header('user-agent') ?? '').slice(0, 200),
+      now,
+      now,
+      now + SESSION_TTL_MS,
+    )
+    .run()
+  c.header('Set-Cookie', sessionCookie(token, SESSION_TTL_MS / 1000))
+}
+
+interface UserRow {
+  id: string
+  email: string
+  password_hash: string | null
+}
+
+async function findUserByEmail(db: D1Database, email: string): Promise<UserRow | null> {
+  return db
+    .prepare('SELECT id, email, password_hash FROM users WHERE email = ?')
+    .bind(email)
+    .first<UserRow>()
+}
+
+authRoutes.post('/auth/signup', async (c) => {
+  const limited = await enforceRateLimit(c, {
+    bucket: 'password-signup',
+    limit: 60,
+    windowSeconds: 3600,
+  })
+  if (limited) return limited
+  const body = await readJson(c)
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : ''
+  if (!EMAIL_PATTERN.test(email)) return c.json({ error: 'bad_email' }, 400)
+  const problem = passwordProblem(body.password)
+  if (problem) return c.json({ error: 'weak_password', message: problem }, 400)
+  const db = c.env?.DB
+  if (!db) return c.json({ error: 'not_configured' }, 503)
+  const existing = await findUserByEmail(db, email)
+  if (existing) {
+    // One plain answer for both cases: an account with a password signs in;
+    // an older code-only account sets its first password via forgot-password,
+    // which proves inbox ownership before anyone can claim it.
+    return c.json({ error: 'account_exists' }, 409)
+  }
+  const user = await upsertUser(db, email, name || undefined)
+  await db
+    .prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+    .bind(await hashPassword(body.password as string), user.id)
+    .run()
+  await startSession(c as AppContext, db, user.id)
+  return c.json({ ok: true, user: publicUser(email) })
+})
+
+authRoutes.post('/auth/login', async (c) => {
+  const ipLimited = await enforceRateLimit(c, {
+    bucket: 'password-login',
+    limit: 100,
+    windowSeconds: 600,
+  })
+  if (ipLimited) return ipLimited
+  const body = await readJson(c)
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const password = typeof body.password === 'string' ? body.password : ''
+  if (!email || !password) return c.json({ error: 'bad_request' }, 400)
+  const emailLimited = await enforceRateLimit(c, {
+    bucket: 'password-login-email',
+    limit: 50,
+    windowSeconds: 3600,
+    subject: `email:${email}`,
+  })
+  if (emailLimited) return emailLimited
+  const db = c.env?.DB
+  if (!db) return c.json({ error: 'not_configured' }, 503)
+  const user = await findUserByEmail(db, email)
+  // One identical answer whether the account is missing, has no password yet,
+  // or the password is wrong — the response never confirms which emails hold
+  // accounts.
+  if (!user?.password_hash) {
+    await burnPasswordTime(password)
+    return c.json({ error: 'invalid_credentials' }, 401)
+  }
+  if (!(await verifyPassword(password, user.password_hash)))
+    return c.json({ error: 'invalid_credentials' }, 401)
+  await startSession(c as AppContext, db, user.id)
+  return c.json({ ok: true, user: publicUser(email) })
+})
+
+authRoutes.post('/auth/password/forgot', async (c) => {
+  const limited = await enforceRateLimit(c, {
+    bucket: 'password-forgot',
+    limit: 10,
+    windowSeconds: 600,
+  })
+  if (limited) return limited
+  const body = await readJson(c)
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  if (!EMAIL_PATTERN.test(email)) return c.json({ error: 'bad_email' }, 400)
+  const db = c.env?.DB
+  if (!db) return c.json({ error: 'not_configured' }, 503)
+  const devMode =
+    c.env?.APP_MODE === 'test' || c.env?.APP_MODE === 'local' || c.env?.APP_MODE === 'local-preview'
+  const user = await findUserByEmail(db, email)
+  let devToken: string | undefined
+  if (user) {
+    const now = Date.now()
+    const token = crypto.randomUUID() + crypto.randomUUID()
+    devToken = token
+    await db
+      .prepare(
+        `INSERT INTO auth_password_resets (id, user_id, token_hash, expires_at, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(crypto.randomUUID(), user.id, hash(token), now + RESET_TTL_MS, now)
+      .run()
+    const link = `${new URL(c.req.url).origin}/auth/reset?token=${token}`
+    const emailer = emailProviderFromEnv(c.env ?? {})
+    // In production with no email sending configured we still answer plainly;
+    // the request is recorded and the same flow works the moment sending is
+    // switched on. Never reveal whether the account exists either way.
+    if (emailer.name !== 'console' || c.env?.APP_MODE !== 'production') {
+      await emailer.send({ to: email, ...passwordResetEmail(link) }).catch(() => undefined)
+    }
+  }
+  // Local and test harnesses read the token from this response so the flow
+  // can be exercised without a mail provider. Hosted modes never see it.
+  return c.json(devMode && devToken ? { ok: true, devToken } : { ok: true })
+})
+
+authRoutes.post('/auth/password/reset', async (c) => {
+  const limited = await enforceRateLimit(c, {
+    bucket: 'password-reset',
+    limit: 20,
+    windowSeconds: 600,
+  })
+  if (limited) return limited
+  const body = await readJson(c)
+  const token = typeof body.token === 'string' ? body.token.trim() : ''
+  const problem = passwordProblem(body.password)
+  if (problem) return c.json({ error: 'weak_password', message: problem }, 400)
+  if (!token) return c.json({ error: 'reset_invalid' }, 400)
+  const db = c.env?.DB
+  if (!db) return c.json({ error: 'not_configured' }, 503)
+  const now = Date.now()
+  const row = await db
+    .prepare(
+      'SELECT id, user_id, expires_at, used_at FROM auth_password_resets WHERE token_hash = ?',
+    )
+    .bind(hash(token))
+    .first<{ id: string; user_id: string; expires_at: number; used_at: number | null }>()
+  if (!row || row.used_at || now > row.expires_at) return c.json({ error: 'reset_invalid' }, 400)
+  await db
+    .prepare('UPDATE auth_password_resets SET used_at = ? WHERE id = ?')
+    .bind(now, row.id)
+    .run()
+  await db
+    .prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+    .bind(await hashPassword(body.password as string), row.user_id)
+    .run()
+  // A new password ends every older session, then signs this browser in.
+  await db
+    .prepare('UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL')
+    .bind(now, row.user_id)
+    .run()
+  const user = await db
+    .prepare('SELECT email FROM users WHERE id = ?')
+    .bind(row.user_id)
+    .first<{ email: string }>()
+  await startSession(c as AppContext, db, row.user_id)
+  return c.json({ ok: true, user: user ? publicUser(user.email) : null })
+})
+
 authRoutes.post('/auth/otp/request', async (c) => {
   const limited = await enforceRateLimit(c, { bucket: 'otp-request', limit: 6, windowSeconds: 600 })
   if (limited) return limited
@@ -143,24 +333,7 @@ authRoutes.post('/auth/otp/verify', async (c) => {
   }
   await db.prepare('UPDATE auth_otp SET consumed_at = ? WHERE id = ?').bind(now, row.id).run()
   const user = await upsertUser(db, email)
-  const userId = user.id
-  const token = crypto.randomUUID() + crypto.randomUUID()
-  await db
-    .prepare(
-      `INSERT INTO auth_sessions (id, user_id, token_hash, user_agent, created_at, last_seen_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      crypto.randomUUID(),
-      userId,
-      hash(token),
-      (c.req.header('user-agent') ?? '').slice(0, 200),
-      now,
-      now,
-      now + SESSION_TTL_MS,
-    )
-    .run()
-  c.header('Set-Cookie', sessionCookie(token, SESSION_TTL_MS / 1000))
+  await startSession(c as AppContext, db, user.id)
   return c.json({ ok: true, user: publicUser(email) })
 })
 

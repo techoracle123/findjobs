@@ -6,9 +6,11 @@
 #
 # Checks: feed freshness + scheduler heartbeat, field coverage vs floors,
 # plan prices and the free-alerts entitlement, crawler prerender length,
-# security headers, auth vendor names, and the OTP endpoint. Read-only,
-# except one OTP request for a made-up address (counts against rate limits
-# only). Exits non-zero if anything fails.
+# security headers, auth vendor names, and the email+password sign-in.
+# Coverage now sits behind a free account: pass a session cookie to read it,
+# e.g. FJ_COOKIE="fj_session=..." bash fj-check.sh . Without one those
+# checks fail on purpose (jobs must be locked). Read-only, except one
+# failed sign-in for a made-up address (rate limits only).
 set -u
 BASE="${BASE:-https://fj-find-jobs.pages.dev}"
 FAIL=0
@@ -17,7 +19,7 @@ fail() { printf '  FAIL %s\n' "$1"; FAIL=1; }
 note() { printf '  --   %s\n' "$1"; }
 
 json() { # json <url> <python-expression over d>
-  curl -s --max-time 20 "$1" | python3 -c "import sys,json
+  curl -s --max-time 20 ${FJ_COOKIE:+-H "Cookie: $FJ_COOKIE"} "$1" | python3 -c "import sys,json
 try:
     d=json.load(sys.stdin)
     print($2)
@@ -71,13 +73,17 @@ echo "[headers + auth]"
 HDRS=$(curl -sI --max-time 20 "$BASE/")
 echo "$HDRS" | grep -qi "content-security-policy" && pass "CSP header present" || note "no CSP on / (check host config)"
 echo "$HDRS" | grep -qi "cloudflareaccess" && fail "Cloudflare Access reference in headers" || pass "no Access references"
-OTP=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/otp/request" -H 'Content-Type: application/json' -d '{"email":"fj-check@example.com"}')
-case "$OTP" in
-  200) pass "OTP request 200 (email provider configured)" ;;
-  503) fail "OTP request 503 email_not_configured — set RESEND_API_KEY (+ EMAIL_FROM/OTP_FROM)" ;;
-  429) note "OTP request 429 (rate limited; provider state unknown)" ;;
-  *)   fail "OTP request unexpected status $OTP" ;;
+LOGIN=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' -d '{"email":"fj-check@example.com","password":"not a real password"}')
+case "$LOGIN" in
+  401) pass "password sign-in alive and refusing bad credentials" ;;
+  429) note "password sign-in 429 (rate limited)" ;;
+  *)   fail "password sign-in unexpected status $LOGIN" ;;
 esac
+JOBS_ANON=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' "$BASE/api/jobs")
+[ "$JOBS_ANON" = "401" ] && pass "jobs locked without an account" || fail "jobs API answered $JOBS_ANON without an account (want 401)"
+EMAILCFG=$(json "$BASE/api/auth/status" "d.get('emailConfigured','')")
+note "emailConfigured(forgot-password emails)=$EMAILCFG"
+[ "$EMAILCFG" = "True" ] && pass "reset emails can send" || note "reset emails cannot send yet — set RESEND_API_KEY (+ EMAIL_FROM/OTP_FROM)"
 
 echo "[bundle]"
 JS=$(curl -s --max-time 20 "$BASE/" | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1)

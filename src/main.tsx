@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { AuthPage } from './components/AuthPage'
+import { HomePage } from './components/HomePage'
 import { QualityWallboard } from './components/QualityWallboard'
 import { InfoPage } from './components/InfoPage'
 import { AdminCopy } from './components/AdminCopy'
@@ -17,8 +18,10 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    {/^\/auth\/(?:signup|login|recovery)\/?$/.test(window.location.pathname) ? (
+    {/^\/auth\/(?:signup|login|recovery|reset)\/?$/.test(window.location.pathname) ? (
       <AuthPage />
+    ) : window.location.pathname === '/' ? (
+      <HomePage />
     ) : window.location.pathname === '/admin/data-quality' ? (
       <QualityWallboard />
     ) : window.location.pathname === '/admin/copy' ? (

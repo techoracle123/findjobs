@@ -46,7 +46,7 @@ const entries: CopyEntry[] = [
   // ── Auth (DEGRADED: no vendor, no empty promises) ──
   {
     id: 'auth.unavailable',
-    text: 'Sign-in is temporarily unavailable. You can still browse jobs without an account.',
+    text: 'Sign-in is temporarily unavailable. Please try again in a few minutes.',
     className: DEGRADED,
     where: 'Auth pages',
   },

@@ -56,6 +56,31 @@ app.use('/api/*', async (c, next) => {
 })
 
 /**
+ * Jobs sit behind a free account: listing, detail and scoring all need a
+ * signed-in user. Aggregate counts stay public through /api/public-stats so
+ * the homepage can describe the platform honestly without exposing a single
+ * job. Three long-standing anonymous writes stay open on purpose: reporting
+ * a bad listing, and the apply counters, none of which return job data.
+ */
+const ANONYMOUS_JOB_WRITES = /^\/(?:fast-apply|apply-click|report)$/
+async function requireAccountForJobs(c: AppContext, next: () => Promise<void>) {
+  const subPath = c.req.path.replace(/^\/api\/jobs\/[^/]+/, '')
+  if (c.req.method === 'POST' && ANONYMOUS_JOB_WRITES.test(subPath)) {
+    await next()
+    return
+  }
+  // Identity only, no account upsert: this gate runs on the busiest routes
+  // in the product and must not write to the database per request.
+  const identity = await resolveIdentity(c.req.raw, readConfig(c.env ?? {}), Date.now(), c.env?.DB)
+  if (!identity) return unauthorized(c)
+  c.header('Cache-Control', 'private, no-store')
+  await next()
+}
+app.use('/api/jobs', requireAccountForJobs)
+app.use('/api/jobs/*', requireAccountForJobs)
+app.use('/api/score', requireAccountForJobs)
+
+/**
  * Reads a numeric query parameter. An empty or unparseable value is absent,
  * not zero: `Number('')` is 0, which would otherwise turn a request with no
  * paging into a request for the first row.
@@ -94,12 +119,40 @@ app.get('/api/auth/status', async (c) => {
   })
 })
 
-// Sign-in is FJ's own email-code flow. This legacy path simply forwards to
-// the sign-in page; Cloudflare Access plays no part anywhere.
+// Sign-in is FJ's own email and password flow. This legacy path simply
+// forwards to the sign-in page; no external sign-in service plays any part.
 app.get('/api/auth/login', async (c) => {
-  const returnTo = c.req.query('returnTo') || '/dashboard'
-  const safe = /^\/(?:dashboard|jobs\/[A-Za-z0-9_-]+)?$/.test(returnTo) ? returnTo : '/dashboard'
+  const returnTo = c.req.query('returnTo') || '/jobs'
+  const safe = /^\/(?:dashboard|profile|jobs(?:\/[A-Za-z0-9_-]+)?)?$/.test(returnTo)
+    ? returnTo
+    : '/jobs'
   return c.redirect(`/auth/login?returnTo=${encodeURIComponent(safe)}`)
+})
+
+/**
+ * The only job numbers a visitor without an account can see: plain totals
+ * for the homepage. No titles, companies or links ever leave through here.
+ */
+app.get('/api/public-stats', async (c) => {
+  const limited = await enforceRateLimit(c, {
+    bucket: 'public-stats',
+    limit: 60,
+    windowSeconds: 60,
+  })
+  if (limited) return limited
+  const snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
+  if (!snapshot) return c.json({ available: false }, 503)
+  const visible = snapshot.jobs.filter((job) => job.quality?.isEnglish !== false)
+  const countries = new Set(visible.map((job) => job.locationCountry).filter(Boolean))
+  c.header('Cache-Control', 'public, max-age=300')
+  return c.json({
+    available: true,
+    total: visible.length,
+    nigeria: visible.filter((job) => job.locationCountry === 'NG').length,
+    remote: visible.filter((job) => job.workMode === 'remote').length,
+    countries: countries.size,
+    updatedAt: snapshot.refreshedAt,
+  })
 })
 
 /**

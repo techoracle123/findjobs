@@ -26,8 +26,9 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
       <>
         <p>
           <strong>What we collect.</strong> Your account email, the profile you build (skills,
-          preferences), saved jobs, your confirmed application history, and job alerts. Anonymous
-          browsing needs no account and stores only device-local preferences.
+          preferences), saved jobs, your confirmed application history, and job alerts. The homepage
+          and information pages need no account. Seeing the jobs needs the free account, so your
+          saved jobs and alerts follow you on any device.
         </p>
         <p>
           <strong>Your CV stays on your device.</strong> When you upload a CV to improve your
@@ -35,9 +36,10 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           not uploaded to FJ or to any third party.
         </p>
         <p>
-          <strong>Sign-in codes.</strong> When you sign in, we send a one-time code to your email
-          through our email delivery partner, which processes your email address only to deliver
-          that message.
+          <strong>Your password.</strong> You sign in with your email and password. We store only a
+          scrambled form of your password that cannot be turned back into the password itself, so
+          even we cannot read it. If you forget it, we email you a one time reset link through our
+          email delivery partner, which processes your email address only to deliver that message.
         </p>
         <p>
           <strong>Payments.</strong> Paid plans are not open yet. When they launch, card payments
@@ -117,8 +119,13 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           for Nigerian users. Turn on Worldwide in the More filter to see every language.
         </p>
         <p>
+          <strong>Why do I need an account to see jobs?</strong> So we can save your jobs, alerts
+          and applications and show them to you on any device. The account is free, and applying on
+          the employer's site is always free.
+        </p>
+        <p>
           <strong>How do I save jobs and track applications?</strong> Tap the bookmark on any job.
-          When you apply through the original listing, mark the role as applied — your Progress
+          When you apply through the original listing, mark the role as applied. Your Progress
           dashboard counts what you confirm each month.
         </p>
       </>

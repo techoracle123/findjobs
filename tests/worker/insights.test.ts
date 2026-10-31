@@ -18,7 +18,11 @@ function request(path: string, body: unknown = {}, config = bindings) {
     `http://localhost/api/jobs/${path}`,
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'cf-connecting-ip': '192.0.2.6' },
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': '192.0.2.6',
+        'x-dev-user-email': 'insights@example.com',
+      },
       body: JSON.stringify(body),
     },
     config,
