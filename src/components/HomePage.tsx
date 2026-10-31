@@ -158,8 +158,8 @@ export function HomePage() {
         )}
         {stats && (
           <p className="field__hint home-stats__note">
-            These numbers come from the adverts on FJ right now. We refresh the list every day and
-            remove jobs that have closed.
+            These numbers come from the adverts on FJ right now. New adverts are collected twice a
+            day, and jobs that have closed are removed.
           </p>
         )}
 
