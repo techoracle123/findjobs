@@ -669,7 +669,9 @@ test('personal monthly progress counts confirmations, not link clicks', async ({
   await expect(
     page.locator('.progress-panel .stat-grid > div').first().locator('strong'),
   ).toHaveText('1')
-  await expect(page.locator('.progress-panel')).toContainText('no number guarantees')
+  await expect(page.locator('.progress-panel')).toContainText(
+    'no number can promise an interview or a job',
+  )
   await page.reload()
   await expect(
     page.locator('.progress-panel .stat-grid > div').first().locator('strong'),
