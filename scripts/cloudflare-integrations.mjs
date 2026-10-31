@@ -25,26 +25,37 @@ export async function telegramSetup(
   project,
   fetcher = fetch,
   hostname = `${project}.pages.dev`,
+  retryDelays = [1_000, 3_000],
 ) {
   if (!token) return null
   const invoke = async (method, body = {}) => {
-    let response
-    try {
-      response = await fetcher(`https://api.telegram.org/bot${token}/${method}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(20_000),
-      })
-    } catch {
-      throw new Error(`Telegram ${method} could not be reached.`)
+    for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+      let response
+      try {
+        response = await fetcher(`https://api.telegram.org/bot${token}/${method}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(20_000),
+        })
+      } catch {
+        // A single connection reset or timeout from the deployment runner
+        // must not stop an otherwise ready release. Retry only network
+        // failures; an HTTP refusal below still fails closed at once.
+        if (attempt < retryDelays.length) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]))
+          continue
+        }
+        throw new Error(`Telegram ${method} could not be reached.`)
+      }
+      const data = await response.json()
+      if (!response.ok || !data.ok)
+        throw new Error(
+          `Telegram ${method} failed (HTTP ${response.status}). Check the encrypted bot token.`,
+        )
+      return data.result
     }
-    const data = await response.json()
-    if (!response.ok || !data.ok)
-      throw new Error(
-        `Telegram ${method} failed (HTTP ${response.status}). Check the encrypted bot token.`,
-      )
-    return data.result
+    throw new Error(`Telegram ${method} could not be reached.`)
   }
   const me = await invoke('getMe')
   if (!me?.username) throw new Error('Telegram bot has no username.')
