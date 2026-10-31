@@ -1,6 +1,11 @@
 name: Email provider diagnostics
 
 on:
+  push:
+    branches: [arena/6acbf55c-findjobs]
+    paths:
+      - .github/workflows/email-diagnostics.yml
+      - scripts/check-brevo-email.mjs
   workflow_dispatch:
     inputs:
       send_test:
@@ -33,6 +38,6 @@ jobs:
           BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           OTP_FROM: ${{ secrets.OTP_FROM }}
-          SEND_TEST: ${{ inputs.send_test }}
-          TEST_RECIPIENT: ${{ inputs.recipient }}
+          SEND_TEST: ${{ github.event_name == 'push' || inputs.send_test }}
+          TEST_RECIPIENT: ${{ github.event_name == 'workflow_dispatch' && inputs.recipient || '' }}
         run: node scripts/check-brevo-email.mjs
