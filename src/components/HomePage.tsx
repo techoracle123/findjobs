@@ -20,6 +20,7 @@ interface PublicStats {
   nigeria: number
   remote: number
   countries: number
+  registeredUsers?: number | null
   updatedAt: string
 }
 
@@ -30,6 +31,7 @@ interface PublicStats {
  */
 export function HomePage() {
   const [stats, setStats] = useState<PublicStats | null>(null)
+  const [registeredUsers, setRegisteredUsers] = useState<number | null>(null)
   const [signedIn, setSignedIn] = useState(false)
 
   useEffect(() => {
@@ -37,9 +39,11 @@ export function HomePage() {
     void (async () => {
       try {
         const response = await fetch('/api/public-stats', { cache: 'no-store' })
-        if (response.ok) {
-          const body = (await response.json()) as PublicStats & { available?: boolean }
-          if (body.available !== false && typeof body.total === 'number') setStats(body)
+        const body = (await response.json().catch(() => null)) as
+          (PublicStats & { available?: boolean }) | null
+        if (typeof body?.registeredUsers === 'number') setRegisteredUsers(body.registeredUsers)
+        if (response.ok && body && body.available !== false && typeof body.total === 'number') {
+          setStats(body)
         }
       } catch {
         /* The page reads fine without the numbers. */
@@ -100,30 +104,44 @@ export function HomePage() {
           </p>
         </section>
 
-        {stats && (
-          <section className="home-stats" aria-label="Jobs on FJ right now">
-            <div className="home-stat">
-              <strong>{number(stats.total)}</strong>
-              <span>jobs listed right now</span>
-            </div>
-            <div className="home-stat">
-              <strong>{number(stats.nigeria)}</strong>
-              <span>jobs in Nigeria</span>
-            </div>
-            <div className="home-stat">
-              <strong>{number(stats.remote)}</strong>
-              <span>remote jobs you can do from home</span>
-            </div>
-            <div className="home-stat">
-              <strong>{number(stats.countries)}</strong>
-              <span>countries hiring</span>
-            </div>
+        {(stats || registeredUsers !== null) && (
+          <section
+            className={`home-stats ${stats ? '' : 'home-stats--users-only'}`}
+            aria-label="FJ in numbers"
+          >
+            {stats && (
+              <>
+                <div className="home-stat">
+                  <strong>{number(stats.total)}</strong>
+                  <span>jobs listed right now</span>
+                </div>
+                <div className="home-stat">
+                  <strong>{number(stats.nigeria)}</strong>
+                  <span>jobs in Nigeria</span>
+                </div>
+                <div className="home-stat">
+                  <strong>{number(stats.remote)}</strong>
+                  <span>remote jobs you can do from home</span>
+                </div>
+                <div className="home-stat">
+                  <strong>{number(stats.countries)}</strong>
+                  <span>countries hiring</span>
+                </div>
+              </>
+            )}
+            {registeredUsers !== null && (
+              <div className="home-stat home-stat--users">
+                <strong>{number(registeredUsers)}</strong>
+                <span>registered users</span>
+              </div>
+            )}
           </section>
         )}
         {stats && (
           <p className="field__hint home-stats__note">
-            These numbers come from the adverts on FJ right now. New adverts are collected twice a
-            day, and jobs that have closed are removed.
+            Job numbers come from the adverts on FJ right now. New adverts are collected twice a
+            day, and jobs that have closed are removed. The registered-user number counts FJ
+            accounts and leaves out test accounts.
           </p>
         )}
 

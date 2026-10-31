@@ -12,6 +12,7 @@ import { requestContext, requireUser, stringList, unauthorized, type AppContext 
 import { enforceRateLimit } from './ratelimit'
 import { takeAiBudget } from './aiquota'
 import { buildReadiness } from './readiness'
+import { countRegisteredUsers } from './auth/accounts'
 import { resolveIdentity } from './auth/identity'
 import { accountRoutes } from './routes/account'
 import { sourceRoutes } from './routes/sources'
@@ -131,8 +132,9 @@ app.get('/api/auth/login', async (c) => {
 })
 
 /**
- * The only job numbers a visitor without an account can see: plain totals
- * for the homepage. No titles, companies or links ever leave through here.
+ * The only aggregate numbers a visitor without an account can see: plain job
+ * totals and the exact registered-account total for the public homepage. No
+ * job titles, companies, links, names or email addresses leave through here.
  */
 app.get('/api/public-stats', async (c) => {
   const limited = await enforceRateLimit(c, {
@@ -141,17 +143,30 @@ app.get('/api/public-stats', async (c) => {
     windowSeconds: 60,
   })
   if (limited) return limited
+
+  let registeredUsers: number | null = null
+  if (c.env?.DB) {
+    try {
+      registeredUsers = await countRegisteredUsers(c.env.DB)
+    } catch {
+      // A missing user total is better than a guessed one. Job totals can
+      // still be served from the public snapshot when the database is busy.
+      registeredUsers = null
+    }
+  }
+
   const snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
-  if (!snapshot) return c.json({ available: false }, 503)
+  if (!snapshot) return c.json({ available: false, registeredUsers }, 503)
   const visible = snapshot.jobs.filter((job) => job.quality?.isEnglish !== false)
   const countries = new Set(visible.map((job) => job.locationCountry).filter(Boolean))
-  c.header('Cache-Control', 'public, max-age=300')
+  c.header('Cache-Control', 'public, max-age=60')
   return c.json({
     available: true,
     total: visible.length,
     nigeria: visible.filter((job) => job.locationCountry === 'NG').length,
     remote: visible.filter((job) => job.workMode === 'remote').length,
     countries: countries.size,
+    registeredUsers,
     updatedAt: snapshot.refreshedAt,
   })
 })

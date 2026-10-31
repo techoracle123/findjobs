@@ -34,6 +34,10 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           needs the free account, so your saved jobs and alerts follow you on any device.
         </p>
         <p>
+          <strong>Public user total.</strong> The homepage shows the total number of registered
+          accounts. It does not show your name, email address or anything about your account.
+        </p>
+        <p>
           <strong>Free CV import stays on your device.</strong> When you use basic CV import to
           improve your matches, the file is read in your browser for skill suggestions. It is not
           saved in that step.

@@ -118,6 +118,27 @@ export async function getUserByEmail(db: D1Database, email: string): Promise<Acc
   return getUserById(db, await userIdFor(email))
 }
 
+/**
+ * The exact registered-account total that may be shown in public. Automated
+ * browser checks create accounts on reserved example domains and with known
+ * test prefixes; those are not customers and must not inflate the number.
+ */
+export async function countRegisteredUsers(db: D1Database): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n
+       FROM users
+       WHERE lower(email) NOT LIKE '%@example.com'
+         AND lower(email) NOT LIKE '%@example.org'
+         AND lower(email) NOT LIKE '%@example.net'
+         AND lower(email) NOT LIKE 'fj-browser-%'
+         AND lower(email) NOT LIKE 'fj-auth-%'`,
+    )
+    .first<{ n: number }>()
+  const count = Number(row?.n ?? 0)
+  return Number.isSafeInteger(count) && count >= 0 ? count : 0
+}
+
 export async function findUserIdByProviderSubscription(
   db: D1Database,
   providerSubscriptionId: string | null,

@@ -104,6 +104,8 @@ test('homepage explains the platform in plain words and sends people to sign up'
   await expect(page.locator('.home-price-grid')).toContainText('₦5,000/month')
   await expect(page.locator('.home-price-grid')).toContainText('₦40,000/year')
   await expect(page.locator('.home-price-grid')).toContainText('₦3,000/month')
+  await expect(page.locator('.home-stat--users')).toContainText('registered users')
+  await expect(page.locator('.home-stat--users strong')).toHaveText(/^\d[\d,]*$/)
   await expect(page.locator('body')).toContainText('Compare the plans before you decide')
   await page
     .getByRole('link', { name: /Create a free account/ })
@@ -549,10 +551,13 @@ test('homepage is public, jobs are not, and sign-in is our own page', async ({ r
   const status = await (await request.get('/api/auth/status')).json()
   expect((await request.get('/')).ok()).toBe(true)
   expect(status.authenticated).toBe(false)
-  // Plain totals stay public for the homepage; job data does not.
-  expect([200, 503]).toContain(
-    (await request.get('/api/public-stats', { timeout: 60_000 })).status(),
-  )
+  // Plain totals stay public for the homepage; job and account details do not.
+  const publicStats = await request.get('/api/public-stats', { timeout: 60_000 })
+  expect([200, 503]).toContain(publicStats.status())
+  const publicStatsBody = (await publicStats.json()) as Record<string, unknown>
+  expect(typeof publicStatsBody.registeredUsers).toBe('number')
+  expect(publicStatsBody.users).toBeUndefined()
+  expect(publicStatsBody.email).toBeUndefined()
   expect((await request.get('/api/jobs')).status()).toBe(401)
   // Sign-in is FJ's own page. No Cloudflare Access screen anywhere.
   const login = await request.get('/api/auth/login', { maxRedirects: 0 })
