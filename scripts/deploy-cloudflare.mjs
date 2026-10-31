@@ -103,10 +103,12 @@ export async function provision(api, projectName) {
 export function bachsDeployment(env = process.env) {
   const secretKey = env.BACHS_SECRET_KEY?.trim() ?? ''
   const webhookSecret = env.BACHS_WEBHOOK_SECRET?.trim() ?? ''
+  // Production checkout opens only with a live Bachs key and the matching
+  // production webhook signing secret. A sandbox or partial setup stays off.
+  const configured = Boolean(secretKey.startsWith('sk_live_') && webhookSecret)
   return {
-    // Production checkout opens only with a live Bachs key and the matching
-    // production webhook signing secret. A sandbox or partial setup stays off.
-    configured: Boolean(secretKey.startsWith('sk_live_') && webhookSecret),
+    configured,
+    provider: configured ? 'bachs' : 'fake',
     secretKey,
     webhookSecret,
   }
@@ -456,10 +458,11 @@ export async function main() {
       return
     }
     const report = await publicJson(`${url}/api/readiness`, 18)
+    const expectedProvider = bachs.provider
     if (
       report.checks?.find((check) => check.id === 'database')?.status !== 'ok' ||
       report.appMode !== 'production' ||
-      report.provider !== 'fake'
+      report.provider !== expectedProvider
     ) {
       throw new Error(
         'Deployment uploaded, but database or safe-mode checks failed. Inspect /api/readiness.',

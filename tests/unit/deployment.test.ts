@@ -139,6 +139,7 @@ describe('Cloudflare deployment automation', () => {
       }),
     ).toEqual({
       configured: true,
+      provider: 'bachs',
       secretKey: 'sk_live_test',
       webhookSecret: 'whsec_test',
     })
@@ -149,6 +150,7 @@ describe('Cloudflare deployment automation', () => {
       }).configured,
     ).toBe(false)
     expect(bachsDeployment({ BACHS_SECRET_KEY: 'sk_live_test' }).configured).toBe(false)
+    expect(bachsDeployment({ BACHS_SECRET_KEY: 'sk_live_test' }).provider).toBe('fake')
 
     const config = JSON.parse(
       deploymentConfig(
