@@ -1,7 +1,7 @@
 /** Durable public discovery, independent of account/D1 storage. No credentials or
  * user data live in this namespace. Publish the pointer only after its data. */
 import { specialistRole } from '../shared/specialisms'
-import { opportunityOf } from '../shared/opportunities'
+import { opportunityOf, withOpportunity } from '../shared/opportunities'
 import { buildQualitySnapshot, dedupeJobs, qualityPass } from './quality'
 import type { QualitySnapshot } from '../shared/quality'
 import { withTimeout } from './timeouts'
@@ -500,7 +500,19 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
       }
       // Individual failed sources must not stay 'open' indefinitely just because
       // other sources continued refreshing the shared publication.
-      for (const job of snapshot.jobs) job.roleFamily = specialistRole(job.title) || job.roleFamily
+      for (const job of snapshot.jobs) {
+        job.roleFamily = specialistRole(job.title) || job.roleFamily
+        // Snapshots published before gig support have no stored lane. Fill it
+        // once when the snapshot loads so list filters, facets and API
+        // responses all use the same evidence-backed classification instead
+        // of re-reading every advert on every request.
+        const opportunity = opportunityOf(job)
+        job.opportunityType = opportunity.opportunityType
+        job.engagementType = opportunity.engagementType
+        job.engagementLabel = opportunity.engagementLabel
+        job.engagementBasis = opportunity.engagementBasis
+        if (opportunity.projectDuration) job.projectDuration = opportunity.projectDuration
+      }
       // Held/rejected listings and report-hidden listings never reach users.
       const hidden = await kv
         .get<Record<string, number>>('moderation:hidden', { type: 'json', cacheTtl: 60 })
@@ -538,5 +550,7 @@ export async function findPublishedJob(
     5000,
   ).catch(() => null)
   const job = details?.find((job) => job.id === id)
-  return job ? { ...job, roleFamily: specialistRole(job.title) || job.roleFamily } : null
+  return job
+    ? { ...withOpportunity(job), roleFamily: specialistRole(job.title) || job.roleFamily }
+    : null
 }

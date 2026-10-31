@@ -147,12 +147,39 @@ it('serves the broad index without D1 and returns full descriptions on individua
   const { kv, data } = storage(),
     source = await index()
   const snapshot = assemblePublicSnapshot([source], new Set())
-  const complete = source.jobs.map((job) => ({
+  // Simulate the snapshot production served before gig fields existed. Its
+  // rows must gain an evidence-backed lane when loaded, not wait for the
+  // next scheduled publication.
+  const legacyJobs = snapshot.jobs.map((job, position) => ({
     ...job,
-    description: job.description + ' Full listing detail only.',
+    ...(position === 0
+      ? {
+          title: 'Contract React Developer',
+          description: 'This is a 6 month contract role building a client portal.',
+        }
+      : {}),
+    opportunityType: undefined,
+    engagementType: undefined,
+    engagementLabel: undefined,
+    engagementBasis: undefined,
+    projectDuration: undefined,
   }))
+  const legacyById = new Map(legacyJobs.map((job) => [job.id, job]))
+  const complete = source.jobs.map((job) => {
+    const legacy = legacyById.get(job.id)
+    return {
+      ...job,
+      ...(legacy ? { title: legacy.title, description: legacy.description } : {}),
+      description: `${legacy?.description ?? job.description} Full listing detail only.`,
+      opportunityType: undefined,
+      engagementType: undefined,
+      engagementLabel: undefined,
+      engagementBasis: undefined,
+      projectDuration: undefined,
+    }
+  })
   data.set('details:test', JSON.stringify(complete))
-  data.set('published', JSON.stringify(snapshot))
+  data.set('published', JSON.stringify({ ...snapshot, jobs: legacyJobs }))
   const { default: app } = await import('../../src/server/app')
   // Test mode + dev identity: jobs need an account now, and the point of
   // this test is that job data itself comes from the snapshot, never D1.
@@ -181,6 +208,16 @@ it('serves the broad index without D1 and returns full descriptions on individua
   expect(body.dataSource).toBe('public-snapshot')
   expect(body.jobs[0].descriptionPreview).toBe(true)
   expect(body.jobs[0].detailKey).toBeUndefined()
+  expect(body.jobs.every((job) => typeof job.opportunityType === 'string')).toBe(true)
+  const gigFeed = await app.request(
+    'https://public-feed-tests.example/api/jobs?status=open&limit=20&ww=1&type=gig',
+    auth,
+    env,
+  )
+  expect(gigFeed.status).toBe(200)
+  const gigBody = (await gigFeed.json()) as { jobs: IndexedJob[]; total: number }
+  expect(gigBody.total).toBeGreaterThan(0)
+  expect(gigBody.jobs.every((job) => job.opportunityType === 'gig')).toBe(true)
   // The default feed is English-first: confirmed non-English listings stay out
   // unless Worldwide is requested.
   const englishOnly = await app.request(
@@ -200,9 +237,9 @@ it('serves the broad index without D1 and returns full descriptions on individua
     env,
   )
   expect(detail.status).toBe(200)
-  expect(((await detail.json()) as { job: IndexedJob }).job.description).toContain(
-    'Full listing detail only.',
-  )
+  const detailBody = (await detail.json()) as { job: IndexedJob }
+  expect(detailBody.job.description).toContain('Full listing detail only.')
+  expect(typeof detailBody.job.opportunityType).toBe('string')
   const denied = await app.request('https://public-feed-tests.example/api/account', {}, env)
   expect(denied.status).toBe(401)
 })

@@ -7,7 +7,7 @@ import { listOpenJobs, findJob, searchJobs } from './jobs'
 import { getRates } from './rates'
 import { suggest } from './cv'
 import { scoreJob } from '../shared/scoring'
-import { isGig } from '../shared/opportunities'
+import { isGig, withOpportunity } from '../shared/opportunities'
 import type { Profile, ScoredJob } from '../shared/types'
 import { requestContext, requireUser, stringList, unauthorized, type AppContext } from './http'
 import { enforceRateLimit } from './ratelimit'
@@ -406,7 +406,11 @@ app.get('/api/jobs', async (c) => {
     const result = searchLivePublic(published.jobs, search)
     return c.json({
       ...result,
-      jobs: result.jobs.map((job) => ({ ...job, detailKey: undefined, descriptionPreview: true })),
+      jobs: result.jobs.map((job) => ({
+        ...withOpportunity(job),
+        detailKey: undefined,
+        descriptionPreview: true,
+      })),
       dataSource: 'public-snapshot',
       facets: jobFacets(published.jobs, search),
       updatedAt: published.refreshedAt,
@@ -469,7 +473,7 @@ app.get('/api/jobs', async (c) => {
   }
 
   return c.json({
-    jobs: result.jobs,
+    jobs: result.jobs.map((job) => withOpportunity(job)),
     total: result.total,
     limit: result.limit,
     offset: result.offset,
