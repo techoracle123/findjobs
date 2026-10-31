@@ -104,6 +104,9 @@ test('homepage explains the platform in plain words and sends people to sign up'
   await expect(page.locator('.home-price-grid')).toContainText('₦5,000/month')
   await expect(page.locator('.home-price-grid')).toContainText('₦40,000/year')
   await expect(page.locator('.home-price-grid')).toContainText('₦3,000/month')
+  await expect(page.locator('.home-user-count')).toContainText(/registered on FJ/)
+  await expect(page.locator('.home-user-count strong')).toHaveText(/^\d[\d,]*$/)
+  await expect(page.locator('.home-stat').first()).toHaveClass(/home-stat--users/)
   await expect(page.locator('.home-stat--users')).toContainText('registered users')
   await expect(page.locator('.home-stat--users strong')).toHaveText(/^\d[\d,]*$/)
   await expect(page.locator('body')).toContainText('Compare the plans before you decide')
@@ -112,6 +115,28 @@ test('homepage explains the platform in plain words and sends people to sign up'
     .first()
     .click()
   await expect(page).toHaveURL(/\/auth\/signup/)
+})
+
+test('signed-in users can go home from Jobs and from a job page', async ({ page }) => {
+  await signUp(page)
+  await page.goto('/jobs')
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
+
+  await page.locator('.topbar').getByRole('link', { name: 'Home', exact: true }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(
+    'Thousands of job opportunities',
+  )
+  expect(new URL(page.url()).pathname).toBe('/')
+  await expect(page.locator('.home-user-count')).toBeVisible()
+
+  await page.goto('/jobs')
+  await page.locator('.joblist .jobrow').first().click()
+  await expect(page.locator('.detail__title')).toBeVisible()
+  await page.locator('.topbar .brand').click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(
+    'Thousands of job opportunities',
+  )
+  expect(new URL(page.url()).pathname).toBe('/')
 })
 
 test('jobs send a visitor without an account to sign in first', async ({ page }) => {
@@ -246,6 +271,7 @@ test('pricing is linked in the header and the page loads', async ({ page }) => {
   await expect(page).toHaveURL(/\/pricing$/)
   await expect(page.getByRole('heading', { name: 'Simple pricing' })).toBeVisible()
   const pricingNav = page.locator('.site-header .topnav')
+  await expect(pricingNav.getByRole('link', { name: 'Home' })).toBeVisible()
   await expect(pricingNav.getByRole('link', { name: 'Jobs' })).toBeVisible()
   await expect(pricingNav.getByRole('link', { name: 'Pricing' })).toHaveAttribute(
     'aria-current',
@@ -404,15 +430,28 @@ NYSC completed in 2024.`
   await page.goto('/dashboard?tab=plan')
   await expect(page.getByRole('heading', { name: '3-day Pro free trial' })).toBeVisible()
   await expect(page.locator('body')).toContainText('We do not ask for card details')
+  const paymentsAreOpen = await paymentsOpen(page)
   await expect(page.locator('body')).toContainText(
-    (await paymentsOpen(page))
-      ? 'Pay by card or bank transfer. Each payment buys one month or one year.'
+    paymentsAreOpen
+      ? 'You do not need to start the free trial before you pay.'
       : 'Payments are not open yet. Nothing on this page can charge you.',
   )
+  if (paymentsAreOpen) {
+    await expect(page.getByRole('button', { name: 'Buy Pro Monthly' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Buy Pro Yearly' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Check payment' })).toBeVisible()
+  }
   await writeAndWait(page, '/api/pro/trial/start', 'POST', () =>
     page.getByRole('button', { name: 'Start my 3-day free trial' }).click(),
   )
   await expect(page.getByRole('heading', { name: 'What is left in your trial' })).toBeVisible()
+  if (paymentsAreOpen) {
+    await expect(page.getByRole('button', { name: 'Buy Pro Monthly' })).toBeVisible()
+    await page.goto('/pricing')
+    await expect(page.locator('body')).toContainText('You do not need the free trial first')
+    await expect(page.getByRole('button', { name: 'Buy Pro Monthly' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Buy Pro Yearly' })).toBeVisible()
+  }
   await expectNoHorizontalOverflow(page)
   await page.screenshot({ path: testInfo.outputPath('phase2-plan-390.png') })
 

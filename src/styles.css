@@ -2882,11 +2882,55 @@ summary:focus-visible {
   gap: 8px;
 }
 
+.home-hero .home-user-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 2px 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.home-user-count svg {
+  flex: 0 0 auto;
+  color: var(--accent-ink, var(--accent));
+}
+
+.home-user-count strong {
+  font-size: 18px;
+}
+
+.home-stats-section {
+  margin-top: clamp(30px, 5vh, 48px);
+}
+
+.home-stats-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+  margin-bottom: 14px;
+}
+
+.home-stats-head .eyebrow,
+.home-stats-head h2 {
+  margin: 0;
+}
+
+.home-stats-head h2 {
+  font-size: clamp(24px, 3vw, 34px);
+  letter-spacing: -0.7px;
+}
+
 .home-stats {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 14px;
-  margin-top: clamp(30px, 5vh, 48px);
 }
 
 .home-stats--users-only {
@@ -2901,6 +2945,11 @@ summary:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.home-stat--users {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .home-stat strong {
@@ -4747,6 +4796,24 @@ textarea:focus-visible {
   margin: 18px auto 0;
 }
 
+.pricing-load-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.pricing-load-error p {
+  margin: 0;
+}
+
 .pricing-choice-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -5016,14 +5083,16 @@ textarea:focus-visible {
   .site-header .topnav {
     order: 3;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
     width: 100%;
     margin: 0;
   }
 
   .site-header .topnav a {
-    padding: 9px 6px;
+    min-width: 0;
+    padding: 9px 4px;
     text-align: center;
+    white-space: nowrap;
   }
 
   .pricing-hero-card {

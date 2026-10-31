@@ -173,6 +173,7 @@ export default function App() {
   const [telegramLinked, setTelegramLinked] = useState(false)
   const [billingPlans, setBillingPlans] = useState<PlanDefinition[]>([])
   const [billingEnabled, setBillingEnabled] = useState(false)
+  const [billingProvider, setBillingProvider] = useState<string | undefined>(undefined)
   const [importedCv, setImportedCv] = useState<ImportedCv | null>(null)
   const adminControls = new URLSearchParams(window.location.search).has('adminControls')
 
@@ -237,15 +238,18 @@ export default function App() {
     }
   }, [])
   useEffect(() => {
+    // Refreshing when the dashboard tab changes also gives the plan page a
+    // clean retry if the first price request failed on a weak connection.
     void fetchPlans()
       .then((catalogue: PlanCatalogue) => {
         setBillingPlans(catalogue.plans)
         // The server says whether a real payment provider is configured.
         // A price list existing is not the same as checkout being open.
         setBillingEnabled(catalogue.billingEnabled)
+        setBillingProvider(catalogue.provider)
       })
       .catch(() => {})
-  }, [])
+  }, [tab])
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState === 'visible') void load()
@@ -540,16 +544,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <a
-          className="brand"
-          href="/"
-          aria-label="FJ - Find Jobs"
-          onClick={(event) => {
-            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-            event.preventDefault()
-            if (jobPage) backToResults()
-          }}
-        >
+        <a className="brand" href="/" aria-label="FJ homepage">
           <img className="brand__logo" src="/favicon.svg" alt="" width="36" height="36" />
           <span className="brand__word">
             <strong>FJ</strong> Find Jobs
@@ -557,6 +552,7 @@ export default function App() {
         </a>
 
         <nav className="topnav" aria-label="Primary">
+          <a href="/">Home</a>
           <a href="/jobs" aria-current={view === 'browse' ? 'page' : undefined}>
             Jobs
           </a>
@@ -579,9 +575,7 @@ export default function App() {
                 ? 'Pro trial active'
                 : proEnabled
                   ? 'Pro active'
-                  : account.proTrial.status === 'not_started'
-                    ? 'Free · 3-day trial available'
-                    : 'Free plan'}
+                  : 'Free plan'}
             </a>
           )}
           {account.mode === 'signed-in' && account.user && (
@@ -714,6 +708,7 @@ export default function App() {
             <PlanPanel
               signedIn={account.mode === 'signed-in'}
               billingEnabled={billingEnabled}
+              billingProvider={billingProvider}
               subscription={account.subscription}
               entitlements={account.entitlements}
               proTrial={account.proTrial}

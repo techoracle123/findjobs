@@ -17,15 +17,17 @@ import {
   type WebhookEvent as BachsSdkWebhookEvent,
   type WriteRequestOptions,
 } from '@bachs/sdk'
-import type {
-  BillingPortalSession,
-  CheckoutRequest,
-  CheckoutSession,
-  PaymentProvider,
-  PlanPriceMap,
-  ProviderPayment,
-  ProviderSubscription,
-  WebhookEvent,
+import {
+  BillingProviderError,
+  type BillingPortalSession,
+  type BillingProviderFailure,
+  type CheckoutRequest,
+  type CheckoutSession,
+  type PaymentProvider,
+  type PlanPriceMap,
+  type ProviderPayment,
+  type ProviderSubscription,
+  type WebhookEvent,
 } from './types'
 import { planForAmount } from './pricing'
 
@@ -127,6 +129,133 @@ function publicHttpsUrl(value: string | undefined): string | undefined {
   }
 }
 
+function cleanCustomerEmail(value: string): string | null {
+  const email = value.trim().toLowerCase()
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null
+}
+
+/**
+ * Bachs should receive a person's name, not an FJ user id, sign-in subject or
+ * email address. Older FJ rows could contain those internal values, so the
+ * adapter protects the boundary even if a stored name has not been repaired.
+ */
+export function bachsCustomerName(value: string | null | undefined): string {
+  const cleaned = (value ?? '')
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120)
+  if (!cleaned) return 'FJ customer'
+  if (/^usr_[0-9a-f]{16,}$/i.test(cleaned)) return 'FJ customer'
+  if (/^(dev|email):/i.test(cleaned)) return 'FJ customer'
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned)) return 'FJ customer'
+  return cleaned
+}
+
+function safeProviderCode(value: unknown): string | null {
+  const code = text(value)?.trim().toUpperCase() ?? null
+  return code && /^[A-Z0-9_.-]{1,100}$/.test(code) ? code : null
+}
+
+function safeProviderRequestId(value: unknown): string | null {
+  const id = text(value)?.trim() ?? null
+  return id && /^[A-Za-z0-9_.:-]{1,120}$/.test(id) ? id : null
+}
+
+function safeFieldNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const names: string[] = []
+  for (const item of value) {
+    const candidate = record(item)
+      ? (text(item.field) ?? text(item.path) ?? text(item.param) ?? text(item.name))
+      : text(item)
+    if (!candidate || !/^[A-Za-z0-9_.-]{1,80}$/.test(candidate)) continue
+    if (!names.includes(candidate)) names.push(candidate)
+    if (names.length >= 10) break
+  }
+  return names
+}
+
+function providerFailure(input: {
+  code: string | null
+  status: number | null
+  name: string
+  outcomeUnknown: boolean
+  fieldNames: string[]
+}): BillingProviderFailure {
+  const code = input.code ?? ''
+  if (
+    input.status === 401 ||
+    input.status === 403 ||
+    code.includes('ACCOUNT_') ||
+    code.includes('PAYMENT_METHOD') ||
+    code.includes('CHECKOUT_HAS_NO') ||
+    code.includes('CHECKOUT_RESTRICTION') ||
+    code.includes('PERMISSION') ||
+    code.includes('SCOPE') ||
+    code.includes('API_KEY') ||
+    code.includes('UNAUTHORIZED') ||
+    code.includes('FORBIDDEN') ||
+    code.includes('CURRENCY_NOT')
+  ) {
+    return 'provider_account_attention'
+  }
+  if (input.outcomeUnknown) return 'outcome_unknown'
+  if (
+    input.fieldNames.length > 0 ||
+    input.status === 400 ||
+    input.status === 422 ||
+    code.includes('VALIDATION') ||
+    code.includes('INVALID_')
+  ) {
+    return 'provider_validation'
+  }
+  if (
+    input.name.includes('Network') ||
+    input.name.includes('Timeout') ||
+    input.name.includes('Abort') ||
+    (input.status === null && input.name === 'TypeError')
+  ) {
+    return 'network'
+  }
+  if (
+    input.name.includes('Response') ||
+    input.status === 408 ||
+    input.status === 425 ||
+    input.status === 429 ||
+    (input.status !== null && input.status >= 500)
+  ) {
+    return 'provider_unavailable'
+  }
+  return 'provider_rejected'
+}
+
+/**
+ * Converts an SDK or network failure into the small, safe shape FJ may log
+ * and classify. The raw provider body and detail are deliberately discarded.
+ */
+export function toBillingProviderError(error: unknown, message: string): BillingProviderError {
+  if (error instanceof BillingProviderError) return error
+  const source = (typeof error === 'object' && error !== null ? error : {}) as RecordValue
+  const statusValue = source.statusCode ?? source.status ?? source.responseStatusCode
+  const status =
+    typeof statusValue === 'number' && Number.isFinite(statusValue) ? statusValue : null
+  const code = safeProviderCode(
+    source.errorCode ?? source.error_code ?? (status !== null ? source.code : null),
+  )
+  const fieldNames = safeFieldNames(source.fieldErrors ?? source.errors)
+  const name = error instanceof Error ? error.name : 'UnknownError'
+  const outcomeUnknown = source.outcomeUnknown === true
+  return new BillingProviderError({
+    failure: providerFailure({ code, status, name, outcomeUnknown, fieldNames }),
+    message,
+    httpStatus: status,
+    providerCode: code,
+    providerRequestId: safeProviderRequestId(source.requestId ?? source.request_id),
+    fieldNames,
+  })
+}
+
 const PLAN_IDS = new Set(['free', 'pro', 'pro_graduate', 'pro_annual', 'employer'])
 
 function planFromMetadata(metadata: RecordValue): string | null {
@@ -143,7 +272,7 @@ export class BachsProvider implements PaymentProvider {
     private readonly webhookSecret: string,
     private readonly plans: PlanPriceMap,
     private readonly client: BachsClientLike = new Bachs({
-      apiKey: secretKey,
+      apiKey: secretKey.replace(/\s+/g, ''),
       logLevel: 'off',
     }),
   ) {}
@@ -151,66 +280,116 @@ export class BachsProvider implements PaymentProvider {
   async createCheckoutSession(request: CheckoutRequest): Promise<CheckoutSession> {
     const amount = request.amount
     if (!Number.isFinite(amount) || amount <= 0) {
-      throw new Error('Bachs checkout amount is not valid')
+      throw new BillingProviderError({
+        failure: 'provider_validation',
+        message: 'The checkout amount is not valid.',
+      })
+    }
+    const email = cleanCustomerEmail(request.email)
+    if (!email) {
+      throw new BillingProviderError({
+        failure: 'provider_validation',
+        message: 'The account email is not valid for checkout.',
+      })
     }
     const currency = request.currency.toUpperCase()
     const reference =
       request.reference ?? `fj_${request.userId}_${request.plan}_${crypto.randomUUID()}`
-    const session = await this.client.checkoutSessions.create(
-      {
-        pricing: {
-          currency,
-          amount: toDecimalString(toKobo(amount)), // decimal string, never a float
-          price_type: 'fixed',
+    let session: CheckoutSessionCreated
+    try {
+      session = await this.client.checkoutSessions.create(
+        {
+          // Keep this to the documented raw-price shape. When a customer is
+          // supplied, customer_creation does not apply, and the checkout
+          // currency already comes from pricing.currency.
+          pricing: {
+            currency,
+            amount: toDecimalString(toKobo(amount)), // decimal string, never a float
+          },
+          reference,
+          customer: {
+            email,
+            name: bachsCustomerName(request.name),
+          },
+          payment_method_types: currency === 'NGN' ? ['NGN_CARD', 'NGN_BANK_TRANSFER'] : undefined,
+          success_url: publicHttpsUrl(request.successUrl ?? request.returnUrl),
+          cancel_url: publicHttpsUrl(request.cancelUrl ?? request.returnUrl),
+          metadata: {
+            ...(request.metadata ?? {}),
+            user_id: request.userId,
+            plan: request.plan,
+          },
+          expires_in_minutes: 60,
         },
-        reference,
-        customer: {
-          email: request.email,
-          name: request.name?.trim() || request.email,
-        },
-        customer_creation: 'always',
-        billing_currency: currency,
-        payment_method_types: currency === 'NGN' ? ['NGN_CARD', 'NGN_BANK_TRANSFER'] : undefined,
-        success_url: publicHttpsUrl(request.successUrl ?? request.returnUrl),
-        cancel_url: publicHttpsUrl(request.cancelUrl ?? request.returnUrl),
-        metadata: {
-          user_id: request.userId,
-          plan: request.plan,
-          ...(request.metadata ?? {}),
-        },
-        expires_in_minutes: 60,
-      },
-      { idempotencyKey: request.idempotencyKey ?? reference },
-    )
-    if (session.reference && session.reference !== reference) {
-      throw new Error('Bachs checkout reference mismatch')
+        { idempotencyKey: request.idempotencyKey ?? reference },
+      )
+    } catch (error) {
+      throw toBillingProviderError(error, 'Bachs could not create the checkout.')
     }
-    return { id: session.checkout_id, url: session.checkout_url }
+    const checkoutUrl = publicHttpsUrl(session.checkout_url)
+    if (!session.checkout_id || !checkoutUrl) {
+      throw new BillingProviderError({
+        failure: 'outcome_unknown',
+        message: 'Bachs returned an unusable checkout response.',
+      })
+    }
+    if (session.reference && session.reference !== reference) {
+      throw new BillingProviderError({
+        failure: 'outcome_unknown',
+        message: 'Bachs returned a checkout for a different reference.',
+      })
+    }
+    return { id: session.checkout_id, url: checkoutUrl }
   }
 
   async createPortalSession(customerId: string): Promise<BillingPortalSession> {
-    const session = await this.client.customerPortal.createSession(customerId)
-    if (!session.url) throw new Error('Bachs did not return a portal URL')
-    return { url: session.url }
+    let session: PortalSessionResponse
+    try {
+      session = await this.client.customerPortal.createSession(customerId)
+    } catch (error) {
+      throw toBillingProviderError(error, 'Bachs could not open the billing portal.')
+    }
+    const url = publicHttpsUrl(session.url)
+    if (!url) {
+      throw new BillingProviderError({
+        failure: 'provider_unavailable',
+        message: 'Bachs did not return a usable portal URL.',
+      })
+    }
+    return { url }
   }
 
   async cancelSubscription(providerSubscriptionId: string): Promise<void> {
     // Fixed-time naira payments have no Bachs subscription to cancel. A real
     // Bachs subscription id is cancelled at the end of its paid period.
     if (!providerSubscriptionId.startsWith('sub_')) return
-    await this.client.subscriptions.cancel(providerSubscriptionId, {
-      cancel_at_period_end: true,
-    })
+    try {
+      await this.client.subscriptions.cancel(providerSubscriptionId, {
+        cancel_at_period_end: true,
+      })
+    } catch (error) {
+      throw toBillingProviderError(error, 'Bachs could not cancel the subscription.')
+    }
   }
 
   async fetchCheckout(checkoutId: string): Promise<ProviderPayment | null> {
-    const session = await this.client.checkoutSessions.get(checkoutId)
+    let session: CheckoutSessionResponse
+    try {
+      session = await this.client.checkoutSessions.get(checkoutId)
+    } catch (error) {
+      throw toBillingProviderError(error, 'Bachs could not read the checkout.')
+    }
     const charge = session.charge ?? null
     const chargeStatus = text(charge?.status)?.toLowerCase() ?? null
+    const paymentStatus = text(session.payment_status)?.toLowerCase() ?? null
     const succeeded =
-      session.payment_status === 'paid' ||
+      paymentStatus === 'paid' ||
+      paymentStatus === 'succeeded' ||
+      paymentStatus === 'accepted' ||
+      paymentStatus === 'overpaid' ||
       chargeStatus === 'succeeded' ||
-      chargeStatus === 'accepted'
+      chargeStatus === 'accepted' ||
+      chargeStatus === 'overpaid'
     const status: ProviderPayment['status'] = succeeded
       ? 'succeeded'
       : session.status === 'expired'
@@ -222,7 +401,7 @@ export class BachsProvider implements PaymentProvider {
     const customer = (session.customer ?? {}) as RecordValue
     return {
       checkoutId: session.checkout_id,
-      chargeId: charge?.payment_id ?? null,
+      chargeId: charge?.payment_id ?? text(charge?.id),
       reference: session.reference ?? charge?.reference ?? null,
       status,
       statusDetail: chargeStatus,
@@ -315,11 +494,14 @@ export class BachsProvider implements PaymentProvider {
         checkoutId,
         chargeId: text(data.charge_id),
         reference,
-        status: rawStatus === 'SUCCEEDED' ? 'succeeded' : 'unknown',
+        status:
+          rawStatus === 'SUCCEEDED' || rawStatus === 'ACCEPTED' || rawStatus === 'OVERPAID'
+            ? 'succeeded'
+            : 'unknown',
         statusDetail: rawStatus,
         amount: amountMajor(data.amount),
         currency: text(data.currency),
-        customerId: text(customer.id) ?? text(customer.customer_id) ?? fallbackCustomerId,
+        customerId: text(customer.customer_id) ?? text(customer.id) ?? fallbackCustomerId,
         plan,
         paidAt: null,
       }
@@ -329,7 +511,13 @@ export class BachsProvider implements PaymentProvider {
       if (data.mode === 'subscription' || data.payment_status !== 'paid') return null
       const charge = record(data.charge) ? data.charge : {}
       const chargeStatus = text(charge.status)?.toLowerCase() ?? null
-      if (chargeStatus && chargeStatus !== 'succeeded' && chargeStatus !== 'accepted') return null
+      if (
+        chargeStatus &&
+        chargeStatus !== 'succeeded' &&
+        chargeStatus !== 'accepted' &&
+        chargeStatus !== 'overpaid'
+      )
+        return null
       const customer = record(data.customer) ? data.customer : {}
       return {
         checkoutId,

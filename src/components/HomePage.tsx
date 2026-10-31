@@ -9,6 +9,7 @@ import {
   GraduationCap,
   MapPin,
   ShieldCheck,
+  Users,
   Wallet,
 } from 'lucide-react'
 import { Footer } from './Footer'
@@ -37,16 +38,26 @@ export function HomePage() {
   useEffect(() => {
     document.title = 'FJ - Find Jobs. Thousands of job opportunities in one place.'
     void (async () => {
-      try {
-        const response = await fetch('/api/public-stats', { cache: 'no-store' })
-        const body = (await response.json().catch(() => null)) as
-          (PublicStats & { available?: boolean }) | null
-        if (typeof body?.registeredUsers === 'number') setRegisteredUsers(body.registeredUsers)
-        if (response.ok && body && body.available !== false && typeof body.total === 'number') {
-          setStats(body)
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let loadedUsers = false
+        let loadedStats = false
+        try {
+          const response = await fetch('/api/public-stats')
+          const body = (await response.json().catch(() => null)) as
+            (PublicStats & { available?: boolean }) | null
+          if (typeof body?.registeredUsers === 'number') {
+            setRegisteredUsers(body.registeredUsers)
+            loadedUsers = true
+          }
+          if (response.ok && body && body.available !== false && typeof body.total === 'number') {
+            setStats(body)
+            loadedStats = true
+          }
+        } catch {
+          /* One retry below handles a brief connection failure. */
         }
-      } catch {
-        /* The page reads fine without the numbers. */
+        if (loadedUsers && loadedStats) break
+        if (attempt === 0) await new Promise((resolve) => window.setTimeout(resolve, 1200))
       }
       try {
         const response = await fetch('/api/auth/session', {
@@ -97,6 +108,15 @@ export function HomePage() {
               </>
             )}
           </div>
+          {registeredUsers !== null && (
+            <p className="home-user-count" aria-live="polite">
+              <Users size={18} aria-hidden="true" />
+              <span>
+                <strong>{number(registeredUsers)}</strong>{' '}
+                {registeredUsers === 1 ? 'person has' : 'people have'} registered on FJ
+              </span>
+            </p>
+          )}
           <p className="field__hint">
             {signedIn
               ? 'You are signed in. Your saved jobs and free alerts are in your account.'
@@ -105,43 +125,47 @@ export function HomePage() {
         </section>
 
         {(stats || registeredUsers !== null) && (
-          <section
-            className={`home-stats ${stats ? '' : 'home-stats--users-only'}`}
-            aria-label="FJ in numbers"
-          >
-            {stats && (
-              <>
-                <div className="home-stat">
-                  <strong>{number(stats.total)}</strong>
-                  <span>jobs listed right now</span>
+          <section className="home-stats-section" aria-labelledby="home-numbers-heading">
+            <div className="home-stats-head">
+              <p className="eyebrow">Live numbers</p>
+              <h2 id="home-numbers-heading">FJ in numbers</h2>
+            </div>
+            <div className={`home-stats ${stats ? '' : 'home-stats--users-only'}`}>
+              {registeredUsers !== null && (
+                <div className="home-stat home-stat--users">
+                  <strong>{number(registeredUsers)}</strong>
+                  <span>registered users</span>
                 </div>
-                <div className="home-stat">
-                  <strong>{number(stats.nigeria)}</strong>
-                  <span>jobs in Nigeria</span>
-                </div>
-                <div className="home-stat">
-                  <strong>{number(stats.remote)}</strong>
-                  <span>remote jobs you can do from home</span>
-                </div>
-                <div className="home-stat">
-                  <strong>{number(stats.countries)}</strong>
-                  <span>countries hiring</span>
-                </div>
-              </>
-            )}
-            {registeredUsers !== null && (
-              <div className="home-stat home-stat--users">
-                <strong>{number(registeredUsers)}</strong>
-                <span>registered users</span>
-              </div>
-            )}
+              )}
+              {stats && (
+                <>
+                  <div className="home-stat">
+                    <strong>{number(stats.total)}</strong>
+                    <span>jobs listed right now</span>
+                  </div>
+                  <div className="home-stat">
+                    <strong>{number(stats.nigeria)}</strong>
+                    <span>jobs in Nigeria</span>
+                  </div>
+                  <div className="home-stat">
+                    <strong>{number(stats.remote)}</strong>
+                    <span>remote jobs you can do from home</span>
+                  </div>
+                  <div className="home-stat">
+                    <strong>{number(stats.countries)}</strong>
+                    <span>countries hiring</span>
+                  </div>
+                </>
+              )}
+            </div>
           </section>
         )}
-        {stats && (
+        {(stats || registeredUsers !== null) && (
           <p className="field__hint home-stats__note">
-            Job numbers come from the adverts on FJ right now. New adverts are collected twice a
-            day, and jobs that have closed are removed. The registered-user number counts FJ
-            accounts and leaves out test accounts.
+            {stats
+              ? 'Job numbers come from the adverts on FJ right now. New adverts are collected twice a day, and jobs that have closed are removed. '
+              : ''}
+            The registered-user number counts FJ accounts and leaves out test accounts.
           </p>
         )}
 
@@ -227,7 +251,8 @@ export function HomePage() {
               <h3>Try it free for 3 days</h3>
               <p>
                 Check one CV in full and prepare applications for three jobs. We do not ask for card
-                details. The trial ends on its own.
+                details. The trial ends on its own. It is optional. You can skip it and buy Pro at
+                once.
               </p>
             </div>
             <a className="btn btn--primary" href="/pricing#trial-heading">
@@ -257,8 +282,8 @@ export function HomePage() {
             </div>
           </div>
           <p className="field__hint">
-            Compare the plans before you decide. The free trial needs no card.{' '}
-            <a href="/pricing">See prices or check the graduate price</a>.
+            Compare the plans before you decide. The free trial needs no card, and you do not need
+            it before you pay. <a href="/pricing">See prices or check the graduate price</a>.
           </p>
         </section>
 

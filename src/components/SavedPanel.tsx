@@ -102,7 +102,7 @@ export function SavedPanel({
               Your saved jobs will stay here.
             </p>
             <button className="btn btn--sm" type="button" onClick={onOpenPlan}>
-              {trial.status === 'not_started' ? 'Start free trial' : 'See Pro plans'}
+              {trial.status === 'not_started' ? 'Trial or buy Pro' : 'Buy Pro'}
             </button>
           </div>
         ) : null}

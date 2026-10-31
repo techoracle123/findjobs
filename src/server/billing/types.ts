@@ -70,6 +70,40 @@ export interface ProviderPayment {
   paidAt: string | null
 }
 
+/** A safe subset of a provider failure. Never put a raw provider body here. */
+export type BillingProviderFailure =
+  | 'provider_unavailable'
+  | 'provider_rejected'
+  | 'provider_account_attention'
+  | 'provider_validation'
+  | 'network'
+  | 'outcome_unknown'
+
+export class BillingProviderError extends Error {
+  readonly failure: BillingProviderFailure
+  readonly httpStatus: number | null
+  readonly providerCode: string | null
+  readonly providerRequestId: string | null
+  readonly fieldNames: string[]
+
+  constructor(input: {
+    failure: BillingProviderFailure
+    message: string
+    httpStatus?: number | null
+    providerCode?: string | null
+    providerRequestId?: string | null
+    fieldNames?: string[]
+  }) {
+    super(input.message)
+    this.name = 'BillingProviderError'
+    this.failure = input.failure
+    this.httpStatus = input.httpStatus ?? null
+    this.providerCode = input.providerCode ?? null
+    this.providerRequestId = input.providerRequestId ?? null
+    this.fieldNames = input.fieldNames ?? []
+  }
+}
+
 export interface WebhookEvent {
   type: string
   /** A stable identifier for the event, used to ignore a replay. */

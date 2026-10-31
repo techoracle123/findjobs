@@ -351,7 +351,7 @@ export function AlertsPanel({
                     />
                     {!proEnabled ? (
                       <button className="btn btn--sm" type="button" onClick={onOpenPlan}>
-                        {trial.status === 'not_started' ? 'Start free trial' : 'See Pro plans'}
+                        {trial.status === 'not_started' ? 'Trial or buy Pro' : 'Buy Pro'}
                       </button>
                     ) : null}
                   </details>
@@ -423,7 +423,7 @@ export function AlertsPanel({
                     change.
                   </p>
                   <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
-                    {trial.status === 'not_started' ? 'Start the free trial' : 'See Pro plans'}
+                    {trial.status === 'not_started' ? 'Trial or buy Pro' : 'Buy Pro'}
                   </button>
                 </div>
               ) : null}

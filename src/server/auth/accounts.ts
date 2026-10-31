@@ -71,6 +71,19 @@ function parseList(raw: string | null): string[] {
   }
 }
 
+/** Keeps internal identity subjects and email addresses out of display names. */
+export function cleanDisplayName(value: string | null | undefined): string | null {
+  const cleaned = (value ?? '')
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!cleaned || cleaned.length > 120) return null
+  if (/^usr_[0-9a-f]{16,}$/i.test(cleaned)) return null
+  if (/^(dev|email):/i.test(cleaned)) return null
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned)) return null
+  return cleaned
+}
+
 export async function upsertUser(
   db: D1Database,
   email: string,
@@ -83,10 +96,17 @@ export async function upsertUser(
     .prepare(
       `INSERT INTO users (id, email, display_name, created_at, updated_at, last_seen_at)
        VALUES (?1, ?2, ?3, ?4, ?4, ?4)
-       ON CONFLICT(id) DO UPDATE SET email = ?2, display_name = COALESCE(?3, users.display_name),
+       ON CONFLICT(id) DO UPDATE SET email = ?2,
+         display_name = CASE
+           WHEN ?3 IS NOT NULL THEN ?3
+           WHEN users.display_name GLOB 'usr_[0-9a-f]*' AND length(users.display_name) = 36 THEN NULL
+           WHEN lower(users.display_name) LIKE 'dev:%' THEN NULL
+           WHEN lower(users.display_name) LIKE 'email:%' THEN NULL
+           ELSE users.display_name
+         END,
          updated_at = ?4, last_seen_at = ?4`,
     )
-    .bind(id, email.toLowerCase(), displayName ?? null, now)
+    .bind(id, email.toLowerCase(), cleanDisplayName(displayName), now)
     .run()
 
   const row = await db

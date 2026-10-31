@@ -181,7 +181,7 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           <strong>How does the free trial work?</strong> After creating a free account, you can
           start one free Pro trial for 3 days. We do not ask for card details. It includes one full
           CV check and help for three jobs. It ends on its own. Work you create stays in your
-          account.
+          account. The trial is optional. You can skip it and buy Pro at once.
         </p>
         <p>
           <strong>Who gets Pro for Graduates?</strong> Final-year students, recent graduates and

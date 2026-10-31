@@ -1,8 +1,9 @@
 # Bachs payments for FJ
 
-This is the owner checklist for turning real Pro payments on. The code is in
-place, but **FJ cannot charge anyone until the two live Bachs secrets below are
-added and the site is deployed again**.
+This is the owner checklist for turning real Pro payments on and for checking
+them when a Buy button fails. Do not announce payments until one real owner
+purchase has opened checkout, reached Bachs, turned Pro on in FJ and shown the
+correct paid end date.
 
 Never paste an API key, webhook secret, bank detail, BVN, NIN, identity
 document, password, one-time code or reset link into chat, a screenshot, a
@@ -48,17 +49,22 @@ founding place.
 4. Confirm that NGN is held or settled in the way you want and that the
    Nigerian bank withdrawal destination is approved and belongs to the
    verified account holder or registered business.
-5. Open **Developer Portal → API keys**.
-6. Create a live secret key named `FJ production checkout`.
-7. Give that key only:
+5. In the Bachs checkout settings, confirm that `NGN_CARD` and
+   `NGN_BANK_TRANSFER` are switched on and that NGN is available for both.
+   Set the fee preference to `org_pays` if the ₦3,000, ₦5,000 and ₦40,000
+   prices on FJ are the final amounts customers should pay. With
+   `customer_pays`, Bachs adds its processing fee on top of those prices.
+6. Open **Developer Portal → API keys**.
+7. Create a live secret key named `FJ production checkout`.
+8. Give that key only:
    - `payments:write` (shown by Bachs as **Create & charge**)
    - `customers:write`
-8. Do not give the checkout key `payouts:write`. FJ checkout does not need it.
-9. Open **Developer Portal → Webhooks** and create a live destination for:
+9. Do not give the checkout key `payouts:write`. FJ checkout does not need it.
+10. Open **Developer Portal → Webhooks** and create a live destination for:
 
-   `https://fj-find-jobs.pages.dev/api/billing/webhook`
+    `https://fj-find-jobs.pages.dev/api/billing/webhook`
 
-10. Subscribe that destination to:
+11. Subscribe that destination to:
     - `collection.succeeded`
     - `collection.failed`
     - `collection.underpaid`
@@ -101,26 +107,50 @@ Do not announce payments from the presence of a buy button alone. First:
 1. Confirm the latest deployment says **Bachs live payments configured**.
 2. Open `/api/billing/plans` and confirm `billingEnabled` is `true` and the
    provider is `bachs`.
-3. Use your own FJ account and make one small real purchase.
-4. Confirm the payment is in Bachs.
-5. Confirm the webhook destination shows a successful delivery.
-6. Confirm Pro is on in the same FJ account and the paid end date is correct.
-7. Confirm the money is visible in the Bachs balance and the withdrawal route
+3. In the deployment log, open **Check Bachs checkout settings safely**. It
+   should show at least one NGN payment method enabled. A manually dispatched
+   deployment can also switch on `bachs_checkout_probe`. That creates one
+   unpaid checkout to prove that Bachs accepts FJ's checkout request. It does
+   not charge anybody.
+4. Use your own FJ account and make one small real purchase.
+5. Confirm the payment is in Bachs.
+6. Confirm the webhook destination shows a successful delivery.
+7. Confirm Pro is on in the same FJ account and the paid end date is correct.
+8. Confirm the money is visible in the Bachs balance and the withdrawal route
    is usable.
-8. Test the support route you will use if a customer pays and Pro does not
+9. Test the support route you will use if a customer pays and Pro does not
    turn on.
 
 If the Bachs balance is held in USD or another currency when you expected
 NGN, fix the Bachs balance/settlement setting before announcing. Do not ask a
 customer to test this for you.
 
+## If Buy does not open a payment page
+
+1. Read the message on the FJ plan or pricing page. If it gives an FJ reference
+   that starts `att_`, keep that reference for support. It is not a secret.
+2. Do not keep clicking Buy. First open the plan page and use **Check payment**
+   if money may have left the bank.
+3. In Bachs, check live mode, open account tasks, checkout settings and the
+   API key scopes. The key needs `payments:write` and `customers:write`.
+4. In **Developer Portal → Logs**, find the failed checkout request. Bachs
+   gives a stable error code and request id there. FJ server logs keep only
+   those safe fields for the same reason. Do not copy a secret key or a full
+   request body into chat or a GitHub issue.
+5. If the error says the account or a payment method needs attention, fix it in
+   Bachs first. Code cannot switch on a corridor or finish account review.
+6. Run the deployment manually with `bachs_checkout_probe` switched on. If the
+   probe succeeds, Bachs accepts the same basic checkout shape FJ sends. If it
+   fails, its log line gives the Bachs status, stable error code, field names
+   and request id.
+
 ## What happens if something goes wrong
 
 - The browser returning from Bachs never turns Pro on by itself.
 - FJ turns Pro on only after a signed Bachs confirmation matches the saved
   FJ checkout, user, plan, exact amount and currency.
-- The plan page also checks recent checkouts with Bachs. This covers a delayed
-  or missed webhook.
+- The plan page checks recent checkouts with Bachs after return and has a
+  **Check payment** button for a delayed bank transfer or missed webhook.
 - Duplicate Bachs events for one charge do not add the same paid time twice.
 - A first failed card attempt does not close the checkout.
 - A bank transfer can still complete after a checkout is shown expired; FJ

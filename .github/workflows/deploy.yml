@@ -2,6 +2,12 @@ name: Deploy Find Jobs
 
 on:
   workflow_dispatch:
+    inputs:
+      bachs_checkout_probe:
+        description: 'Create one unpaid Bachs checkout to test live checkout creation'
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       [
@@ -19,6 +25,7 @@ on:
       - scripts/cloudflare-integrations.mjs
       - scripts/check-live.mjs
       - scripts/check-openrouter.mjs
+      - scripts/check-bachs.mjs
       - scripts/bootstrap-public-feed.mjs
       - src/**
       - functions/**
@@ -79,6 +86,11 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: node scripts/check-openrouter.mjs
+      - name: Check Bachs checkout settings safely
+        env:
+          BACHS_SECRET_KEY: ${{ secrets.BACHS_SECRET_KEY }}
+          BACHS_DIAGNOSTIC_CREATE_CHECKOUT: ${{ github.event_name == 'workflow_dispatch' && inputs.bachs_checkout_probe && '1' || '0' }}
+        run: node scripts/check-bachs.mjs
       - name: Provision database and queue, migrate, and deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

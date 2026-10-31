@@ -34,6 +34,9 @@ describe('public response caching', () => {
     await request('/api/rates')
     await request('/api/rates')
     expect(count()).toBe(3)
+    await request('/api/public-stats?fresh=one')
+    await request('/api/public-stats?fresh=two')
+    expect(count()).toBe(4)
   })
   it('never caches account data, translation, advice or writes', async () => {
     const { request, count } = setup()

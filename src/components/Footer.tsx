@@ -3,6 +3,7 @@ export function Footer() {
   return (
     <footer className="site-footer">
       <nav aria-label="Footer">
+        <a href="/">Home</a>
         <a href="/about">About</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>

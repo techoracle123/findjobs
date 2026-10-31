@@ -81,7 +81,7 @@ export function SalaryGuidePanel({ profile, countries, proEnabled }: SalaryGuide
             of adverts used. At least three matching adverts are required, so nothing is invented.
           </p>
           <p>
-            <Lock size={14} /> <a href="/pricing">See Pro plans</a>
+            <Lock size={14} /> <a href="/pricing#plans">Trial or buy Pro</a>
           </p>
         </div>
       </div>

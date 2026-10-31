@@ -249,7 +249,7 @@ export function MasterCvPanel({
               trial ends. The free CV tool above still works.
             </p>
             <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
-              {trial.status === 'not_started' ? 'Start the 3-day free trial' : 'See Pro plans'}
+              {trial.status === 'not_started' ? 'Trial or buy Pro' : 'Buy Pro'}
             </button>
           </div>
         ) : null}

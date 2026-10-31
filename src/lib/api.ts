@@ -57,6 +57,188 @@ export class ApiError extends Error {
   }
 }
 
+export type BillingErrorAction =
+  | 'sign_in'
+  | 'graduate_check'
+  | 'manage_plan'
+  | 'check_payment'
+  | 'retry_later'
+  | 'contact'
+  | 'none'
+
+export interface BillingErrorInfo {
+  message: string
+  code: string | null
+  failure: string | null
+  supportReference: string | null
+  action: BillingErrorAction
+}
+
+function parsedApiError(error: ApiError): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(error.body)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function safeErrorText(value: unknown, pattern: RegExp): string | null {
+  if (typeof value !== 'string') return null
+  const cleaned = value.trim()
+  return pattern.test(cleaned) ? cleaned : null
+}
+
+/**
+ * Turns a billing API failure into one plain message. It reads only FJ's own
+ * error code, failure category and attempt reference, never provider detail.
+ */
+export function describeBillingError(error: unknown): BillingErrorInfo {
+  if (!(error instanceof ApiError)) {
+    const network =
+      error instanceof TypeError || (error instanceof Error && error.name === 'AbortError')
+    return {
+      message: network
+        ? 'FJ could not reach the payment service. Check your connection and try again. No charge was made by this click.'
+        : 'That billing action could not be done. Please try again.',
+      code: network ? 'network_error' : null,
+      failure: network ? 'network' : null,
+      supportReference: null,
+      action: network ? 'retry_later' : 'none',
+    }
+  }
+
+  const body = parsedApiError(error)
+  const code = safeErrorText(body.error, /^[a-z0-9_]{1,80}$/)
+  const failure = safeErrorText(body.failure, /^[a-z0-9_]{1,80}$/)
+  const supportReference = safeErrorText(body.supportReference, /^att_[A-Za-z0-9-]{8,80}$/)
+  const referenceText = supportReference ? ` Please quote reference ${supportReference}.` : ''
+  const info = (message: string, action: BillingErrorAction): BillingErrorInfo => ({
+    message: `${message}${referenceText}`,
+    code,
+    failure,
+    supportReference,
+    action,
+  })
+
+  if (error.status === 401 || code === 'unauthorized') {
+    return info('Your sign-in has ended. Sign in again, then choose the plan.', 'sign_in')
+  }
+  if (code === 'graduate_eligibility_required') {
+    return info(
+      'Complete the graduate-price check first. Pro Monthly and Pro Yearly do not need that check.',
+      'graduate_check',
+    )
+  }
+  if (code === 'subscription_active') {
+    return info('This account already has an active auto-renewing plan.', 'manage_plan')
+  }
+  if (code === 'no_billing_history') {
+    return info('This account has no completed payment to manage yet.', 'none')
+  }
+  if (code === 'billing_record_not_manageable') {
+    return info(
+      'This plan does not have an online billing portal. Paid time ends on the date shown.',
+      'none',
+    )
+  }
+  if (error.status === 429 || code === 'rate_limited') {
+    return info(
+      'Too many billing tries were made in a short time. Wait a while, then try once.',
+      'retry_later',
+    )
+  }
+  if (code === 'billing_not_configured' || code === 'storage_unavailable') {
+    return info('Payments are not available at the moment. No charge was made.', 'retry_later')
+  }
+  if (code === 'plan_not_purchasable') {
+    return info(
+      'That plan cannot be bought. Choose Pro Monthly, Pro Yearly or Pro for Graduates.',
+      'none',
+    )
+  }
+  if (code === 'portal_failed') {
+    return info(
+      'The billing portal could not be opened. Please try again.',
+      failure === 'provider_account_attention' ? 'contact' : 'retry_later',
+    )
+  }
+  if (code === 'cancel_failed') {
+    return info(
+      'Your plan could not be cancelled. Please try again.',
+      failure === 'provider_account_attention' ? 'contact' : 'retry_later',
+    )
+  }
+
+  switch (failure) {
+    case 'provider_account_attention':
+      return info(
+        'Payments need attention on the FJ payment account before checkout can open. No charge was made. Please use Contact us.',
+        'contact',
+      )
+    case 'provider_validation':
+      return info(
+        'The payment page could not be opened with the checkout details. No charge was made. Please use Contact us if it happens again.',
+        'contact',
+      )
+    case 'provider_unavailable':
+      return info(
+        'Payments are temporarily unavailable. No charge was made. Wait a short time and try again.',
+        'retry_later',
+      )
+    case 'network':
+      return info(
+        'FJ could not reach the payment service. No charge was made. Check your connection and try again.',
+        'retry_later',
+      )
+    case 'outcome_unknown':
+      return info(
+        'FJ could not confirm whether a payment page was created. Do not pay again yet. Use Check payment first.',
+        'check_payment',
+      )
+    case 'provider_rejected':
+      return info(
+        'The payment service did not open checkout. No charge was made. Please try again.',
+        'contact',
+      )
+  }
+
+  if (code === 'payments_account_attention') {
+    return info(
+      'Payments need attention on the FJ payment account. No charge was made. Please use Contact us.',
+      'contact',
+    )
+  }
+  if (code === 'checkout_details_rejected') {
+    return info(
+      'The payment page could not be opened with the checkout details. No charge was made.',
+      'contact',
+    )
+  }
+  if (code === 'payments_temporarily_unavailable') {
+    return info(
+      'Payments are temporarily unavailable. No charge was made. Wait a short time and try again.',
+      'retry_later',
+    )
+  }
+  if (code === 'checkout_outcome_unknown') {
+    return info(
+      'FJ could not confirm whether a payment page was created. Do not pay again yet. Use Check payment first.',
+      'check_payment',
+    )
+  }
+  if (error.status === 400)
+    return info('That billing action could not be done. Check the plan and try again.', 'none')
+  if (error.status >= 500)
+    return info(
+      'Payments could not be opened. No charge was made by this click. Please try again.',
+      'retry_later',
+    )
+  return info('That billing action could not be done. Please try again.', 'none')
+}
+
 export interface JobsResponse {
   facets?: JobFacets
   updatedAt?: string
@@ -457,7 +639,7 @@ export interface PlanCatalogue {
 }
 
 export function fetchPlans(): Promise<PlanCatalogue> {
-  return request<PlanCatalogue>('/api/billing/plans')
+  return request<PlanCatalogue>('/api/billing/plans', { cache: 'no-store' })
 }
 
 export function fetchSubscription(): Promise<{
@@ -488,6 +670,7 @@ export function reconcileBilling(): Promise<{
   entitlements: string[]
   checked: number
   applied: boolean
+  failedChecks?: number
 }> {
   return request('/api/billing/reconcile', { method: 'POST' })
 }

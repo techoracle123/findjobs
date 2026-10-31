@@ -5,8 +5,10 @@ import { PaystackProvider } from '../../src/server/billing/paystack'
 import { FlutterwaveProvider } from '../../src/server/billing/flutterwave'
 import { FakeProvider } from '../../src/server/billing/fake'
 import {
+  bachsCustomerName,
   BachsProvider,
   parseDecimalToKobo,
+  toBillingProviderError,
   toDecimalString,
   type BachsClientLike,
 } from '../../src/server/billing/bachs'
@@ -528,6 +530,20 @@ describe('provider selection', () => {
     )
     expect(partial.id).toBe('fake')
   })
+
+  it('infers Bachs from both usable secrets and removes accidental key whitespace', () => {
+    const config = readConfig({
+      APP_MODE: 'production',
+      BACHS_SECRET_KEY: ' sk_live_test\n',
+      BACHS_WEBHOOK_SECRET: ' whsec_live ',
+    })
+    expect(config.billing.provider).toBe('bachs')
+    expect(config.billing.bachs).toEqual({
+      secretKey: 'sk_live_test',
+      webhookSecret: 'whsec_live',
+    })
+    expect(providerFor(config).id).toBe('bachs')
+  })
 })
 
 /* -------------------------------------------------------------------------- */
@@ -600,12 +616,18 @@ describe('bachs adapter', () => {
     })
     expect(session).toEqual({ id: 'chk_test', url: 'https://checkout.example.test/chk_test' })
     const input = seenInput as {
-      pricing: { amount: string; currency: string }
+      pricing: { amount: string; currency: string; price_type?: string }
       payment_method_types: string[]
+      customer: { email: string; name: string }
+      customer_creation?: string
+      billing_currency?: string
       metadata: Record<string, string>
       reference: string
     }
-    expect(input.pricing).toEqual({ currency: 'NGN', amount: '5000.00', price_type: 'fixed' })
+    expect(input.pricing).toEqual({ currency: 'NGN', amount: '5000.00' })
+    expect(input.customer).toEqual({ email: 'person@example.com', name: 'Test Person' })
+    expect(input.customer_creation).toBeUndefined()
+    expect(input.billing_currency).toBeUndefined()
     expect(input.payment_method_types).toEqual(['NGN_CARD', 'NGN_BANK_TRANSFER'])
     expect(input.reference).toBe('fj_att_test')
     expect(input.metadata).toMatchObject({
@@ -615,6 +637,99 @@ describe('bachs adapter', () => {
       pricing_tier: 'founding',
     })
     expect(seenOptions).toEqual({ idempotencyKey: 'fj-checkout-att_test' })
+  })
+
+  it('never sends an internal FJ id or email address as the Bachs customer name', () => {
+    expect(bachsCustomerName('usr_0123456789abcdef0123456789abcdef')).toBe('FJ customer')
+    expect(bachsCustomerName('dev:person@example.com')).toBe('FJ customer')
+    expect(bachsCustomerName('person@example.com')).toBe('FJ customer')
+    expect(bachsCustomerName('  Ada   Lovelace ')).toBe('Ada Lovelace')
+  })
+
+  it('keeps only safe fields from a Bachs SDK failure', () => {
+    const raw = Object.assign(new Error('raw provider detail with a secret'), {
+      name: 'BachsApiError',
+      statusCode: 403,
+      errorCode: 'ACCOUNT_NOT_ACTIVATED',
+      requestId: 'req_safe_123',
+      fieldErrors: [{ field: 'pricing.amount', message: 'raw provider detail' }],
+      body: { detail: 'raw provider detail with a secret' },
+    })
+    const safe = toBillingProviderError(raw, 'Bachs could not create the checkout.')
+    expect(safe).toMatchObject({
+      failure: 'provider_account_attention',
+      httpStatus: 403,
+      providerCode: 'ACCOUNT_NOT_ACTIVATED',
+      providerRequestId: 'req_safe_123',
+      fieldNames: ['pricing.amount'],
+      message: 'Bachs could not create the checkout.',
+    })
+    expect(JSON.stringify(safe)).not.toContain('raw provider detail')
+    expect(safe.message).not.toContain('secret')
+
+    const validation = Object.assign(new Error('raw validation'), {
+      name: 'BachsApiError',
+      statusCode: 422,
+      errorCode: 'VALIDATION_ERROR',
+      fieldErrors: [{ field: 'customer.email' }],
+    })
+    expect(toBillingProviderError(validation, 'safe').failure).toBe('provider_validation')
+
+    const uncertain = Object.assign(new Error('network down'), {
+      name: 'BachsNetworkError',
+      outcomeUnknown: true,
+    })
+    expect(toBillingProviderError(uncertain, 'safe').failure).toBe('outcome_unknown')
+  })
+
+  it('reads accepted and overpaid Bachs checkouts back as paid', async () => {
+    const fakeClient = {
+      checkoutSessions: {
+        create: async () => {
+          throw new Error('not used')
+        },
+        get: async () => ({
+          checkout_id: 'chk_fetch',
+          status: 'completed',
+          payment_status: 'succeeded',
+          amount: '5000.00',
+          currency: 'NGN',
+          reference: 'fj_att_fetch',
+          completed_at: '2026-10-31T12:00:00Z',
+          customer: { id: 'cust_fetch', email: 'person@example.com' },
+          charge: {
+            id: 'ch_fetch',
+            status: 'overpaid',
+            amount: '5000.00',
+            currency: 'NGN',
+            reference: 'fj_att_fetch',
+            completed_at: '2026-10-31T12:00:00Z',
+          },
+          metadata: { user_id: 'usr_1', plan: 'pro' },
+        }),
+      },
+      customerPortal: {
+        createSession: async () => ({ id: 'psn_test', url: 'https://portal.example.test' }),
+      },
+      subscriptions: {
+        cancel: async () => ({ id: 'sub_test', status: 'active' }),
+      },
+      webhooks: {
+        constructEvent: () => {
+          throw new Error('not used')
+        },
+      },
+    } as unknown as BachsClientLike
+    const provider = new BachsProvider('sk_sandbox_test', BACHS_WEBHOOK_SECRET, PLANS, fakeClient)
+    await expect(provider.fetchCheckout('chk_fetch')).resolves.toMatchObject({
+      checkoutId: 'chk_fetch',
+      chargeId: 'ch_fetch',
+      status: 'succeeded',
+      amount: 5000,
+      currency: 'NGN',
+      customerId: 'cust_fetch',
+      plan: 'pro',
+    })
   })
 
   it('verifies and parses a Bachs collection.succeeded event', async () => {
@@ -650,6 +765,35 @@ describe('bachs adapter', () => {
 
     const tampered = payload.replace('5000.00', '100.00')
     expect(await provider.parseWebhook(tampered, await bachsHeaders(payload))).toBeNull()
+  })
+
+  it('treats ACCEPTED and OVERPAID Bachs collections as successful payments', async () => {
+    const provider = new BachsProvider('sk_sandbox_test', BACHS_WEBHOOK_SECRET, PLANS)
+    for (const status of ['ACCEPTED', 'OVERPAID']) {
+      const payload = JSON.stringify({
+        id: `evt_bachs_${status.toLowerCase()}`,
+        type: 'collection.succeeded',
+        created_at: '2026-10-31T12:00:00.000Z',
+        organization_id: 'acct_test',
+        data: {
+          charge_id: `ch_${status.toLowerCase()}`,
+          checkout_id: 'chk_test',
+          reference: 'fj_att_test',
+          status,
+          amount: '5000.00',
+          currency: 'NGN',
+          customer: { customer_id: 'cust_test', email: 'person@example.com' },
+          metadata: { user_id: 'usr_1', plan: 'pro', attempt_id: 'att_test' },
+        },
+      })
+      const event = await provider.parseWebhook(payload, await bachsHeaders(payload))
+      expect(event?.providerPayment).toMatchObject({
+        status: 'succeeded',
+        statusDetail: status,
+        customerId: 'cust_test',
+        amount: 5000,
+      })
+    }
   })
 
   it('parses a direct Bachs subscription event without trusting email for the plan', async () => {

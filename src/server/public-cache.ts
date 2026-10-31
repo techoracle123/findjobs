@@ -21,7 +21,13 @@ export function publicDataCache(override?: Cache): MiddlewareHandler<AppEnv> {
     // Job data is account-only now, so it is never shared-cache material:
     // a cached 200 here would hand jobs to a visitor with no account.
     const ttl =
-      path === '/api/health' || path === '/api/sources' ? 300 : path === '/api/rates' ? 3600 : 0
+      path === '/api/public-stats'
+        ? 60
+        : path === '/api/health' || path === '/api/sources'
+          ? 300
+          : path === '/api/rates'
+            ? 3600
+            : 0
     if (
       !ttl ||
       c.req.method !== 'GET' ||

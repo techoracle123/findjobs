@@ -137,11 +137,18 @@ app.get('/api/auth/login', async (c) => {
  * job titles, companies, links, names or email addresses leave through here.
  */
 app.get('/api/public-stats', async (c) => {
-  const limited = await enforceRateLimit(c, {
-    bucket: 'public-stats',
-    limit: 60,
-    windowSeconds: 60,
-  })
+  let limited: Response | null | undefined
+  try {
+    limited = await enforceRateLimit(c, {
+      bucket: 'public-stats',
+      limit: 60,
+      windowSeconds: 60,
+    })
+  } catch {
+    // This read-only public total is edge-cached. A rate-limit storage fault
+    // should not hide the homepage numbers from every visitor.
+    limited = undefined
+  }
   if (limited) return limited
 
   let registeredUsers: number | null = null
@@ -155,11 +162,21 @@ app.get('/api/public-stats', async (c) => {
     }
   }
 
-  const snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
-  if (!snapshot) return c.json({ available: false, registeredUsers }, 503)
+  let snapshot: Awaited<ReturnType<typeof publishedPublicJobs>> = null
+  try {
+    snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
+  } catch {
+    snapshot = null
+  }
+  if (!snapshot) {
+    c.header('Cache-Control', 'no-store')
+    return c.json({ available: false, registeredUsers }, 503)
+  }
   const visible = snapshot.jobs.filter((job) => job.quality?.isEnglish !== false)
   const countries = new Set(visible.map((job) => job.locationCountry).filter(Boolean))
-  c.header('Cache-Control', 'public, max-age=60')
+  // Do not let a brief user-count database failure hide the counter for a
+  // full cache minute. Complete public totals can be shared for 60 seconds.
+  c.header('Cache-Control', registeredUsers === null ? 'no-store' : 'public, max-age=60')
   return c.json({
     available: true,
     total: visible.length,

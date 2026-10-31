@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import './setup'
 
 import { app } from '../../src/server/app'
-import { userIdFor } from '../../src/server/auth/accounts'
+import { upsertSubscription, upsertUser, userIdFor } from '../../src/server/auth/accounts'
 import {
   createCheckoutAttempt,
   getFoundingClaim,
@@ -176,6 +176,35 @@ describe('Bachs fixed-time payments', () => {
     expect(afterRefund.subscription?.status).toBe('canceled')
     expect(afterRefund.entitlements).not.toContain('cv_analysis')
     expect(await getFoundingClaim(env.DB, userId)).toBeNull()
+  })
+
+  it('does not send a subscription from another provider to the Bachs portal', async () => {
+    const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 12)
+    const email = `bachs-portal-${suffix}@example.com`
+    const user = await upsertUser(env.DB, email, 'Portal Test')
+    await upsertSubscription(env.DB, {
+      id: `sub_fake_${suffix}`,
+      userId: user.id,
+      provider: 'fake',
+      providerCustomerId: `cus_fake_${suffix}`,
+      providerSubscriptionId: `sub_fake_${suffix}`,
+      plan: 'pro',
+      status: 'active',
+      currentPeriodEnd: new Date(Date.now() + 86_400_000).toISOString(),
+      cancelAtPeriodEnd: false,
+    })
+
+    const response = await app.fetch(
+      new Request(`${BASE}/api/billing/portal`, {
+        method: 'POST',
+        headers: { 'x-dev-user-email': email },
+      }),
+      bachsEnv(),
+    )
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({
+      error: 'billing_record_not_manageable',
+    })
   })
 
   it('does not grant Pro when the signed Bachs amount is not the checkout amount', async () => {

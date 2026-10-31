@@ -124,7 +124,7 @@ export function ProInsightsPanel({
               and the skills you may need to learn.
             </p>
             <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
-              {trial.status === 'not_started' ? 'Try it free for 3 days' : 'See Pro plans'}
+              {trial.status === 'not_started' ? 'Trial or buy Pro' : 'Buy Pro'}
             </button>
           </div>
         ) : (

@@ -9,7 +9,7 @@ interface SiteHeaderProps {
 
 /**
  * The public site header. It stays at the top of the public pages so people
- * can always get to jobs, pricing, account pages and sign in.
+ * can always get home, to jobs, to pricing, to account pages and to sign in.
  */
 export function SiteHeader({ current, signedIn: signedInProp }: SiteHeaderProps) {
   const [signedIn, setSignedIn] = useState(Boolean(signedInProp))
@@ -43,6 +43,9 @@ export function SiteHeader({ current, signedIn: signedInProp }: SiteHeaderProps)
       </a>
 
       <nav className="topnav" aria-label="Primary">
+        <a href="/" aria-current={current === 'home' ? 'page' : undefined}>
+          Home
+        </a>
         <a href="/jobs" aria-current={current === 'jobs' ? 'page' : undefined}>
           Jobs
         </a>

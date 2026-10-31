@@ -178,9 +178,9 @@ async function requireFeature(c: AppContext, feature: string): Promise<FeatureGa
           trial,
           message:
             trial.status === 'not_started'
-              ? 'Start the free 3-day Pro trial to use this tool. Applying on the employer site stays free.'
-              : 'Your free Pro trial has ended. Applying on the employer site stays free.',
-          upgradeUrl: '/pricing',
+              ? 'Use the optional free 3-day trial or buy Pro to use this tool. You do not need the trial before you pay. Applying on the employer site stays free.'
+              : 'Your free Pro trial has ended. Buy Pro to keep using this tool. Applying on the employer site stays free.',
+          upgradeUrl: '/pricing#plans',
         },
         403,
       ),
@@ -201,8 +201,8 @@ async function enforceTrialPack(
       error: 'trial_limit_reached',
       trial: await getTrialState(gate.db, gate.user.id),
       message:
-        'You have used help for three jobs in your free trial. You can still apply free on the company website.',
-      upgradeUrl: '/pricing',
+        'You have used help for three jobs in your free trial. Buy Pro for more, or apply free on the company website.',
+      upgradeUrl: '/pricing#plans',
     },
     403,
   )
@@ -363,8 +363,8 @@ proRoutes.put('/pro/cv', async (c) => {
       {
         error: 'trial_limit_reached',
         trial: await getTrialState(gate.db, gate.user.id),
-        message: 'You have used the one CV check in your free trial.',
-        upgradeUrl: '/pricing',
+        message: 'You have used the one CV check in your free trial. Buy Pro for more checks.',
+        upgradeUrl: '/pricing#plans',
       },
       403,
     )

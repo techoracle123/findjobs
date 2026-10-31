@@ -288,10 +288,11 @@ export function ProTools({ job, proEnabled, trial, onRefresh }: ProToolsProps) {
         <ul className="plain-list">
           <li>The free trial includes one CV check and help for three jobs.</li>
           <li>We do not ask for card details. The trial ends after 3 days.</li>
+          <li>You can skip the trial and buy Pro at once.</li>
           <li>You can always apply free on the company website.</li>
         </ul>
         <p>
-          <Lock size={14} /> <a href="/pricing">Start the trial or compare Pro plans</a>
+          <Lock size={14} /> <a href="/pricing#plans">Trial or buy Pro</a>
         </p>
         {message ? <p role="status">{message}</p> : null}
         {prepared ? (

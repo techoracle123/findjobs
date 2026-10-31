@@ -3,6 +3,7 @@ import { ArrowRight, Check, ShieldCheck } from 'lucide-react'
 import { Footer } from './Footer'
 import { SiteHeader } from './SiteHeader'
 import {
+  describeBillingError,
   fetchProAccess,
   startCheckout,
   startProTrial,
@@ -146,16 +147,21 @@ const EMPTY_GRADUATE: GraduateForm = {
  */
 export function PricingPage() {
   const [plans, setPlans] = useState<PlansPayload | null>(null)
+  const [plansError, setPlansError] = useState(false)
+  const [plansRetry, setPlansRetry] = useState(0)
   const [access, setAccess] = useState<ProAccess | null>(null)
   const [trialBusy, setTrialBusy] = useState(false)
   const [trialNotice, setTrialNotice] = useState('')
   const [checkoutBusy, setCheckoutBusy] = useState<string | null>(null)
-  const [checkoutNotice, setCheckoutNotice] = useState(() =>
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('billing') === 'cancelled'
+  const [checkoutNotice, setCheckoutNotice] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    const params = new URLSearchParams(
+      window.location.search.replace(/^\?/, '').replace(/\?/g, '&'),
+    )
+    return params.get('billing') === 'cancelled'
       ? 'You stopped before payment. If you already sent a bank transfer, sign in and open your plan so FJ can check it.'
-      : '',
-  )
+      : ''
+  })
   const [waitlist, setWaitlist] = useState<'idle' | 'done' | 'error'>('idle')
   const [email, setEmail] = useState('')
   const [graduateForm, setGraduateForm] = useState<GraduateForm>(EMPTY_GRADUATE)
@@ -169,10 +175,18 @@ export function PricingPage() {
     const link = canonical ?? Object.assign(document.createElement('link'), { rel: 'canonical' })
     link.href = 'https://fj-find-jobs.pages.dev/pricing'
     if (!canonical) document.head.appendChild(link)
+    setPlansError(false)
     void fetch('/api/billing/plans', { cache: 'no-store' })
       .then((r) => (r.ok ? (r.json() as Promise<PlansPayload>) : null))
-      .then((body) => body && setPlans(body))
-      .catch(() => {})
+      .then((body) => {
+        if (body) {
+          setPlans(body)
+          setPlansError(false)
+        } else {
+          setPlansError(true)
+        }
+      })
+      .catch(() => setPlansError(true))
     void fetchProAccess()
       .then((body) => {
         setAccess(body)
@@ -188,7 +202,7 @@ export function PricingPage() {
         }
       })
       .catch(() => setAccess(null))
-  }, [])
+  }, [plansRetry])
 
   const seekerPlans = useMemo(
     () =>
@@ -206,12 +220,16 @@ export function PricingPage() {
     return [
       ...FAQ.map((item) => (item.q === 'When can I pay?' ? { ...item, a: paymentAnswer } : item)),
       {
+        q: 'Do I need to use the free trial before I pay?',
+        a: 'No. The trial is optional. You can buy Pro Monthly, Pro Yearly or an approved graduate plan at once. If your free trial is already running, paid time starts after the trial ends.',
+      },
+      {
         q: 'Will my plan renew by itself?',
         a: 'No. Each naira payment buys one month or one year. FJ will not charge you again unless you choose to pay. If you want more time, you pay again before or after the end date in your account.',
       },
       {
         q: 'What if I pay and Pro does not turn on?',
-        a: 'Open your plan page first. FJ checks your payment with Bachs there. If a confirmed payment still does not turn Pro on, contact FJ through the Contact page and we will fix it or refund that payment. If you pay twice for the same time by mistake, contact FJ about the duplicate payment.',
+        a: 'Do not pay again yet. Open your plan page and use Check payment. Bank transfers can take a few minutes. If a confirmed payment still does not turn Pro on, contact FJ through the Contact page and we will fix it or refund that payment. If you pay twice for the same time by mistake, contact FJ about the duplicate payment.',
       },
     ]
   }, [plans?.billingEnabled])
@@ -249,9 +267,15 @@ export function PricingPage() {
     try {
       const { session } = await startCheckout(plan.id)
       window.location.href = session.url
-    } catch {
-      setCheckoutNotice('Payments could not open. Please try again.')
+    } catch (error) {
+      const info = describeBillingError(error)
+      setCheckoutNotice(info.message)
       setCheckoutBusy(null)
+      if (info.action === 'sign_in') {
+        window.location.href = '/auth/login?returnTo=%2Fpricing'
+      } else if (info.action === 'graduate_check') {
+        window.location.hash = 'graduate-check'
+      }
     }
   }
 
@@ -300,6 +324,54 @@ export function PricingPage() {
     )
   }
 
+  const heroAction = (className = 'btn btn--primary pricing-main-cta') => {
+    if (!access) {
+      return (
+        <a className={className} href="/auth/signup?returnTo=%2Fpricing">
+          Create a free account
+        </a>
+      )
+    }
+    if (access.paid) {
+      return (
+        <a className={className} href="/dashboard?tab=plan">
+          Open your plan
+        </a>
+      )
+    }
+    if (!plans) {
+      return (
+        <a className={className} href="#plans">
+          See plans
+        </a>
+      )
+    }
+    if (plans.billingEnabled) {
+      return (
+        <a className={className} href="#plans">
+          Buy Pro now
+        </a>
+      )
+    }
+    return trialAction(className)
+  }
+
+  const heroSecondaryAction = () => {
+    if (
+      access &&
+      !access.paid &&
+      plans?.billingEnabled &&
+      (access.trial.status === 'not_started' || access.trial.status === 'active')
+    ) {
+      return trialAction('btn pricing-secondary-cta')
+    }
+    return (
+      <a className="btn pricing-secondary-cta" href="#compare">
+        Compare plans
+      </a>
+    )
+  }
+
   const planAction = (plan: PlanRow): PlanAction => {
     if (plan.id === 'free') {
       return access
@@ -310,13 +382,16 @@ export function PricingPage() {
     if (plan.id === 'pro_graduate' && graduateResult?.result !== 'eligible') {
       return { href: '#graduate-check', label: 'Check if you qualify' }
     }
+    // Paid checkout is direct. Trial state never changes these paid-plan
+    // buttons: the trial is an optional extra shown in its own section.
+    if (access && plans?.billingEnabled) {
+      return { planId: plan.id, label: `Buy ${planName(plan)}` }
+    }
+    if (access && !plans) return { href: '#plans', label: 'Loading prices' }
     if (access?.trial.status === 'active') {
       return { href: '/dashboard?tab=plan', label: 'Open Pro tools' }
     }
     if (access?.trial.status === 'not_started') return { href: '#trial', label: 'Try Pro free' }
-    if (access && plans?.billingEnabled) {
-      return { planId: plan.id, label: `Buy ${planName(plan)}` }
-    }
     if (access) return { href: '#payments-opening-soon', label: 'Join the list' }
     return { href: '/auth/signup?returnTo=%2Fpricing', label: 'Create free account' }
   }
@@ -363,10 +438,8 @@ export function PricingPage() {
             prepare your application.
           </p>
           <div className="pricing-hero-actions">
-            {trialAction()}
-            <a className="btn pricing-secondary-cta" href="#compare">
-              Compare plans
-            </a>
+            {heroAction()}
+            {heroSecondaryAction()}
           </div>
           {trialNotice ? (
             <p className="form-notice pricing-hero-notice" role="status">
@@ -384,6 +457,9 @@ export function PricingPage() {
             </li>
             <li>
               <Check size={16} aria-hidden="true" /> No card for the trial
+            </li>
+            <li>
+              <Check size={16} aria-hidden="true" /> You can skip the trial and buy Pro
             </li>
             <li>
               <Check size={16} aria-hidden="true" />{' '}
@@ -412,11 +488,17 @@ export function PricingPage() {
               <li>
                 <Check size={16} aria-hidden="true" /> The trial ends on its own
               </li>
+              <li>
+                <Check size={16} aria-hidden="true" /> You do not need the trial before you pay
+              </li>
             </ul>
           </div>
           <div className="pricing-trial-action">
             {trialAction('btn btn--primary pricing-main-cta')}
-            <p>No card details. No charge.</p>
+            <p>
+              No card details. No charge. If you pay during the trial, paid time starts after the
+              trial ends.
+            </p>
           </div>
         </section>
 
@@ -426,7 +508,10 @@ export function PricingPage() {
               <p className="eyebrow">Plans</p>
               <h2 id="plans-heading">Choose a plan</h2>
             </div>
-            <p>Pro Monthly, Pro Yearly and Pro for Graduates have the same tools.</p>
+            <p>
+              Pro Monthly, Pro Yearly and Pro for Graduates have the same tools. You can buy at
+              once. You do not need the free trial first.
+            </p>
           </div>
 
           <div className="pricing-cards">
@@ -495,7 +580,19 @@ export function PricingPage() {
               )
             })}
           </div>
-          {!plans ? <p role="status">Loading prices...</p> : null}
+          {!plans && !plansError ? <p role="status">Loading prices...</p> : null}
+          {!plans && plansError ? (
+            <div className="pricing-load-error" role="alert">
+              <p>Prices could not load. Check your connection and try again.</p>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setPlansRetry((count) => count + 1)}
+              >
+                Load prices again
+              </button>
+            </div>
+          ) : null}
           <p className="pricing-under-note">
             {plans?.billingEnabled
               ? 'Prices are in naira. Each payment buys one month or one year. FJ will not charge you again unless you choose to pay.'
@@ -755,11 +852,11 @@ export function PricingPage() {
                   <p>
                     {graduateResult.result === 'eligible'
                       ? plans?.billingEnabled
-                        ? 'Your price is ₦3,000 each month. You can start the free trial first, or choose Pro for Graduates above.'
-                        : 'When payments open, your price will be ₦3,000 each month. You can start the free trial now.'
+                        ? 'Your price is ₦3,000 each month. Choose Pro for Graduates above to buy now. The free trial is optional.'
+                        : 'When payments open, your price will be ₦3,000 each month. The free trial is optional.'
                       : graduateResult.result === 'review'
-                        ? 'Do not send your BVN, NIN or identity card. We will say what we need in your account.'
-                        : 'Pro Monthly and Pro Yearly have the same tools.'}
+                        ? 'Do not send your BVN, NIN or identity card. We will say what we need in your account. You can buy Pro Monthly or Pro Yearly above now if you do not want to wait.'
+                        : 'Pro Monthly and Pro Yearly have the same tools and can be bought above.'}
                   </p>
                 </div>
               ) : null}

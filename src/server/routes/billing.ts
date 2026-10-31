@@ -23,7 +23,9 @@ import {
   type CheckoutAttempt,
 } from '../billing/checkouts'
 import {
+  BillingProviderError,
   planEntitlements,
+  type BillingProviderFailure,
   type ProviderPayment,
   type ProviderSubscription,
   type WebhookEvent,
@@ -49,6 +51,91 @@ function validIso(value: string | null | undefined): string | null {
   if (!value) return null
   const time = Date.parse(value)
   return Number.isNaN(time) ? null : new Date(time).toISOString()
+}
+
+interface SafeBillingError {
+  failure: BillingProviderFailure | 'unknown'
+  httpStatus: number | null
+  providerCode: string | null
+  providerRequestId: string | null
+  fieldNames: string[]
+  outcomeUnknown: boolean
+  errorName: string
+}
+
+function safeBillingError(error: unknown): SafeBillingError {
+  if (error instanceof BillingProviderError) {
+    return {
+      failure: error.failure,
+      httpStatus: error.httpStatus,
+      providerCode: error.providerCode,
+      providerRequestId: error.providerRequestId,
+      fieldNames: error.fieldNames,
+      outcomeUnknown: error.failure === 'outcome_unknown',
+      errorName: error.name,
+    }
+  }
+  const source = (typeof error === 'object' && error !== null ? error : {}) as Record<
+    string,
+    unknown
+  >
+  return {
+    failure: 'unknown',
+    httpStatus: null,
+    providerCode: null,
+    providerRequestId: null,
+    fieldNames: [],
+    outcomeUnknown: source.outcomeUnknown === true,
+    errorName: error instanceof Error ? error.name : 'unknown',
+  }
+}
+
+function checkoutFailureBody(failure: SafeBillingError['failure'], supportReference?: string) {
+  const suffix = supportReference ? ` Please quote reference ${supportReference}.` : ''
+  switch (failure) {
+    case 'provider_account_attention':
+      return {
+        error: 'payments_account_attention',
+        failure,
+        supportReference,
+        message: `Payments need attention on the FJ payment account before checkout can open. No charge was made.${suffix}`,
+      }
+    case 'provider_validation':
+      return {
+        error: 'checkout_details_rejected',
+        failure,
+        supportReference,
+        message: `The payment page could not be opened with the checkout details. No charge was made.${suffix}`,
+      }
+    case 'provider_unavailable':
+      return {
+        error: 'payments_temporarily_unavailable',
+        failure,
+        supportReference,
+        message: `Payments are temporarily unavailable. No charge was made. Please wait a short time and try again.${suffix}`,
+      }
+    case 'network':
+      return {
+        error: 'payment_network_error',
+        failure,
+        supportReference,
+        message: `FJ could not reach the payment service. No charge was made. Check your connection and try again.${suffix}`,
+      }
+    case 'outcome_unknown':
+      return {
+        error: 'checkout_outcome_unknown',
+        failure,
+        supportReference,
+        message: `FJ could not confirm whether a payment page was created. Do not pay again yet. Use Check payment on your plan page first.${suffix}`,
+      }
+    default:
+      return {
+        error: 'checkout_failed',
+        failure,
+        supportReference,
+        message: `The payment page could not be opened. No charge was made. Please try again.${suffix}`,
+      }
+  }
 }
 
 billingRoutes.get('/billing/plans', async (c) => {
@@ -157,6 +244,7 @@ billingRoutes.post('/billing/checkout', async (c) => {
   const existingSubscription = await getSubscription(db, user.id)
   const hasAutoRenewingSubscription = Boolean(
     existingSubscription &&
+    existingSubscription.provider === provider.id &&
     (existingSubscription.status === 'active' || existingSubscription.status === 'trialing') &&
     existingSubscription.providerSubscriptionId?.startsWith('sub_') &&
     (!existingSubscription.currentPeriodEnd ||
@@ -228,32 +316,34 @@ billingRoutes.post('/billing/checkout', async (c) => {
     })
     return c.json({ session })
   } catch (error) {
+    const safe = safeBillingError(error)
     if (attempt) {
-      const outcomeUnknown = Boolean(
-        error &&
-        typeof error === 'object' &&
-        'outcomeUnknown' in error &&
-        (error as { outcomeUnknown?: unknown }).outcomeUnknown,
-      )
-      await markAttemptStatus(db, attempt.id, outcomeUnknown ? 'uncertain' : 'failed', [
+      await markAttemptStatus(db, attempt.id, safe.outcomeUnknown ? 'uncertain' : 'failed', [
         'created',
         'open',
         'uncertain',
       ]).catch(() => false)
+      await recordAudit(db, user.id, 'billing.checkout.failed', {
+        attemptId: attempt.id,
+        plan: attempt.plan,
+        provider: provider.id,
+        failure: safe.failure,
+        providerCode: safe.providerCode,
+        fieldNames: safe.fieldNames,
+      }).catch(() => undefined)
     }
     logger.error('billing checkout failed', {
       provider: provider.id,
       userId: user.id,
       attemptId: attempt?.id,
-      error: error instanceof Error ? error.name : 'unknown',
+      error: safe.errorName,
+      failure: safe.failure,
+      httpStatus: safe.httpStatus,
+      providerCode: safe.providerCode,
+      providerRequestId: safe.providerRequestId,
+      fieldNames: safe.fieldNames,
     })
-    return c.json(
-      {
-        error: 'checkout_failed',
-        message: 'Payments could not open. Please try again.',
-      },
-      502,
-    )
+    return c.json(checkoutFailureBody(safe.failure, attempt?.id), 502)
   }
 })
 
@@ -265,7 +355,13 @@ billingRoutes.post('/billing/portal', async (c) => {
 
   const subscription = await getSubscription(c.env.DB, user.id)
   if (!subscription?.providerCustomerId) {
-    return badRequest(c, 'This account has no billing history.')
+    return c.json(
+      {
+        error: 'no_billing_history',
+        message: 'This account has no completed payment to manage yet.',
+      },
+      409,
+    )
   }
 
   const config = readConfig(c.env ?? {})
@@ -273,14 +369,38 @@ billingRoutes.post('/billing/portal', async (c) => {
   if (!hasRealProvider(config)) {
     return c.json({ error: 'billing_not_configured' }, 503)
   }
+  if (subscription.provider !== provider.id) {
+    return c.json(
+      {
+        error: 'billing_record_not_manageable',
+        message:
+          'This plan does not have an online billing portal to open. Your paid time ends on the date shown.',
+      },
+      409,
+    )
+  }
   const origin = new URL(c.req.url).origin
   try {
     const session = await provider.createPortalSession(subscription.providerCustomerId, origin)
     return c.json({ session })
-  } catch {
-    logger.error('billing portal failed', { provider: provider.id, userId: user.id })
+  } catch (error) {
+    const safe = safeBillingError(error)
+    logger.error('billing portal failed', {
+      provider: provider.id,
+      userId: user.id,
+      error: safe.errorName,
+      failure: safe.failure,
+      httpStatus: safe.httpStatus,
+      providerCode: safe.providerCode,
+      providerRequestId: safe.providerRequestId,
+      fieldNames: safe.fieldNames,
+    })
     return c.json(
-      { error: 'portal_failed', message: 'Billing could not open. Please try again.' },
+      {
+        error: 'portal_failed',
+        failure: safe.failure,
+        message: 'The billing portal could not be opened. Please try again.',
+      },
       502,
     )
   }
@@ -312,13 +432,24 @@ billingRoutes.post('/billing/cancel', async (c) => {
   ) {
     try {
       await provider.cancelSubscription(subscription.providerSubscriptionId)
-    } catch {
+    } catch (error) {
+      const safe = safeBillingError(error)
       logger.error('billing provider cancellation failed', {
         provider: provider.id,
         userId: user.id,
+        error: safe.errorName,
+        failure: safe.failure,
+        httpStatus: safe.httpStatus,
+        providerCode: safe.providerCode,
+        providerRequestId: safe.providerRequestId,
+        fieldNames: safe.fieldNames,
       })
       return c.json(
-        { error: 'cancel_failed', message: 'Your plan could not be cancelled. Please try again.' },
+        {
+          error: 'cancel_failed',
+          failure: safe.failure,
+          message: 'Your plan could not be cancelled. Please try again.',
+        },
         502,
       )
     }
@@ -358,6 +489,7 @@ billingRoutes.post('/billing/reconcile', async (c) => {
   const attempts = await listRecentAttemptsForUser(db, user.id, provider.id)
   let applied = false
   let checked = 0
+  let failedChecks = 0
   for (const attempt of attempts) {
     if (!attempt.providerCheckoutId) continue
     checked += 1
@@ -369,11 +501,19 @@ billingRoutes.post('/billing/reconcile', async (c) => {
       } else if (payment.status === 'expired') {
         await markAttemptStatus(db, attempt.id, 'expired', ['created', 'open', 'uncertain'])
       }
-    } catch {
+    } catch (error) {
+      failedChecks += 1
+      const safe = safeBillingError(error)
       logger.error('billing reconcile failed', {
         provider: provider.id,
         userId: user.id,
         attemptId: attempt.id,
+        error: safe.errorName,
+        failure: safe.failure,
+        httpStatus: safe.httpStatus,
+        providerCode: safe.providerCode,
+        providerRequestId: safe.providerRequestId,
+        fieldNames: safe.fieldNames,
       })
     }
   }
@@ -382,7 +522,7 @@ billingRoutes.post('/billing/reconcile', async (c) => {
     getSubscription(db, user.id),
     getEntitlements(db, user.id),
   ])
-  return c.json({ subscription, entitlements, checked, applied })
+  return c.json({ subscription, entitlements, checked, applied, failedChecks })
 })
 
 /**
@@ -403,7 +543,7 @@ billingRoutes.post('/billing/webhook', async (c) => {
   } catch (error) {
     logger.error('billing webhook could not be confirmed', {
       provider: provider.id,
-      reason: error instanceof Error ? error.message : 'unknown',
+      reason: error instanceof Error ? error.name : 'unknown',
     })
     return c.json({ error: 'verification_failed' }, 503)
   }
@@ -635,7 +775,15 @@ async function applyRefund(
   }
   const marked =
     attempt.status === 'refunded' ||
-    (await markAttemptStatus(db, attempt.id, 'refunded', ['paid', 'disputed']))
+    (await markAttemptStatus(db, attempt.id, 'refunded', [
+      'paid',
+      'disputed',
+      'created',
+      'open',
+      'uncertain',
+      'expired',
+      'failed',
+    ]))
   if (!marked) return
   const nowIso = validIso(event.createdAt) ?? new Date().toISOString()
   await revokeAttemptAccess(db, attempt, 'refund', nowIso)
@@ -663,7 +811,15 @@ async function applyDispute(
   if (detail === 'lost') {
     const marked =
       attempt.status === 'refunded' ||
-      (await markAttemptStatus(db, attempt.id, 'refunded', ['paid', 'disputed']))
+      (await markAttemptStatus(db, attempt.id, 'refunded', [
+        'paid',
+        'disputed',
+        'created',
+        'open',
+        'uncertain',
+        'expired',
+        'failed',
+      ]))
     if (marked) {
       await revokeAttemptAccess(db, attempt, 'dispute_lost', nowIso)
       await releaseFoundingClaimAfterRefund(db, attempt.userId)

@@ -91,6 +91,13 @@ describe('the plan catalogue', () => {
     expect(body.error).toBe('billing_not_configured')
   })
 
+  it('explains when an account has no billing portal to open', async () => {
+    const email = `portal-empty-${crypto.randomUUID().slice(0, 8)}@example.com`
+    const response = await post('/api/billing/portal', {}, { 'x-dev-user-email': email })
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ error: 'no_billing_history' })
+  })
+
   it('refuses every webhook when no provider is configured', async () => {
     // A crafted body must never be able to grant a paid plan.
     const response = await post('/api/billing/webhook', {

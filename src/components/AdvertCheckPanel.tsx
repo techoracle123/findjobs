@@ -229,7 +229,7 @@ export function AdvertCheckPanel({ proEnabled, trial, onOpenPlan }: AdvertCheckP
               This tool is in Pro and in the free trial. You can also use it from each job page.
             </p>
             <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
-              {trial.status === 'not_started' ? 'Start the free trial' : 'See Pro plans'}
+              {trial.status === 'not_started' ? 'Trial or buy Pro' : 'Buy Pro'}
             </button>
           </div>
         ) : (

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CreditCard, ExternalLink } from 'lucide-react'
 import type { PlanDefinition, Subscription } from '../lib/api'
 import {
   cancelSubscription,
+  describeBillingError,
   openBillingPortal,
   reconcileBilling,
   startCheckout,
@@ -19,6 +20,7 @@ interface PlanPanelProps {
   proTrial: ProTrialState
   graduateEligibility: GraduateEligibilityState | null
   billingEnabled: boolean
+  billingProvider?: string
   onOpenPricing: () => void
   onRequireSignIn: () => void
   onRefresh: () => Promise<void> | void
@@ -42,6 +44,22 @@ function price(plan: PlanDefinition): string {
   return `${symbol}${plan.price.amount.toLocaleString('en-NG')}${suffix}`
 }
 
+function subscriptionIsPro(subscription: Subscription | null): boolean {
+  return Boolean(
+    subscription &&
+    PRO_PLANS.has(subscription.plan) &&
+    ACTIVE_STATUSES.has(subscription.status) &&
+    (!subscription.currentPeriodEnd || Date.parse(subscription.currentPeriodEnd) > Date.now()),
+  )
+}
+
+function paidPlanName(plan: PlanDefinition): string {
+  if (plan.id === 'pro') return 'Pro Monthly'
+  if (plan.id === 'pro_annual') return 'Pro Yearly'
+  if (plan.id === 'pro_graduate') return 'Pro for Graduates'
+  return plan.displayLabel ?? plan.label
+}
+
 export function PlanPanel({
   signedIn,
   entitlements,
@@ -50,28 +68,32 @@ export function PlanPanel({
   proTrial,
   graduateEligibility,
   billingEnabled,
+  billingProvider,
   onOpenPricing,
   onRequireSignIn,
   onRefresh,
 }: PlanPanelProps) {
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
-  const [billingReturn] = useState(() =>
-    typeof window === 'undefined'
-      ? null
-      : new URLSearchParams(window.location.search).get('billing'),
-  )
-  const billingChecks = useRef(0)
-  const proActive = Boolean(
-    subscription &&
-    PRO_PLANS.has(subscription.plan) &&
-    ACTIVE_STATUSES.has(subscription.status) &&
-    (!subscription.currentPeriodEnd || Date.parse(subscription.currentPeriodEnd) > Date.now()),
-  )
+  const [billingReturn] = useState(() => {
+    if (typeof window === 'undefined') return null
+    // Bachs adds checkout_id to the success URL. Tolerate a second question
+    // mark if a provider ever appends it without merging the query string.
+    const params = new URLSearchParams(
+      window.location.search.replace(/^\?/, '').replace(/\?/g, '&'),
+    )
+    return params.get('billing') ?? (params.has('checkout_id') ? 'checking' : null)
+  })
+  const [billingChecks, setBillingChecks] = useState(0)
+  const proActive = subscriptionIsPro(subscription)
   const trialActive = proTrial.status === 'active'
   const unlocked = proActive || trialActive
   const currentPlan = proActive ? 'Pro' : trialActive ? 'Pro free trial' : 'Free'
-  const autoRenews = Boolean(subscription?.providerSubscriptionId?.startsWith('sub_'))
+  const autoRenews = Boolean(
+    billingProvider &&
+    subscription?.provider === billingProvider &&
+    subscription.providerSubscriptionId?.startsWith('sub_'),
+  )
   const hasFeature = (feature: string) => unlocked || entitlements.includes(feature)
 
   useEffect(() => {
@@ -80,19 +102,32 @@ export function PlanPanel({
       setNotice('Payment confirmed. Pro is on.')
       return
     }
-    setNotice('We are checking your payment. Pro will turn on here when Bachs confirms it.')
-    if (billingChecks.current >= 12) return
+    if (billingChecks >= 15) {
+      setNotice(
+        'We have not received payment confirmation yet. If you paid by bank transfer, wait a few minutes and use Check payment below. Do not pay again yet.',
+      )
+      return
+    }
+    setNotice(
+      'We are checking your payment. Pro will turn on here when the payment service confirms it.',
+    )
     const timer = window.setTimeout(
       () => {
-        billingChecks.current += 1
-        void reconcileBilling()
-          .catch(() => undefined)
-          .then(() => onRefresh())
+        void (async () => {
+          try {
+            await reconcileBilling()
+            await onRefresh()
+          } catch {
+            // The next scheduled check or the manual button can try again.
+          } finally {
+            setBillingChecks((count) => count + 1)
+          }
+        })()
       },
-      billingChecks.current === 0 ? 800 : 4000,
+      billingChecks === 0 ? 800 : 4000,
     )
     return () => window.clearTimeout(timer)
-  }, [billingReturn, onRefresh, proActive, signedIn])
+  }, [billingChecks, billingReturn, onRefresh, proActive, signedIn])
 
   const startTrial = async () => {
     setBusy('trial')
@@ -109,6 +144,40 @@ export function PlanPanel({
       )
     } catch {
       setNotice('The trial could not start. Please try again.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const checkPayment = async () => {
+    if (!signedIn) {
+      onRequireSignIn()
+      return
+    }
+    setBusy('check')
+    setNotice('Checking your recent payment...')
+    try {
+      const result = await reconcileBilling()
+      await onRefresh()
+      if (result.applied || subscriptionIsPro(result.subscription)) {
+        setNotice('Payment confirmed. Pro is on.')
+      } else if (result.checked === 0) {
+        setNotice(
+          'FJ has no recent payment page to check for this account. If no payment page opened and your bank took no money, choose a plan again. If your bank took money, use Contact us before paying again.',
+        )
+      } else if ((result.failedChecks ?? 0) > 0) {
+        setNotice(
+          'FJ could not check the payment service just now. Wait a short time and use Check payment again. Do not pay again yet.',
+        )
+      } else {
+        setNotice(
+          'No confirmed payment has arrived yet. Bank transfers can take a few minutes. Wait, then use Check payment again. Do not pay again yet.',
+        )
+      }
+    } catch (error) {
+      const info = describeBillingError(error)
+      setNotice(info.message)
+      if (info.action === 'sign_in') onRequireSignIn()
     } finally {
       setBusy(null)
     }
@@ -134,8 +203,10 @@ export function PlanPanel({
         const { session } = await startCheckout(planId)
         window.location.href = session.url
       }
-    } catch {
-      setNotice('That billing action could not be done. Please try again.')
+    } catch (error) {
+      const info = describeBillingError(error)
+      setNotice(info.message)
+      if (info.action === 'sign_in') onRequireSignIn()
     } finally {
       setBusy(null)
     }
@@ -148,8 +219,10 @@ export function PlanPanel({
       await cancelSubscription()
       await onRefresh()
       setNotice('Your plan will end at the close of the period you have already paid for.')
-    } catch {
-      setNotice('Your plan could not be cancelled. Please try again.')
+    } catch (error) {
+      const info = describeBillingError(error)
+      setNotice(info.message)
+      if (info.action === 'sign_in') onRequireSignIn()
     } finally {
       setBusy(null)
     }
@@ -175,8 +248,8 @@ export function PlanPanel({
             {proActive
               ? `Pro is active${subscription?.currentPeriodEnd ? ` until ${fmtDate(subscription.currentPeriodEnd)}` : ''}.`
               : trialActive
-                ? `Your free trial runs until ${fmtDate(proTrial.endsAt)}. It will stop on its own. We did not take card details.`
-                : 'You can find jobs and apply for free. Pro adds the tools below.'}
+                ? `Your free trial runs until ${fmtDate(proTrial.endsAt)}. It will stop on its own. We did not take card details. You can buy Pro below now, and the paid time will start after the trial.`
+                : 'You can find jobs and apply for free. You can buy Pro below now. The 3-day trial is optional.'}
           </p>
         </div>
         <div className="plan-actions">
@@ -203,7 +276,9 @@ export function PlanPanel({
             <h3>3-day Pro free trial</h3>
             <p>
               Use all Pro tools for 3 days. Check one CV in full. Prepare applications for three
-              jobs. We do not ask for card details. There is no charge when the trial ends.
+              jobs. We do not ask for card details. There is no charge when the trial ends. This
+              trial is optional. You do not need it before you pay.{' '}
+              <a href="#fj-plan-prices">See the paid plans below</a>.
             </p>
           </div>
           <button
@@ -225,7 +300,7 @@ export function PlanPanel({
             <p>
               You have {cvRemaining} CV check and {packsRemaining} job
               {packsRemaining === 1 ? '' : 's'} left. Reports you create stay in your account after
-              the trial ends.
+              the trial ends. You can buy Pro below now. Paid time starts after this trial ends.
             </p>
           </div>
           <span className="status-pill">Ends {fmtDate(proTrial.endsAt)}</span>
@@ -250,10 +325,10 @@ export function PlanPanel({
           <h3>Pro for Graduates</h3>
           <p className="muted">
             {graduateEligibility.result === 'eligible'
-              ? `You can use the ₦3,000 monthly graduate price${billingEnabled ? '' : ' when payments open'}. It has the same Pro tools.`
+              ? `You can use the ₦3,000 monthly graduate price${billingEnabled ? ' below' : ' when payments open'}. It has the same Pro tools.`
               : graduateEligibility.result === 'review'
-                ? 'We need to check your answers. You can still use Free. Regular Pro will have the same tools.'
-                : 'This price does not fit your answers. Regular Pro has the same tools.'}
+                ? `We need to check your answers before the graduate price can be used. ${billingEnabled ? 'You can buy Pro Monthly or Pro Yearly below now.' : 'You can still use Free.'} Regular Pro has the same tools.`
+                : `This price does not fit your answers. ${billingEnabled ? 'You can buy Pro Monthly or Pro Yearly below now.' : 'Regular Pro has the same tools.'}`}
           </p>
         </div>
       ) : null}
@@ -264,9 +339,9 @@ export function PlanPanel({
         </p>
       ) : null}
 
-      <div className="billing-box">
+      <div className="billing-box" id="fj-plan-prices">
         <div className="inline-head">
-          <h3>Prices</h3>
+          <h3>{billingEnabled ? 'Buy Pro or add time' : 'Prices'}</h3>
           {!billingEnabled ? <span className="status-pill">Payments not open yet</span> : null}
         </div>
         {!billingEnabled ? (
@@ -276,10 +351,14 @@ export function PlanPanel({
           </p>
         ) : (
           <p className="muted">
-            <CreditCard size={14} /> Pay by card or bank transfer. Each payment buys one month or
-            one year. FJ will not charge you again unless you choose to pay.
+            <CreditCard size={14} /> You do not need to start the free trial before you pay. Pay by
+            card or bank transfer. Each payment buys one month or one year. FJ will not charge you
+            again unless you choose to pay.
           </p>
         )}
+        {shownPlans.length === 0 ? (
+          <p className="muted">Prices are loading. If they do not appear, reload this page.</p>
+        ) : null}
         <div className="plan-price-grid">
           {shownPlans.map((plan) => {
             const paid = plan.price.amount > 0
@@ -319,9 +398,9 @@ export function PlanPanel({
                     ) : busy === plan.id ? (
                       'Opening…'
                     ) : proActive ? (
-                      'Add more time'
+                      `Add ${paidPlanName(plan)} time`
                     ) : (
-                      `Choose ${plan.displayLabel ?? plan.label}`
+                      `Buy ${paidPlanName(plan)}`
                     )}
                   </button>
                 ) : null}
@@ -329,6 +408,21 @@ export function PlanPanel({
             )
           })}
         </div>
+        {signedIn && billingEnabled ? (
+          <div className="plan-actions">
+            <button
+              className="btn btn--sm"
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void checkPayment()}
+            >
+              {busy === 'check' ? 'Checking…' : 'Check payment'}
+            </button>
+            <span className="muted">
+              Use this if you paid and Pro is not on yet. Do not pay again before checking.
+            </span>
+          </div>
+        ) : null}
         {proActive && billingEnabled && autoRenews && !subscription?.cancelAtPeriodEnd ? (
           <button
             className="btn btn--ghost btn--sm"
