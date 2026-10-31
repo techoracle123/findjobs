@@ -95,7 +95,7 @@ test('homepage explains the platform in plain words and sends people to sign up'
   await expect(page.locator('.joblist')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'How it works' })).toBeVisible()
   await expect(
-    page.getByRole('heading', { name: 'What decides if you get the job?' }),
+    page.getByRole('heading', { name: 'What decides if you get the work?' }),
   ).toBeVisible()
   await expect(page.locator('body')).toContainText('pay in dollars')
   await expect(page.locator('body')).toContainText('gigs and contracts')
@@ -994,9 +994,9 @@ test('UI controls with no backing data stay hidden unless admin override', async
   const facets = (await (await feedResponse).json()).facets
   expect(facets?.coverage).toBeTruthy()
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
-  // Work type is always visible by product decision, whatever the coverage.
+  // Work setting is always visible by product decision, whatever the coverage.
   // Chips may exist in both the filter bar and the mobile drawer (>= 1).
-  expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
+  expect(await page.getByRole('button', { name: /Work setting/ }).count()).toBeGreaterThanOrEqual(1)
   const experienceCount = await page.getByRole('button', { name: /Experience/ }).count()
   if (facets.coverage.seniority < 0.6) expect(experienceCount).toBe(0)
   else expect(experienceCount).toBeGreaterThanOrEqual(1)
@@ -1004,7 +1004,7 @@ test('UI controls with no backing data stay hidden unless admin override', async
   // The admin override always exposes every control for testing.
   await page.goto('/jobs?adminControls=1')
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
-  expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
+  expect(await page.getByRole('button', { name: /Work setting/ }).count()).toBeGreaterThanOrEqual(1)
   expect(await page.getByRole('button', { name: /Verified only/ }).count()).toBeGreaterThanOrEqual(
     1,
   )

@@ -2185,12 +2185,13 @@ summary:focus-visible {
     width: 100%;
   }
   .opportunity-switch__button {
-    flex-direction: column;
-    gap: 1px;
-    min-height: 46px;
-    padding: 6px 4px;
-    font-size: 12px;
-    line-height: 1.15;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1px 5px;
+    min-height: 42px;
+    padding: 5px 4px;
+    font-size: 11.5px;
+    line-height: 1.1;
     text-align: center;
   }
 }
@@ -2651,12 +2652,25 @@ summary:focus-visible {
 }
 
 @media (max-width: 700px) {
+  .content.browse {
+    padding-top: 6px;
+  }
+  .opportunity-switch {
+    margin: 8px 0 0;
+    padding: 3px;
+  }
   .results-head {
     min-height: 28px;
     margin: 0 0 6px;
   }
+  .results-head .select {
+    min-height: 32px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
   .chipbar {
-    margin: 6px 0 4px;
+    margin: 4px 0;
+    padding-bottom: 0;
   }
 }
 
