@@ -869,9 +869,9 @@ async function salaryJobs(c: AppContext): Promise<{ jobs: Job[]; updatedAt: stri
   // Production discovery lives in the published snapshot. If that snapshot is
   // briefly unavailable, Pro market tools should say they have no current
   // market sample rather than scanning the account database's legacy jobs
-  // table on a user request. Local and test previews still use their small
-  // seeded D1 corpus.
-  if (!config.isLocal && !config.isTest) return { jobs: [], updatedAt: null }
+  // table on a user request. Preview, local and test deployments still use
+  // their small seeded D1 corpus.
+  if (config.isProduction) return { jobs: [], updatedAt: null }
   const listed = await listOpenJobs(c.env?.DB)
   return { jobs: listed.jobs, updatedAt: null }
 }

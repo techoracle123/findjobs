@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 
 type SiteHeaderPage = 'home' | 'jobs' | 'pricing' | 'about' | 'dashboard'
 
@@ -65,18 +65,18 @@ export function SiteHeader({ current, signedIn: signedInProp }: SiteHeaderProps)
       <div className="topbar__spacer" />
       <div className="topbar__actions">
         {signedIn ? (
-          <a className="btn btn--primary btn--sm" href="/jobs">
+          <a key="signed-in" className="btn btn--primary btn--sm" href="/jobs">
             See jobs
           </a>
         ) : (
-          <>
+          <Fragment key="anonymous">
             <a className="btn btn--ghost btn--sm" href="/auth/login?returnTo=%2Fjobs">
               Sign in
             </a>
             <a className="btn btn--primary btn--sm nav-signup" href="/auth/signup?returnTo=%2Fjobs">
               Sign up
             </a>
-          </>
+          </Fragment>
         )}
       </div>
     </header>

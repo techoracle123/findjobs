@@ -5580,3 +5580,7 @@ textarea:focus-visible {
   border-color: var(--accent-ink);
   color: #fff;
 }
+
+.site-header .btn {
+  transition: none;
+}
