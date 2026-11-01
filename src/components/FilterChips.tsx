@@ -113,11 +113,11 @@ export function FilterChips({
               aria-label={
                 count === undefined
                   ? option.label
-                  : `${option.label}, ${count.toLocaleString()} listings`
+                  : `${option.label} ${count.toLocaleString()} listings`
               }
               onClick={() => onChange({ ...filters, opportunityType: option.id })}
             >
-              <span>{option.label}</span>
+              <span>{option.label}</span>{' '}
               {count !== undefined && (
                 <span className="opportunity-switch__count">{count.toLocaleString()}</span>
               )}
