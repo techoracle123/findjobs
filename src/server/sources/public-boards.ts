@@ -218,6 +218,33 @@ export const himalayas: SourceParser = {
             if (!jobs.length || fresh === 0 || jobs.length < 20) break
           }
         }
+
+        // One relevance-ranked page for the detailed kinds of short-term work
+        // people ask for by name. The employment-type filter stays on, and
+        // results are deduped into the same source by guid.
+        for (const query of [
+          'video editor',
+          'photo editor',
+          'penetration tester',
+          'cybersecurity',
+          'web developer',
+          'data analyst',
+        ]) {
+          const url = new URL('/jobs/api/search', base)
+          url.searchParams.set('employment_type', 'Contractor')
+          url.searchParams.set('q', query)
+          url.searchParams.set('sort', 'recent')
+          url.searchParams.set('page', '1')
+          const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
+          if (!response.ok) continue
+          const body = (await response.json()) as { jobs?: Record<string, unknown>[] }
+          for (const item of body.jobs ?? []) {
+            const mapped = himalayasPosting(item)
+            if (!mapped || seen.has(mapped.id)) continue
+            seen.add(mapped.id)
+            postings.push(mapped.posting)
+          }
+        }
       }
     } catch {
       // The browse feed is the source of truth; a search-top-up failure must
@@ -414,18 +441,31 @@ export const jobicy: SourceParser = {
 
     await walk(base, 4, true)
 
-    // Jobicy's `tag` filter searches job titles. On the global feed only,
-    // top up explicitly titled contract/freelance work and dedupe it into
-    // the same source. Structured jobType on the main walk catches the rest.
+    // Jobicy's `tag` filter searches available job content. On the global
+    // feed only, top up explicitly titled contract/freelance work plus one
+    // small page for detailed categories people search for directly. Every
+    // result is deduped into the same source, and the normal opportunity
+    // classifier still decides whether it belongs in the gig lane.
     if (source.id === 'jobicy' && base.hostname.endsWith('jobicy.com')) {
-      for (const tag of ['contract', 'freelance']) {
+      const topUps: Array<{ tag: string; pages: number; count?: string }> = [
+        { tag: 'contract', pages: 2 },
+        { tag: 'freelance', pages: 2 },
+        { tag: 'video editor', pages: 1, count: '20' },
+        { tag: 'photo editor', pages: 1, count: '20' },
+        { tag: 'penetration testing', pages: 1, count: '20' },
+        { tag: 'cybersecurity', pages: 1, count: '20' },
+        { tag: 'web developer', pages: 1, count: '20' },
+        { tag: 'data analyst', pages: 1, count: '20' },
+      ]
+      for (const topUp of topUps) {
         const targeted = new URL(base)
-        targeted.searchParams.set('tag', tag)
+        targeted.searchParams.set('tag', topUp.tag)
+        if (topUp.count) targeted.searchParams.set('count', topUp.count)
         targeted.searchParams.delete('cursor')
         try {
-          await walk(targeted, 2, false)
+          await walk(targeted, topUp.pages, false)
         } catch {
-          // Keep the main Jobicy feed if a title top-up is unavailable.
+          // Keep the main Jobicy feed if a category top-up is unavailable.
         }
       }
     }

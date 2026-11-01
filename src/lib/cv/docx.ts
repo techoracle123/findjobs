@@ -1,4 +1,5 @@
 import { strFromU8, unzipSync } from 'fflate'
+import { MAX_DOCX_DOCUMENT_BYTES } from './limits'
 
 function decodeEntities(xml: string): string {
   return xml
@@ -17,10 +18,19 @@ function decodeEntities(xml: string): string {
  */
 export async function extractDocxText(file: File): Promise<string> {
   const buffer = new Uint8Array(await file.arrayBuffer())
-  const archive = unzipSync(buffer)
+  // Only the main document part is needed. Filtering during unzip avoids
+  // expanding images and embedded files that FJ does not use.
+  const archive = unzipSync(buffer, {
+    filter: (entry) => entry.name === 'word/document.xml',
+  })
   const document = archive['word/document.xml']
   if (!document) {
-    throw new Error('This file does not look like a readable .docx document.')
+    throw new Error('FJ:This file does not look like a readable DOCX document.')
+  }
+  if (document.byteLength > MAX_DOCX_DOCUMENT_BYTES) {
+    throw new Error(
+      'FJ:That DOCX document is too large to read safely. Remove embedded attachments and try again.',
+    )
   }
 
   const xml = decodeEntities(strFromU8(document))

@@ -62,7 +62,7 @@ const FAQ = [
   },
   {
     q: 'What happens to my CV?',
-    a: 'The free CV tool reads your file on your device. It does not save the file. For the Pro CV check, FJ saves the text from your CV only if you agree. FJ does not keep the PDF or DOCX file. You can see, download, replace or delete the saved text.',
+    a: 'The free CV tool reads your file on your device and does not save it in that step. If you separately agree, Free and Pro users can save the readable CV text and a short summary. The trial or Pro can add a full CV report. FJ does not keep the PDF, DOCX or TXT file. You can see, download, replace or delete the saved text.',
   },
   {
     q: 'Will FJ add things to my CV?',

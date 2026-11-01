@@ -84,6 +84,7 @@ export async function ensureSources(db: D1Database): Promise<void> {
   const statements: D1PreparedStatement[] = []
   for (const source of SEED_SOURCES) {
     const config = JSON.stringify({
+      ...(source.options ?? {}),
       company: source.company,
       companyLabel: source.companyLabel,
       country: source.country,

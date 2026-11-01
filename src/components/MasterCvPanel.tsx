@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Download, FileText, LoaderCircle, ShieldCheck, Trash2, Upload } from 'lucide-react'
-import { deleteMasterCv, fetchMasterCv, saveMasterCv } from '../lib/api'
+import { analyseSavedMasterCv, deleteMasterCv, fetchMasterCv, saveMasterCv } from '../lib/api'
 import type { MasterCv, ProTrialState } from '../shared/types'
 import type { ImportedCv } from './CvImport'
 
@@ -40,6 +40,23 @@ function downloadText(filename: string, text: string) {
 
 function reportAsText(cv: MasterCv): string {
   const report = cv.report
+  if (!report) {
+    const basic = cv.basicSummary
+    return [
+      'FJ saved CV summary',
+      `CV: ${cv.fileName}`,
+      `Saved: ${fmtDateTime(basic.generatedAt)}`,
+      '',
+      basic.summary,
+      '',
+      `Words: ${basic.wordCount}`,
+      `About pages: ${basic.estimatedPages}`,
+      `Skills found: ${basic.detectedSkills.join(', ') || 'None from the FJ skills list'}`,
+      `Sections found: ${basic.sectionsFound.join(', ') || 'None clearly labelled'}`,
+      '',
+      'This is the free saved-CV summary. It does not include the full Pro CV check.',
+    ].join('\n')
+  }
   const lines = [
     'FJ CV check',
     `CV: ${cv.fileName}`,
@@ -104,6 +121,12 @@ export function MasterCvPanel({
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [savedText, setSavedText] = useState<string | null>(null)
+  const [fullAccess, setFullAccess] = useState(proEnabled)
+  const [paidAccess, setPaidAccess] = useState(false)
+
+  useEffect(() => {
+    setFullAccess(proEnabled)
+  }, [proEnabled])
 
   useEffect(() => {
     if (importedCv) setPending(importedCv)
@@ -117,7 +140,12 @@ export function MasterCvPanel({
     let active = true
     setLoading(true)
     void fetchMasterCv(false)
-      .then((body) => active && setCv(body.cv))
+      .then((body) => {
+        if (!active) return
+        setCv(body.cv)
+        setFullAccess(body.canFullAnalysis ?? !body.locked)
+        setPaidAccess(body.paid)
+      })
       .catch(() => active && setCv(null))
       .finally(() => active && setLoading(false))
     return () => {
@@ -137,9 +165,12 @@ export function MasterCvPanel({
         fileName: file.name,
         fileType: file.type || extracted.kind,
       })
-    } catch {
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : ''
       setError(
-        'That file could not be read. Use a text-readable PDF or DOCX, or paste the CV text below.',
+        message.startsWith('FJ:')
+          ? message.slice(3)
+          : 'That file could not be read. Use a text-readable PDF or DOCX, or paste the CV text below.',
       )
     } finally {
       setBusy(false)
@@ -162,18 +193,48 @@ export function MasterCvPanel({
     try {
       const body = await saveMasterCv({ ...source, consent })
       setCv(body.cv)
+      setFullAccess(body.canFullAnalysis ?? !body.locked)
+      setPaidAccess(body.paid)
       setSavedText(null)
-      setNotice('Your CV check is ready. We saved the text in your FJ account.')
-      // The report is already saved and visible. Refreshing trial counters in
-      // the background must not keep the button saying "Analysing…" or turn a
-      // successful save into an error if that later account read is slow.
+      setPending(null)
+      setPasted('')
+      setNotice(
+        body.cv.report
+          ? 'Your full CV check is ready. We saved the readable text and report in your account.'
+          : body.canFullAnalysis
+            ? 'Your CV text is saved. The full check in your trial was already used, so no new report was made.'
+            : 'Your CV text is saved free. Use the trial or Pro when you want the full check.',
+      )
+      // The saved CV is already visible. Refreshing trial counters in the
+      // background must not keep the button busy or turn a successful save
+      // into an error if that later account read is slow.
+      setBusy(false)
+      void Promise.resolve(onRefresh()).catch(() => undefined)
+    } catch {
+      setError('We could not save the CV. Make sure the text can be read and try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const analyseSaved = async () => {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const body = await analyseSavedMasterCv()
+      setCv(body.cv)
+      setFullAccess(body.canFullAnalysis ?? !body.locked)
+      setPaidAccess(body.paid)
+      setSavedText(null)
+      setNotice('Your full CV check is ready.')
       setBusy(false)
       void Promise.resolve(onRefresh()).catch(() => undefined)
     } catch {
       setError(
         trial.status === 'active' && trial.cvAnalysesUsed >= trial.limits.cvAnalyses
-          ? 'You have used the one CV check in your free trial.'
-          : 'We could not check the CV. Make sure the text can be read and try again.',
+          ? 'You have used the one full CV check in your free trial. Your saved CV text is still here.'
+          : 'We could not run the full CV check. Please try again.',
       )
     } finally {
       setBusy(false)
@@ -212,13 +273,26 @@ export function MasterCvPanel({
   }
 
   const trialUsed = trial.cvAnalysesUsed >= trial.limits.cvAnalyses
-  const canAnalyse = proEnabled && !(trial.status === 'active' && trialUsed && !cv)
+  const trialCheckUsed = trial.status === 'active' && trialUsed && !paidAccess
+  const canRunFull = fullAccess && !trialCheckUsed
+  const replacementText = pending?.text ?? pasted
+  const replacementTooLong = replacementText.length > 60_000
+  const hasReplacement = Boolean(pending || pasted.trim())
+  const savedSummary = cv?.report ?? cv?.basicSummary ?? null
+  const fullReport = cv?.report ?? null
+  const saveLabel = busy
+    ? 'Saving...'
+    : !cv && canRunFull
+      ? 'Check my CV'
+      : cv && canRunFull
+        ? 'Save and check this CV'
+        : 'Save CV text free'
 
   return (
     <section className="panel master-cv-panel" aria-labelledby="master-cv-heading">
       <div className="panel__head panel-head-row">
         <div>
-          <p className="eyebrow">Pro</p>
+          <p className="eyebrow">Free save · Full check with trial or Pro</p>
           <h2 className="panel__title" id="master-cv-heading">
             Your saved CV
           </h2>
@@ -227,26 +301,23 @@ export function MasterCvPanel({
       </div>
       <div className="panel__body stack">
         <p className="panel__note">
-          We check what is clear, what is missing and what you should fix first.
+          Save the readable text from your CV free. A trial or Pro plan can also make a full check
+          that shows what to fix first.
         </p>
         <p className="field__hint">
-          The free tool reads your CV on your device. This Pro tool is different. If you agree, FJ
-          saves the text and report in your account. We do not keep the PDF or DOCX file. We do not
-          send your CV to any company.
+          Your browser reads the file. With your permission, FJ saves only the text and a short
+          summary. We do not keep the PDF, DOCX or TXT file, and we do not send your CV to any
+          company.
         </p>
 
         {loading ? <p role="status">Loading your saved CV...</p> : null}
 
-        {!proEnabled && !cv ? (
-          <div className="locked-box">
-            <h3>
-              {trial.status === 'not_started'
-                ? 'Check one CV in the free trial'
-                : 'CV check is part of Pro'}
-            </h3>
+        {!fullAccess ? (
+          <div className="locked-box compact">
+            <h3>You can save your CV now</h3>
             <p>
-              The free trial includes one full CV check. The report stays in your account after the
-              trial ends. The free CV tool above still works.
+              Saving the readable text is free. The full check needs the 3-day trial or Pro. If you
+              already have a full report, it stays readable below.
             </p>
             <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
               {trial.status === 'not_started' ? 'Trial or buy Pro' : 'Buy Pro'}
@@ -254,7 +325,7 @@ export function MasterCvPanel({
           </div>
         ) : null}
 
-        {proEnabled ? (
+        {signedIn ? (
           <div className="master-cv-upload stack stack--sm">
             <input
               ref={fileRef}
@@ -272,7 +343,7 @@ export function MasterCvPanel({
               <button
                 className="btn btn--primary"
                 type="button"
-                disabled={busy || !canAnalyse}
+                disabled={busy}
                 onClick={() => fileRef.current?.click()}
               >
                 {busy ? <LoaderCircle size={15} className="icon-spin" /> : <Upload size={15} />}
@@ -280,10 +351,23 @@ export function MasterCvPanel({
               </button>
               {pending ? (
                 <span className="field__hint">
-                  Ready: {pending.fileName} ({pending.text.trim().split(/\s+/).length} words read)
+                  Ready: {pending.fileName} ({pending.text.trim().split(/\s+/).length} words,{' '}
+                  {pending.text.length.toLocaleString('en-NG')} characters read)
                 </span>
               ) : null}
             </div>
+            {pending ? (
+              <details className="cv-details">
+                <summary>Preview the text FJ read</summary>
+                <label className="field">
+                  Text read from {pending.fileName}
+                  <textarea rows={8} readOnly value={pending.text} />
+                </label>
+                <p className="field__hint">
+                  Check that names, dates, skills and job titles look right before you save it.
+                </p>
+              </details>
+            ) : null}
             <details>
               <summary>Paste CV text instead</summary>
               <label className="field">
@@ -302,22 +386,38 @@ export function MasterCvPanel({
                 checked={consent}
                 onChange={(event) => setConsent(event.target.checked)}
               />{' '}
-              I agree that FJ can save the text from this CV and the report in my account. I know FJ
-              will not keep the file. I can delete the saved text at any time.
+              I agree that FJ can save the text from this CV and a short summary in my account. If a
+              full check runs, FJ can also save that report. I know FJ will not keep the file. I can
+              delete the saved text at any time.
             </label>
-            {trial.status === 'active' ? (
+            {cv && hasReplacement ? (
               <p className="field__hint" role="status">
-                Trial: {Math.max(0, trial.limits.cvAnalyses - trial.cvAnalysesUsed)} CV check left.
-                Checking the same text again does not use another one.
+                This will replace your saved CV text.
+                {cv.report && !canRunFull
+                  ? ' The old full report will also be removed because no new full check will run. Download it first if you need it.'
+                  : ''}
+              </p>
+            ) : null}
+            {replacementTooLong ? (
+              <p className="banner banner--demo" role="alert">
+                This CV has more than 60,000 characters of readable text. Remove repeated pages or
+                old attachments before saving. FJ will not cut the text without telling you.
+              </p>
+            ) : null}
+            {trial.status === 'active' && !paidAccess ? (
+              <p className="field__hint" role="status">
+                {trialCheckUsed
+                  ? 'Your one trial CV check has been used. You can still save or replace CV text free.'
+                  : `Trial: ${Math.max(0, trial.limits.cvAnalyses - trial.cvAnalysesUsed)} full CV check left. Checking the same text again does not use another one.`}
               </p>
             ) : null}
             <button
               className="btn btn--primary"
               type="button"
-              disabled={busy || !consent || !canAnalyse || (!pending && !pasted.trim())}
+              disabled={busy || !consent || replacementTooLong || !hasReplacement}
               onClick={() => void save()}
             >
-              {busy ? 'Checking...' : cv ? 'Check this CV' : 'Check my CV'}
+              {saveLabel}
             </button>
           </div>
         ) : null}
@@ -333,7 +433,7 @@ export function MasterCvPanel({
           </p>
         ) : null}
 
-        {cv ? (
+        {cv && savedSummary ? (
           <div className="cv-report stack">
             <div className="cv-report-head">
               <div>
@@ -341,14 +441,16 @@ export function MasterCvPanel({
                   <FileText size={18} aria-hidden="true" /> {cv.fileName}
                 </h3>
                 <p className="muted">
-                  Checked {fmtDateTime(cv.report.generatedAt)} · {cv.report.wordCount} words · about{' '}
-                  {cv.report.estimatedPages} page
-                  {cv.report.estimatedPages === 1 ? '' : 's'}
+                  {fullReport ? 'Checked' : 'Saved'} {fmtDateTime(savedSummary.generatedAt)} ·{' '}
+                  {savedSummary.wordCount} words · about {savedSummary.estimatedPages} page
+                  {savedSummary.estimatedPages === 1 ? '' : 's'}
                 </p>
               </div>
-              <span className="status-pill status-open">Saved</span>
+              <span className="status-pill status-open">
+                {fullReport ? 'Full check saved' : 'CV text saved'}
+              </span>
             </div>
-            <p className="cv-overall">{cv.report.summary}</p>
+            <p className="cv-overall">{savedSummary.summary}</p>
 
             <div className="btnrow" aria-label="Saved CV actions">
               <button
@@ -362,9 +464,14 @@ export function MasterCvPanel({
               <button
                 className="btn btn--sm"
                 type="button"
-                onClick={() => downloadText('fj-cv-check.txt', reportAsText(cv))}
+                onClick={() =>
+                  downloadText(
+                    fullReport ? 'fj-cv-check.txt' : 'fj-cv-summary.txt',
+                    reportAsText(cv),
+                  )
+                }
               >
-                <Download size={14} /> Download report
+                <Download size={14} /> {fullReport ? 'Download report' : 'Download summary'}
               </button>
               <button
                 className="btn btn--sm"
@@ -395,134 +502,191 @@ export function MasterCvPanel({
               </label>
             ) : null}
 
-            <div>
-              <h3>Fix these first</h3>
-              <ol className="numbered-list">
-                {cv.report.priorityFixes.map((fix) => (
-                  <li key={fix}>{fix}</li>
-                ))}
-              </ol>
-            </div>
-
-            <div>
-              <h3>What looks good</h3>
-              <ul className="plain-list">
-                {cv.report.strengths.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="cv-section-grid">
-              {cv.report.sections.map((section) => (
-                <article key={section.title}>
-                  <div className="inline-head">
-                    <h3>{section.title}</h3>
-                    <span
-                      className={`status-pill ${section.rating === 'strong' ? 'status-open' : ''}`}
+            {!fullReport ? (
+              <div className="cv-basic-summary stack stack--sm">
+                <h3>What FJ found</h3>
+                <p>
+                  <strong>Skills:</strong>{' '}
+                  {cv.basicSummary.detectedSkills.length
+                    ? cv.basicSummary.detectedSkills.slice(0, 10).join(', ')
+                    : 'No skills from the FJ list yet'}
+                </p>
+                <p>
+                  <strong>Sections found:</strong>{' '}
+                  {cv.basicSummary.sectionsFound.length
+                    ? cv.basicSummary.sectionsFound.join(', ')
+                    : 'No clear section headings'}
+                </p>
+                {canRunFull ? (
+                  <>
+                    <p>
+                      Your text is saved. Run the full check when you are ready. You do not need to
+                      upload the file again.
+                    </p>
+                    <button
+                      className="btn btn--primary"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void analyseSaved()}
                     >
-                      {section.rating === 'needs-work' ? 'Needs work' : section.rating}
-                    </span>
+                      {busy ? 'Checking...' : 'Run full CV check'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      {trialCheckUsed
+                        ? 'Your one trial full check has been used. This saved text can be checked fully with Pro.'
+                        : 'The full check shows what to fix first, weak bullets and missing evidence. It needs the trial or Pro.'}
+                    </p>
+                    <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
+                      {trial.status === 'not_started' ? 'Trial or buy Pro' : 'Buy Pro'}
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {fullReport ? (
+              <>
+                <div>
+                  <h3>Fix these first</h3>
+                  <ol className="numbered-list">
+                    {fullReport.priorityFixes.map((fix) => (
+                      <li key={fix}>{fix}</li>
+                    ))}
+                  </ol>
+                </div>
+
+                <div>
+                  <h3>What looks good</h3>
+                  <ul className="plain-list">
+                    {fullReport.strengths.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <details className="cv-details">
+                  <summary>Section by section detail</summary>
+                  <div className="cv-section-grid">
+                    {fullReport.sections.map((section) => (
+                      <article key={section.title}>
+                        <div className="inline-head">
+                          <h3>{section.title}</h3>
+                          <span
+                            className={`status-pill ${section.rating === 'strong' ? 'status-open' : ''}`}
+                          >
+                            {section.rating === 'needs-work' ? 'Needs work' : section.rating}
+                          </span>
+                        </div>
+                        <p>{section.summary}</p>
+                        {section.evidence.length ? (
+                          <>
+                            <h4>Evidence found</h4>
+                            <ul className="plain-list">
+                              {section.evidence.map((line) => (
+                                <li key={line}>{line}</li>
+                              ))}
+                            </ul>
+                          </>
+                        ) : null}
+                        {section.actions.length ? (
+                          <>
+                            <h4>What to do</h4>
+                            <ul className="plain-list">
+                              {section.actions.map((line) => (
+                                <li key={line}>{line}</li>
+                              ))}
+                            </ul>
+                          </>
+                        ) : null}
+                      </article>
+                    ))}
                   </div>
-                  <p>{section.summary}</p>
-                  {section.evidence.length ? (
-                    <>
-                      <h4>Evidence found</h4>
+                </details>
+
+                {fullReport.weakBullets.length ? (
+                  <details className="cv-details">
+                    <summary>Bullets that need evidence ({fullReport.weakBullets.length})</summary>
+                    {fullReport.weakBullets.map((bullet) => (
+                      <article className="bullet-fix" key={bullet.original}>
+                        <p>
+                          <strong>Now:</strong> {bullet.original}
+                        </p>
+                        <p>
+                          <strong>Starting point:</strong> {bullet.suggestion}
+                        </p>
+                        <small>{bullet.reason}</small>
+                      </article>
+                    ))}
+                  </details>
+                ) : null}
+
+                <details className="cv-details">
+                  <summary>Role evidence, missing evidence and dates</summary>
+                  <div>
+                    <h3>Evidence for roles you want</h3>
+                    {fullReport.targetRoles.map((role) => {
+                      const total = role.matchedSkills.length + role.missingSkills.length
+                      const pct = total ? Math.round((role.matchedSkills.length / total) * 100) : 0
+                      return (
+                        <article className="role-evidence" key={role.roleFamily}>
+                          <div className="inline-head">
+                            <h4>{role.label}</h4>
+                            <span className="status-pill">
+                              {pct}% of main skills · {role.matchingJobs} adverts
+                            </span>
+                          </div>
+                          <p>
+                            <strong>Found:</strong>{' '}
+                            {role.matchedSkills.length
+                              ? role.matchedSkills.join(', ')
+                              : 'No main skill evidence yet'}
+                          </p>
+                          <p>
+                            <strong>Missing:</strong>{' '}
+                            {role.missingSkills.length
+                              ? role.missingSkills.join(', ')
+                              : 'No major gap in this sample'}
+                          </p>
+                        </article>
+                      )
+                    })}
+                  </div>
+
+                  {fullReport.missingEvidenceQuestions.length ? (
+                    <div>
+                      <h3>Evidence only you can add</h3>
                       <ul className="plain-list">
-                        {section.evidence.map((line) => (
-                          <li key={line}>{line}</li>
+                        {fullReport.missingEvidenceQuestions.map((question) => (
+                          <li key={question}>{question}</li>
                         ))}
                       </ul>
-                    </>
-                  ) : null}
-                  {section.actions.length ? (
-                    <>
-                      <h4>What to do</h4>
-                      <ul className="plain-list">
-                        {section.actions.map((line) => (
-                          <li key={line}>{line}</li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : null}
-                </article>
-              ))}
-            </div>
-
-            {cv.report.weakBullets.length ? (
-              <div>
-                <h3>Bullets that need evidence</h3>
-                {cv.report.weakBullets.map((bullet) => (
-                  <article className="bullet-fix" key={bullet.original}>
-                    <p>
-                      <strong>Now:</strong> {bullet.original}
-                    </p>
-                    <p>
-                      <strong>Starting point:</strong> {bullet.suggestion}
-                    </p>
-                    <small>{bullet.reason}</small>
-                  </article>
-                ))}
-              </div>
-            ) : null}
-
-            <div>
-              <h3>Evidence for roles you want</h3>
-              {cv.report.targetRoles.map((role) => {
-                const total = role.matchedSkills.length + role.missingSkills.length
-                const pct = total ? Math.round((role.matchedSkills.length / total) * 100) : 0
-                return (
-                  <article className="role-evidence" key={role.roleFamily}>
-                    <div className="inline-head">
-                      <h4>{role.label}</h4>
-                      <span className="status-pill">
-                        {pct}% of main skills · {role.matchingJobs} adverts
-                      </span>
                     </div>
-                    <p>
-                      <strong>Found:</strong>{' '}
-                      {role.matchedSkills.length
-                        ? role.matchedSkills.join(', ')
-                        : 'No main skill evidence yet'}
-                    </p>
-                    <p>
-                      <strong>Missing:</strong>{' '}
-                      {role.missingSkills.length
-                        ? role.missingSkills.join(', ')
-                        : 'No major gap in this sample'}
-                    </p>
-                  </article>
-                )
-              })}
-            </div>
+                  ) : null}
 
-            {cv.report.missingEvidenceQuestions.length ? (
-              <div>
-                <h3>Evidence only you can add</h3>
-                <ul className="plain-list">
-                  {cv.report.missingEvidenceQuestions.map((question) => (
-                    <li key={question}>{question}</li>
-                  ))}
-                </ul>
-              </div>
+                  <div>
+                    <h3>Dates and early-career evidence</h3>
+                    <ul className="plain-list">
+                      {fullReport.timeline.notes.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                      {fullReport.earlyCareerSignals.map((signal) => (
+                        <li key={signal}>{signal}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </details>
+              </>
             ) : null}
 
-            <div>
-              <h3>Dates and early-career evidence</h3>
-              <ul className="plain-list">
-                {cv.report.timeline.notes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-                {cv.report.earlyCareerSignals.map((signal) => (
-                  <li key={signal}>{signal}</li>
-                ))}
-              </ul>
-            </div>
-
-            <p className="field__hint">
-              FJ has not added any experience, employer, qualification, date or result. Replace
-              every bracket with true evidence from your own work.
-            </p>
+            {fullReport ? (
+              <p className="field__hint">
+                FJ has not added any experience, employer, qualification, date or result. Replace
+                every bracket with true evidence from your own work.
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>

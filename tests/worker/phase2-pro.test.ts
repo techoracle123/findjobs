@@ -7,6 +7,7 @@ const suffix = crypto.randomUUID().slice(0, 8)
 const user = (name: string) => ({ 'x-dev-user-email': `phase2-${name}-${suffix}@example.com` })
 
 const FREE = user('free')
+const FREE_CV = user('free-cv')
 const TRIAL_CV = user('trial-cv')
 const PACK = user('pack')
 const EXPIRED = user('expired')
@@ -115,6 +116,7 @@ beforeAll(async () => {
   for (const id of JOB_IDS) await insertJob(id)
   for (const headers of [
     FREE,
+    FREE_CV,
     TRIAL_CV,
     PACK,
     EXPIRED,
@@ -134,16 +136,61 @@ beforeAll(async () => {
 })
 
 describe('3-day trial and saved master CV', () => {
-  it('keeps detailed CV analysis locked until the trial is started', async () => {
-    const locked = await request('/api/pro/cv', 'PUT', TRIAL_CV, {
-      fileName: 'ada.pdf',
+  it('saves CV text free, then runs the full check on that saved text in the trial', async () => {
+    const savedResponse = await request('/api/pro/cv', 'PUT', FREE_CV, {
+      fileName: 'free-ada.pdf',
       fileType: 'application/pdf',
       text: CV_TEXT,
       consent: true,
     })
-    expect(locked.status).toBe(403)
-    expect(await locked.json()).toMatchObject({ error: 'pro_required' })
+    expect(savedResponse.status).toBe(200)
+    const saved = (await savedResponse.json()) as {
+      cv: {
+        analysisLevel: string
+        report: unknown
+        basicSummary: { detectedSkills: string[]; wordCount: number }
+        text?: string
+      }
+      locked: boolean
+      canSave: boolean
+      canFullAnalysis: boolean
+      trial: { cvAnalysesUsed: number }
+    }
+    expect(saved).toMatchObject({ locked: true, canSave: true, canFullAnalysis: false })
+    expect(saved.cv.analysisLevel).toBe('saved_only')
+    expect(saved.cv.report).toBeNull()
+    expect(saved.cv.text).toBeUndefined()
+    expect(saved.cv.basicSummary.detectedSkills).toContain('TypeScript')
+    expect(saved.trial.cvAnalysesUsed).toBe(0)
 
+    const lockedAnalysis = await request('/api/pro/cv/analyze', 'POST', FREE_CV, {})
+    expect(lockedAnalysis.status).toBe(403)
+    expect(await lockedAnalysis.json()).toMatchObject({ error: 'pro_required' })
+
+    await startTrial(FREE_CV)
+    const analysedResponse = await request('/api/pro/cv/analyze', 'POST', FREE_CV, {})
+    expect(analysedResponse.status).toBe(200)
+    const analysed = (await analysedResponse.json()) as {
+      cv: {
+        analysisLevel: string
+        report: { sections: unknown[]; detectedSkills: string[] }
+        text?: string
+      }
+      trial: { cvAnalysesUsed: number }
+    }
+    expect(analysed.cv.analysisLevel).toBe('full')
+    expect(analysed.cv.report.sections.length).toBeGreaterThanOrEqual(7)
+    expect(analysed.cv.report.detectedSkills).toContain('TypeScript')
+    expect(analysed.cv.text).toBeUndefined()
+    expect(analysed.trial.cvAnalysesUsed).toBe(1)
+
+    const withText = (await (
+      await request('/api/pro/cv?includeText=1', 'GET', FREE_CV)
+    ).json()) as { cv: { text: string } }
+    expect(withText.cv.text).toContain('Phase2EvidenceMarker')
+  })
+
+  it('starts the trial once and keeps the same end time', async () => {
     const started = await startTrial(TRIAL_CV)
     expect(started.trial.status).toBe('active')
     expect(started.trial.limits).toEqual({ days: 3, cvAnalyses: 1, applicationPacks: 3 })
@@ -202,13 +249,26 @@ describe('3-day trial and saved master CV', () => {
       text: CHANGED_CV,
       consent: true,
     })
-    expect(changed.status).toBe(403)
-    expect(await changed.json()).toMatchObject({ error: 'trial_limit_reached' })
+    expect(changed.status).toBe(200)
+    const changedBody = (await changed.json()) as {
+      cv: { analysisLevel: string; report: unknown }
+      fullAnalysisDeferred: boolean
+      trial: { cvAnalysesUsed: number }
+    }
+    expect(changedBody).toMatchObject({ fullAnalysisDeferred: true })
+    expect(changedBody.cv.analysisLevel).toBe('saved_only')
+    expect(changedBody.cv.report).toBeNull()
+    expect(changedBody.trial.cvAnalysesUsed).toBe(1)
+
+    const blockedAnalysis = await request('/api/pro/cv/analyze', 'POST', TRIAL_CV, {})
+    expect(blockedAnalysis.status).toBe(403)
+    expect(await blockedAnalysis.json()).toMatchObject({ error: 'trial_limit_reached' })
 
     const withText = (await (
       await request('/api/pro/cv?includeText=1', 'GET', TRIAL_CV)
     ).json()) as { cv: { text: string } }
     expect(withText.cv.text).toContain('Phase2EvidenceMarker')
+    expect(withText.cv.text).toContain('appointment dashboard')
   })
 
   it('counts distinct trial job packs once, including detailed CV checks', async () => {
@@ -299,16 +359,22 @@ describe('3-day trial and saved master CV', () => {
     expect(
       (await request(`/api/jobs/${JOB_IDS[1]}/prepared-application`, 'POST', EXPIRED, {})).status,
     ).toBe(403)
-    expect(
-      (
-        await request('/api/pro/cv', 'PUT', EXPIRED, {
-          fileName: 'new.txt',
-          fileType: 'text/plain',
-          text: CHANGED_CV,
-          consent: true,
-        })
-      ).status,
-    ).toBe(403)
+    expect((await request('/api/pro/cv/analyze', 'POST', EXPIRED, {})).status).toBe(403)
+
+    const sameCvResponse = await request('/api/pro/cv', 'PUT', EXPIRED, {
+      fileName: 'expired.txt',
+      fileType: 'text/plain',
+      text: CV_TEXT,
+      consent: true,
+    })
+    expect(sameCvResponse.status).toBe(200)
+    const sameCv = (await sameCvResponse.json()) as {
+      cv: { analysisLevel: string; report: { summary: string } | null }
+      locked: boolean
+    }
+    expect(sameCv.locked).toBe(true)
+    expect(sameCv.cv.analysisLevel).toBe('full')
+    expect(sameCv.cv.report?.summary).toBeTruthy()
   })
 })
 

@@ -397,12 +397,19 @@ export function submitGraduateEligibility(
   })
 }
 
-export function fetchMasterCv(includeText = false): Promise<{
+export interface MasterCvResponse {
   cv: MasterCv | null
+  /** Locked means a new full report needs trial or Pro. Saving readable CV
+   * text is free for signed-in users, and an old full report stays readable. */
   locked: boolean
+  canSave?: boolean
+  canFullAnalysis?: boolean
+  fullAnalysisDeferred?: boolean
   trial: ProTrialState
   paid: boolean
-}> {
+}
+
+export function fetchMasterCv(includeText = false): Promise<MasterCvResponse> {
   return request(`/api/pro/cv${includeText ? '?includeText=1' : ''}`, { cache: 'no-store' })
 }
 
@@ -411,11 +418,19 @@ export function saveMasterCv(input: {
   fileType: string
   text: string
   consent: boolean
-}): Promise<{ cv: MasterCv; trial: ProTrialState; paid: boolean }> {
+}): Promise<MasterCvResponse & { cv: MasterCv }> {
   return request('/api/pro/cv', {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),
+  })
+}
+
+export function analyseSavedMasterCv(): Promise<MasterCvResponse & { cv: MasterCv }> {
+  return request('/api/pro/cv/analyze', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
   })
 }
 

@@ -1487,6 +1487,37 @@ summary:focus-visible {
 .detail-section .breakdown {
   margin-top: 20px;
 }
+.gig-glance {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+  padding: 16px;
+}
+.gig-glance__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+.gig-glance__grid dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.gig-glance__grid dd {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 560px) {
+  .gig-glance__grid {
+    grid-template-columns: 1fr;
+  }
+}
 .section-heading {
   display: flex;
   justify-content: space-between;
@@ -2193,6 +2224,48 @@ summary:focus-visible {
     font-size: 11.5px;
     line-height: 1.1;
     text-align: center;
+  }
+}
+
+.gig-categories {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 9px 0 0;
+}
+.gig-categories__label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.gig-category-btn {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+.gig-category-btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.gig-category-btn--more {
+  border-style: dashed;
+}
+@media (max-width: 700px) {
+  .gig-categories {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .gig-categories::-webkit-scrollbar {
+    display: none;
+  }
+  .gig-categories > * {
+    flex-shrink: 0;
   }
 }
 
@@ -3668,6 +3741,47 @@ textarea:focus-visible {
   margin: 0;
   font-size: 16px;
   line-height: 1.7;
+}
+
+.cv-basic-summary {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-sunken);
+}
+
+.cv-basic-summary h3,
+.cv-basic-summary p {
+  margin: 0;
+}
+
+.cv-details {
+  min-width: 0;
+}
+
+.cv-details > summary {
+  cursor: pointer;
+  width: fit-content;
+  max-width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.cv-details > summary:hover,
+.cv-details > summary:focus-visible {
+  border-color: var(--accent);
+}
+
+.cv-details[open] > summary {
+  margin-bottom: 12px;
+}
+
+.cv-details textarea {
+  max-width: 100%;
 }
 
 .cv-section-grid,

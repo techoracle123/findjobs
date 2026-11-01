@@ -218,7 +218,18 @@ export function sourceRegistrySql(sources) {
         source.listingUrl,
         source.listingUrl,
         source.enabled ? 1 : 0,
-        ['rss', 'jsonld', 'arbeitnow', 'remotive'].includes(source.parser)
+        [
+          'rss',
+          'jsonld',
+          'arbeitnow',
+          'remotive',
+          'workday',
+          'oracle-recruiting',
+          'zoho-recruit',
+          'efcc-recruitment',
+          'fcsc-vacancies',
+          'nnpc-careers',
+        ].includes(source.parser)
           ? 'unverified'
           : 'verified',
         source.tier,
@@ -226,6 +237,7 @@ export function sourceRegistrySql(sources) {
         source.country,
         JSON.stringify(source.tags),
         JSON.stringify({
+          ...(source.options ?? {}),
           company: source.company,
           companyLabel: source.companyLabel,
           country: source.country,

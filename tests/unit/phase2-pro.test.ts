@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { buildAdvertCheck } from '../../src/server/advert-check'
 import { jobMatchesSmartAlert } from '../../src/server/alerts'
-import { buildCvAnalysis, buildSkillPlan } from '../../src/server/pro-analysis'
+import {
+  basicSummaryFromReport,
+  buildCvAnalysis,
+  buildCvBasicSummary,
+  buildSkillPlan,
+} from '../../src/server/pro-analysis'
 import type { AlertPreference, Job, Profile } from '../../src/shared/types'
 
 const profile: Profile = {
@@ -84,6 +89,24 @@ describe('detailed CV analysis', () => {
       missingSkills: [],
     })
     expect(JSON.stringify(report)).not.toMatch(/guaranteed (job|interview)/i)
+  })
+
+  it('keeps a compact free summary separate from the full report', () => {
+    const basic = buildCvBasicSummary(fullCv, 'ada.pdf', '2026-10-31T00:00:00.000Z')
+    expect(basic.detectedSkills).toEqual(expect.arrayContaining(['TypeScript', 'React']))
+    expect(basic.sectionsFound).toEqual(
+      expect.arrayContaining(['Contact details', 'Skills', 'Experience', 'Education']),
+    )
+    expect(basic.wordCount).toBeGreaterThan(50)
+    expect(basic).not.toHaveProperty('sections')
+    expect(basic).not.toHaveProperty('priorityFixes')
+
+    const report = buildCvAnalysis(fullCv, profile, [job()], 'ada.pdf')
+    expect(basicSummaryFromReport(report)).toMatchObject({
+      fileName: 'ada.pdf',
+      wordCount: report.wordCount,
+      detectedSkills: report.detectedSkills,
+    })
   })
 
   it('never invents a score or role estimate for a thin CV', () => {

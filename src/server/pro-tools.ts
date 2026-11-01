@@ -590,4 +590,10 @@ export function buildSalaryGuide(
   }
 }
 
-export { buildBestMatches, buildCvAnalysis, buildSkillPlan } from './pro-analysis'
+export {
+  basicSummaryFromReport,
+  buildBestMatches,
+  buildCvAnalysis,
+  buildCvBasicSummary,
+  buildSkillPlan,
+} from './pro-analysis'

@@ -29,8 +29,10 @@ import { livePublicEnabled, livePublicJobs } from '../live-public'
 import { readConfig } from '../config'
 import {
   EMPTY_APPLICATION_ANSWERS,
+  basicSummaryFromReport,
   buildBestMatches,
   buildCvAnalysis,
+  buildCvBasicSummary,
   buildCvCheck,
   buildInterviewPrep,
   buildPreparedApplication,
@@ -100,13 +102,14 @@ function uniqueStrings(values: string[]): string[] {
  */
 function profileWithMasterCv(profile: Profile, cv: MasterCv | null): Profile {
   if (!cv) return profile
+  const summary = cv.report ?? cv.basicSummary
   return {
     ...profile,
-    skills: uniqueStrings([...profile.skills, ...cv.report.detectedSkills]),
+    skills: uniqueStrings([...profile.skills, ...summary.detectedSkills]),
     targetRoleFamilies: profile.targetRoleFamilies.length
       ? profile.targetRoleFamilies
-      : cv.report.roleFamilies,
-    targetSeniority: profile.targetSeniority.length ? profile.targetSeniority : cv.report.seniority,
+      : summary.roleFamilies,
+    targetSeniority: profile.targetSeniority.length ? profile.targetSeniority : summary.seniority,
   }
 }
 
@@ -208,6 +211,63 @@ async function enforceTrialPack(
     },
     403,
   )
+}
+
+type FullCvOutcome =
+  | {
+      kind: 'full'
+      cv: MasterCv
+      trial: Awaited<ReturnType<typeof getTrialState>>
+    }
+  | { kind: 'trial_limit'; trial: Awaited<ReturnType<typeof getTrialState>> }
+
+async function generateFullMasterCv(
+  c: AppContext,
+  gate: Extract<FeatureGate, { ok: true }>,
+  input: {
+    existing: MasterCv | null
+    text: string
+    textHash: string
+    fileName: string
+    fileType: string
+  },
+): Promise<FullCvOutcome> {
+  if (input.existing?.textHash === input.textHash && input.existing.report) {
+    const { text: _savedText, ...publicCv } = input.existing
+    return { kind: 'full', cv: publicCv, trial: gate.trial }
+  }
+
+  if (!gate.paid && !(await canUseTrialCvAnalysis(gate.db, gate.user.id, input.textHash))) {
+    return { kind: 'trial_limit', trial: await getTrialState(gate.db, gate.user.id) }
+  }
+
+  const [profile, { jobs }] = await Promise.all([getProfile(gate.db, gate.user.id), salaryJobs(c)])
+  const now = new Date().toISOString()
+  const report = buildCvAnalysis(input.text, profile, jobs, input.fileName, now)
+  const cv: MasterCv & { text: string } = {
+    fileName: input.fileName,
+    fileType: input.fileType,
+    text: input.text,
+    textHash: input.textHash,
+    analysisLevel: 'full',
+    basicSummary: basicSummaryFromReport(report),
+    report,
+    createdAt: input.existing?.createdAt ?? now,
+    updatedAt: now,
+  }
+  await saveMasterCv(gate.db, gate.user.id, cv)
+  if (!gate.paid) await recordTrialCvAnalysis(gate.db, gate.user.id, input.textHash)
+  await recordAudit(gate.db, gate.user.id, 'pro.cv.analysis', {
+    fileType: input.fileType,
+    wordCount: report.wordCount,
+    detectedSkills: report.detectedSkills.length,
+  })
+  const { text: _savedText, ...publicCv } = cv
+  return {
+    kind: 'full',
+    cv: publicCv,
+    trial: await getTrialState(gate.db, gate.user.id),
+  }
 }
 
 async function getApplicationAnswers(db: D1Database, userId: string): Promise<ApplicationAnswers> {
@@ -313,12 +373,25 @@ proRoutes.get('/pro/cv', async (c) => {
     getTrialState(gate.db, gate.user.id),
     paidFeature(gate.db, gate.user.id, 'cv_analysis'),
   ])
-  return c.json({ cv, locked: !paid && trial.status !== 'active', trial, paid })
+  const locked = !paid && trial.status !== 'active'
+  return c.json({ cv, locked, canSave: true, canFullAnalysis: !locked, trial, paid })
 })
 
 proRoutes.put('/pro/cv', async (c) => {
-  const gate = await requireFeature(c, 'cv_analysis')
-  if (!gate.ok) return gate.response
+  const signedIn = await requireSignedIn(c)
+  if (!signedIn.ok) return signedIn.response
+  const [paid, trial] = await Promise.all([
+    paidFeature(signedIn.db, signedIn.user.id, 'cv_analysis'),
+    getTrialState(signedIn.db, signedIn.user.id),
+  ])
+  const canFullAnalysis = paid || trial.status === 'active'
+  const gate: Extract<FeatureGate, { ok: true }> = {
+    ok: true,
+    user: signedIn.user,
+    db: signedIn.db,
+    paid,
+    trial,
+  }
   const limited = await enforceRateLimit(c, {
     bucket: 'cv-analysis',
     limit: 10,
@@ -330,19 +403,29 @@ proRoutes.put('/pro/cv', async (c) => {
     return c.json(
       {
         error: 'consent_required',
-        message: 'Please confirm that FJ may save the readable CV text for your detailed analysis.',
+        message: 'Please confirm that FJ may save the readable CV text in your account.',
       },
       400,
     )
   }
-  const text = typeof body.text === 'string' ? body.text.slice(0, 60_000) : ''
+  const text = typeof body.text === 'string' ? body.text : ''
+  if (text.length > 60_000) {
+    return c.json(
+      {
+        error: 'cv_too_long',
+        message:
+          'This CV text is longer than FJ can save. Remove repeated pages or old attachments and try again. Nothing was saved.',
+      },
+      400,
+    )
+  }
   const wordCount = (text.match(/\b[\p{L}\p{N}][\p{L}\p{N}'-]*\b/gu) ?? []).length
   if (text.trim().length < 200 || wordCount < 30) {
     return c.json(
       {
         error: 'cv_unreadable',
         message:
-          'That CV text is too short to analyse. Use a text-readable PDF or DOCX, or paste the CV text.',
+          'That CV text is too short to save. Use a text-readable PDF or DOCX, or paste the CV text.',
       },
       400,
     )
@@ -357,44 +440,125 @@ proRoutes.put('/pro/cv', async (c) => {
       : 'text/plain'
   const textHash = await sha256Hex(text.trim().toLowerCase().replace(/\s+/g, ' '))
   const existing = await getMasterCv(gate.db, gate.user.id)
-  if (existing?.textHash === textHash)
-    return c.json({ cv: existing, trial: gate.trial, paid: gate.paid })
+  const access = {
+    locked: !canFullAnalysis,
+    canSave: true,
+    canFullAnalysis,
+    paid: gate.paid,
+  }
 
-  if (!gate.paid && !(await canUseTrialCvAnalysis(gate.db, gate.user.id, textHash))) {
+  if (existing?.textHash === textHash) {
+    // The same text never downgrades a full report that is already saved.
+    // If the person now has trial or paid access, this is also the route that
+    // turns a free saved CV into a full check without another upload.
+    if (canFullAnalysis && !existing.report) {
+      const outcome = await generateFullMasterCv(c, gate, {
+        existing,
+        text,
+        textHash,
+        fileName: existing.fileName,
+        fileType: existing.fileType,
+      })
+      if (outcome.kind === 'full')
+        return c.json({ cv: outcome.cv, trial: outcome.trial, ...access })
+      return c.json({
+        cv: existing,
+        trial: outcome.trial,
+        ...access,
+        fullAnalysisDeferred: true,
+      })
+    }
+    return c.json({ cv: existing, trial: gate.trial, ...access })
+  }
+
+  if (canFullAnalysis) {
+    const outcome = await generateFullMasterCv(c, gate, {
+      existing,
+      text,
+      textHash,
+      fileName,
+      fileType,
+    })
+    if (outcome.kind === 'full') return c.json({ cv: outcome.cv, trial: outcome.trial, ...access })
+    // A trial user who has already used the one detailed check can still
+    // replace the saved text. It is saved below as text-only, with no claim
+    // that a new full report was produced.
+    gate.trial = outcome.trial
+  }
+
+  const now = new Date().toISOString()
+  const basicSummary = buildCvBasicSummary(text, fileName, now)
+  const cv: MasterCv & { text: string } = {
+    fileName,
+    fileType,
+    text,
+    textHash,
+    analysisLevel: 'saved_only',
+    basicSummary,
+    report: null,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  }
+  await saveMasterCv(gate.db, gate.user.id, cv)
+  await recordAudit(gate.db, gate.user.id, 'cv.saved', {
+    fileType,
+    wordCount: basicSummary.wordCount,
+    detectedSkills: basicSummary.detectedSkills.length,
+    analysisLevel: 'saved_only',
+  })
+  const { text: _savedText, ...publicCv } = cv
+  return c.json({
+    cv: publicCv,
+    trial: gate.trial,
+    ...access,
+    fullAnalysisDeferred: true,
+  })
+})
+
+proRoutes.post('/pro/cv/analyze', async (c) => {
+  const gate = await requireFeature(c, 'cv_analysis')
+  if (!gate.ok) return gate.response
+  const limited = await enforceRateLimit(c, {
+    bucket: 'cv-analysis',
+    limit: 10,
+    windowSeconds: 3600,
+  })
+  if (limited) return limited
+  const existing = await getMasterCv(gate.db, gate.user.id, true)
+  if (!existing?.text) {
+    return c.json(
+      {
+        error: 'cv_not_saved',
+        message: 'Save a CV first, then run the full check on the saved text.',
+      },
+      404,
+    )
+  }
+  const outcome = await generateFullMasterCv(c, gate, {
+    existing,
+    text: existing.text,
+    textHash: existing.textHash,
+    fileName: existing.fileName,
+    fileType: existing.fileType,
+  })
+  if (outcome.kind === 'trial_limit') {
     return c.json(
       {
         error: 'trial_limit_reached',
-        trial: await getTrialState(gate.db, gate.user.id),
-        message: 'You have used the one CV check in your free trial. Buy Pro for more checks.',
+        trial: outcome.trial,
+        message:
+          'You have used the one full CV check in your free trial. Your saved CV text is still available. Buy Pro for another full check.',
         upgradeUrl: '/pricing#plans',
       },
       403,
     )
   }
-
-  const [profile, { jobs }] = await Promise.all([getProfile(gate.db, gate.user.id), salaryJobs(c)])
-  const now = new Date().toISOString()
-  const report = buildCvAnalysis(text, profile, jobs, fileName, now)
-  const cv = {
-    fileName,
-    fileType,
-    text,
-    textHash,
-    report,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  }
-  await saveMasterCv(gate.db, gate.user.id, cv)
-  if (!gate.paid) await recordTrialCvAnalysis(gate.db, gate.user.id, textHash)
-  await recordAudit(gate.db, gate.user.id, 'pro.cv.analysis', {
-    fileType,
-    wordCount: report.wordCount,
-    detectedSkills: report.detectedSkills.length,
-  })
-  const { text: _savedText, ...publicCv } = cv
   return c.json({
-    cv: publicCv,
-    trial: await getTrialState(gate.db, gate.user.id),
+    cv: outcome.cv,
+    trial: outcome.trial,
+    locked: false,
+    canSave: true,
+    canFullAnalysis: true,
     paid: gate.paid,
   })
 })
@@ -664,7 +828,10 @@ proRoutes.post('/jobs/:id/interview-prep', async (c) => {
     getMasterCv(gate.db, gate.user.id),
   ])
   const effectiveProfile = cv
-    ? { ...profile, skills: [...new Set([...profile.skills, ...cv.report.detectedSkills])] }
+    ? {
+        ...profile,
+        skills: [...new Set([...profile.skills, ...(cv.report ?? cv.basicSummary).detectedSkills])],
+      }
     : profile
   return c.json({ prep: buildInterviewPrep(job, effectiveProfile, answers) })
 })

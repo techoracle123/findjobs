@@ -365,6 +365,11 @@ test('work setting and gig filters are visible and employers link is gone', asyn
   await expect(gigs).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.resultcount')).toContainText(/gigs and contracts|gig or contract/)
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'All gigs' })).toBeVisible()
+  await page.getByRole('button', { name: 'More types' }).click()
+  await expect(page.getByRole('button', { name: 'Video editing' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Penetration testing' })).toBeVisible()
+  await page.getByRole('button', { name: 'Fewer types' }).click()
   await expect(page.getByText('We couldn’t load jobs. Please try again.')).toHaveCount(0)
   await page.getByRole('button', { name: /All work/ }).click()
   await expect(page).not.toHaveURL(/type=gig/)
@@ -472,6 +477,21 @@ NYSC completed in 2024.`
     await expect(page.getByRole('button', { name: 'Buy Pro Yearly' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Check payment' })).toBeVisible()
   }
+  await page.goto('/profile')
+  const freeSavedCv = page.locator('.master-cv-panel')
+  await expect(freeSavedCv.getByRole('heading', { name: 'Your saved CV' })).toBeVisible()
+  await freeSavedCv.getByText('Paste CV text instead').click()
+  await freeSavedCv.getByLabel('CV text').fill(sampleCv)
+  await freeSavedCv.getByLabel(/I agree that FJ can save/).check()
+  await writeAndWait(page, '/api/pro/cv', 'PUT', () =>
+    freeSavedCv.getByRole('button', { name: 'Save CV text free' }).click(),
+  )
+  await expect(freeSavedCv).toContainText('CV text saved')
+  await expect(freeSavedCv.getByRole('heading', { name: 'What FJ found' })).toBeVisible()
+  await expect(freeSavedCv.getByRole('button', { name: 'Trial or buy Pro' }).first()).toBeVisible()
+
+  await page.goto('/dashboard?tab=plan')
+  await expect(page.getByRole('heading', { name: '3-day Pro free trial' })).toBeVisible()
   await writeAndWait(page, '/api/pro/trial/start', 'POST', () =>
     page.getByRole('button', { name: 'Start my 3-day free trial' }).click(),
   )
@@ -489,11 +509,9 @@ NYSC completed in 2024.`
   await page.goto('/profile')
   const masterCv = page.locator('.master-cv-panel')
   await expect(masterCv.getByRole('heading', { name: 'Your saved CV' })).toBeVisible()
-  await masterCv.getByText('Paste CV text instead').click()
-  await masterCv.getByLabel('CV text').fill(sampleCv)
-  await masterCv.getByLabel(/I agree that FJ can save/).check()
-  await writeAndWait(page, '/api/pro/cv', 'PUT', () =>
-    masterCv.getByRole('button', { name: 'Check my CV' }).click(),
+  await expect(masterCv.getByRole('button', { name: 'Run full CV check' })).toBeVisible()
+  await writeAndWait(page, '/api/pro/cv/analyze', 'POST', () =>
+    masterCv.getByRole('button', { name: 'Run full CV check' }).click(),
   )
   await expect(masterCv.getByRole('heading', { name: 'Fix these first' })).toBeVisible()
   await expect(masterCv.getByRole('button', { name: 'View saved text' })).toBeVisible()

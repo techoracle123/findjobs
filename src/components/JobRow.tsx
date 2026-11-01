@@ -2,6 +2,7 @@ import { Bookmark, BookmarkCheck, Flag } from 'lucide-react'
 import type { ScoredJob } from '../shared/types'
 import { formatRange, formatRelativeTime, PERIOD_LABELS } from '../shared/format'
 import { opportunityBadge, opportunityOf } from '../shared/opportunities'
+import { gigCategoryFor } from '../shared/gig-categories'
 import { roleFamilyLabel, workModeLabel } from '../shared/taxonomy'
 import type { SalaryView } from '../lib/ranking'
 import { MatchRing } from './MatchRing'
@@ -46,6 +47,7 @@ export function JobRow({
   const { job, score } = scored
   const opportunity = opportunityOf(job)
   const gigBadge = opportunity.opportunityType === 'gig' ? opportunityBadge(job) : ''
+  const gigCategory = opportunity.opportunityType === 'gig' ? gigCategoryFor(job) : null
   const hasProfile = scored.components.some((component) => component.applicable)
   const hasPay = salary.max > 0 || salary.min > 0
   return (
@@ -85,7 +87,12 @@ export function JobRow({
             {job.locationLabel ? ` · ${job.locationLabel}` : ''}
           </span>
           <span className="jobrow__meta">
-            {job.roleFamily !== 'unknown' && <span>{roleFamilyLabel(job.roleFamily)}</span>}
+            {gigCategory ? (
+              <span>{gigCategory.label}</span>
+            ) : job.roleFamily !== 'unknown' ? (
+              <span>{roleFamilyLabel(job.roleFamily)}</span>
+            ) : null}
+            {opportunity.projectDuration && <span>{opportunity.projectDuration}</span>}
             {job.workMode !== 'unknown' && <span>{workModeLabel(job.workMode)}</span>}
             {job.postedAt && <span>{formatRelativeTime(job.postedAt)}</span>}
             {job.sourceName && <span>Source: {job.sourceName}</span>}

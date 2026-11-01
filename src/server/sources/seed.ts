@@ -11,6 +11,8 @@ export interface SeedSource {
   company?: string
   /** The employer's display name, when the source does not carry one. */
   companyLabel?: string
+  /** Parser-specific settings that are safe to publish in this registry. */
+  options?: Record<string, unknown>
   country: string
   tags: string[]
   /** How often the source should be refreshed. */
@@ -624,4 +626,99 @@ export const SEED_SOURCES: SeedSource[] = [
     kind: 'jsonld' as const,
     enabled: true,
   })),
+
+  // --- Direct Nigerian employer and public-sector sources -----------------
+  // These link back to the employer's or agency's own application route. The
+  // public-sector monitors publish nothing while an exercise is closed.
+  {
+    id: 'workday-shell-nigeria',
+    parser: 'workday',
+    name: 'Shell Nigeria — official Workday board',
+    listingUrl: 'https://shell.wd3.myworkdayjobs.com/wday/cxs/shell/ShellCareers/jobs',
+    company: 'shell',
+    companyLabel: 'Shell',
+    options: { searchText: 'Nigeria', countryCode: 'NG', maxPostings: 100, fetchDetails: true },
+    country: 'NG',
+    tags: ['nigeria', 'employer-board', 'energy'],
+    tier: 'six_hourly',
+    rateLimitPerHour: 6,
+    kind: 'ats',
+    enabled: true,
+  },
+  {
+    id: 'oracle-mtn-nigeria',
+    parser: 'oracle-recruiting',
+    name: 'MTN Nigeria — official careers site',
+    listingUrl: 'https://ehle.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs',
+    company: 'mtn-nigeria',
+    companyLabel: 'MTN Nigeria',
+    options: { siteNumber: 'CX_1', countryCode: 'NG', location: 'Nigeria', maxPostings: 100 },
+    country: 'NG',
+    tags: ['nigeria', 'employer-board', 'telecoms'],
+    tier: 'six_hourly',
+    rateLimitPerHour: 6,
+    kind: 'ats',
+    enabled: true,
+  },
+  {
+    id: 'zoho-gtbank',
+    parser: 'zoho-recruit',
+    name: 'GTBank — official Zoho Recruit careers',
+    listingUrl: 'https://gtbank.zohorecruit.com/jobs/Job-Portal',
+    company: 'gtbank',
+    companyLabel: 'Guaranty Trust Bank (GTBank)',
+    options: {
+      listingUrls: [
+        'https://gtbank.zohorecruit.com/jobs/Job-Portal',
+        'https://gtbank.zohorecruit.com/jobs/specialists',
+        'https://gtbank.zohorecruit.com/jobs/Careers',
+      ],
+      maxPostings: 50,
+    },
+    country: 'NG',
+    tags: ['nigeria', 'employer-board', 'banking'],
+    tier: 'six_hourly',
+    rateLimitPerHour: 4,
+    kind: 'html',
+    enabled: true,
+  },
+  {
+    id: 'efcc-recruitment-portal',
+    parser: 'efcc-recruitment',
+    name: 'EFCC — official recruitment portal',
+    listingUrl: 'https://recruitment.efcc.gov.ng/',
+    companyLabel: 'Economic and Financial Crimes Commission (EFCC)',
+    country: 'NG',
+    tags: ['nigeria', 'public-sector', 'federal-government'],
+    tier: 'six_hourly',
+    rateLimitPerHour: 4,
+    kind: 'html',
+    enabled: true,
+  },
+  {
+    id: 'fcsc-vacancies',
+    parser: 'fcsc-vacancies',
+    name: 'Federal Civil Service Commission — official vacancies',
+    listingUrl: 'https://recruitment.fedcivilservice.gov.ng/',
+    companyLabel: 'Federal Civil Service Commission',
+    country: 'NG',
+    tags: ['nigeria', 'public-sector', 'civil-service', 'federal-government'],
+    tier: 'daily',
+    rateLimitPerHour: 2,
+    kind: 'html',
+    enabled: true,
+  },
+  {
+    id: 'nnpc-careers',
+    parser: 'nnpc-careers',
+    name: 'NNPC Limited — official careers',
+    listingUrl: 'https://careers.nnpcgroup.com/',
+    companyLabel: 'NNPC Limited',
+    country: 'NG',
+    tags: ['nigeria', 'public-sector', 'energy'],
+    tier: 'daily',
+    rateLimitPerHour: 2,
+    kind: 'html',
+    enabled: true,
+  },
 ]

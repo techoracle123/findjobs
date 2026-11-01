@@ -1,5 +1,6 @@
 import { roleFamilyLabel } from '../shared/taxonomy'
 import { matchesOpportunityFilter, opportunityOf } from '../shared/opportunities'
+import { gigCategoryFor } from '../shared/gig-categories'
 import { marketRank } from '../shared/scoring'
 import type { Job } from '../shared/types'
 import type { JobSearch, JobSearchResult } from './jobs'
@@ -65,6 +66,7 @@ export async function fetchPublicSource(
       id,
       listingUrl: source.listingUrl,
       options: {
+        ...(source.options ?? {}),
         company: source.company,
         companyLabel: source.companyLabel,
         country: source.country,
@@ -199,11 +201,14 @@ function haystack(job: Job): string {
   let value = haystackCache.get(job)
   if (value === undefined) {
     const opportunity = opportunityOf(job)
+    const gigCategory = opportunity.opportunityType === 'gig' ? gigCategoryFor(job) : null
     const opportunityTerms = [
       opportunity.opportunityType,
       opportunity.engagementType,
       opportunity.engagementLabel,
       opportunity.projectDuration ?? '',
+      gigCategory?.label ?? '',
+      gigCategory?.search ?? '',
       opportunity.opportunityType === 'gig' ? 'gig gigs contract freelance project' : 'job jobs',
     ].join(' ')
     value =

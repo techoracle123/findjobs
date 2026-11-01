@@ -72,6 +72,7 @@ async function worker() {
           id: source.id,
           listingUrl: source.listingUrl,
           options: {
+            ...(source.options ?? {}),
             company: source.company,
             companyLabel: source.companyLabel,
             country: source.country,

@@ -6,6 +6,7 @@ import type {
   BestMatch,
   CvAnalysisReport,
   CvAnalysisSection,
+  CvBasicSummary,
   CvTargetRole,
   Job,
   Profile,
@@ -43,6 +44,72 @@ function yearsIn(text: string): number[] {
   return [...new Set([...text.matchAll(/\b(19\d{2}|20\d{2})\b/g)].map((match) => Number(match[1])))]
     .filter((year) => year >= 1970 && year <= 2100)
     .sort((a, b) => b - a)
+}
+
+/**
+ * The free saved-CV summary. It records only simple facts needed to confirm
+ * the upload and help matching: length, detected skills and which familiar
+ * CV sections appear. Advice, scoring of sections and advert comparisons stay
+ * in the full Pro or trial report.
+ */
+export function buildCvBasicSummary(
+  rawText: string,
+  fileName = 'CV',
+  generatedAt = new Date().toISOString(),
+): CvBasicSummary {
+  const text = rawText.slice(0, 60_000)
+  const lines = cvLinesOf(text)
+  const suggestion = suggestFromKeywords(text)
+  const wordCount = (text.match(/\b[\p{L}\p{N}][\p{L}\p{N}'-]*\b/gu) ?? []).length
+  const sectionsFound = (
+    [
+      ['Contact details', /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i],
+      ['Summary', /\b(?:professional summary|profile summary|summary|objective|about me)\b/i],
+      ['Skills', /\b(?:skills|technical skills|core competencies|tools)\b/i],
+      [
+        'Experience',
+        /\b(?:work experience|professional experience|employment history|experience)\b/i,
+      ],
+      ['Projects', /\b(?:projects?|portfolio|work samples?)\b/i],
+      [
+        'Education',
+        /\b(?:education|university|polytechnic|college|b\.?sc|b\.?a\.?|hnd|ond|degree)\b/i,
+      ],
+      ['Certifications', /\b(?:certifications?|certified|licen[cs]e|training)\b/i],
+    ] as Array<[string, RegExp]>
+  )
+    .filter(([, pattern]) => pattern.test(text))
+    .map(([label]) => label)
+
+  return {
+    generatedAt,
+    fileName,
+    wordCount,
+    lineCount: lines.length,
+    estimatedPages: Math.max(1, Math.round(wordCount / 550)),
+    detectedSkills: suggestion.skills.slice(0, 20),
+    roleFamilies: suggestion.roleFamilies,
+    seniority: suggestion.seniority,
+    sectionsFound,
+    summary: suggestion.summary,
+  }
+}
+
+export function basicSummaryFromReport(report: CvAnalysisReport): CvBasicSummary {
+  return {
+    generatedAt: report.generatedAt,
+    fileName: report.fileName,
+    wordCount: report.wordCount,
+    lineCount: report.lineCount,
+    estimatedPages: report.estimatedPages,
+    detectedSkills: report.detectedSkills,
+    roleFamilies: report.roleFamilies,
+    seniority: report.seniority,
+    sectionsFound: report.sections
+      .filter((section) => section.rating !== 'missing')
+      .map((section) => section.title),
+    summary: report.summary,
+  }
 }
 
 export function buildCvAnalysis(

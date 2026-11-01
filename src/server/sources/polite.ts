@@ -19,7 +19,7 @@ const cache = new Map<string, HostPolicy>()
  * endpoints directly with the same UA and timeout discipline.
  */
 export function robotsGatedKind(kind: string | undefined): boolean {
-  return kind === 'jsonld'
+  return kind === 'jsonld' || kind === 'html'
 }
 
 /** UA + hard timeout, no robots gate. For documented public APIs and feeds. */

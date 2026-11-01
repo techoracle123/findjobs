@@ -5,6 +5,7 @@ import { formatRange, formatRelativeTime, PERIOD_LABELS } from '../shared/format
 import { roleFamilyLabel, seniorityLabel, workModeLabel } from '../shared/taxonomy'
 import { applyLinkOf, isClosed } from '../shared/verification'
 import { opportunityBadge, opportunityOf } from '../shared/opportunities'
+import { gigCategoryFor } from '../shared/gig-categories'
 import { ScoreBreakdown } from './ScoreBreakdown'
 import { recordApplyClick } from '../lib/api'
 import { copy } from '../shared/copy'
@@ -56,7 +57,31 @@ export function JobDetail({
   const hasPay = job.salaryMin > 0 || job.salaryMax > 0
   const opportunity = opportunityOf(job)
   const isGig = opportunity.opportunityType === 'gig'
+  const gigCategory = isGig ? gigCategoryFor(job) : null
   const badge = opportunityBadge(job)
+  const gigFacts: Array<[string, string]> = isGig
+    ? (
+        [
+          gigCategory ? ['Type of work', gigCategory.label] : null,
+          ['Engagement', opportunity.engagementLabel || 'Gig or contract'],
+          opportunity.projectDuration ? ['Stated duration', opportunity.projectDuration] : null,
+          hasPay
+            ? [
+                'Stated pay',
+                `${formatRange(job.salaryMin, job.salaryMax, job.salaryCurrency)} ${PERIOD_LABELS[job.salaryPeriod]}`,
+              ]
+            : ['Stated pay', 'Not stated in this advert'],
+          job.workMode !== 'unknown' ? ['Work setting', workModeLabel(job.workMode)] : null,
+          job.locationLabel ? ['Location', job.locationLabel] : null,
+          job.requiredSkills.length || job.usefulSkills.length
+            ? [
+                'Main skills',
+                [...new Set([...job.requiredSkills, ...job.usefulSkills])].slice(0, 4).join(', '),
+              ]
+            : null,
+        ] as Array<[string, string] | null>
+      ).filter((fact): fact is [string, string] => fact !== null)
+    : []
   const applyLabel = isGig
     ? opportunity.engagementType === 'contract' || opportunity.engagementType === 'temporary'
       ? 'Apply for this contract'
@@ -77,7 +102,11 @@ export function JobDetail({
         </p>
         <div className="job-facts">
           {badge && <span className={isGig ? 'chip chip--gig' : 'chip'}>{badge}</span>}
-          {job.roleFamily !== 'unknown' && <span>{roleFamilyLabel(job.roleFamily)}</span>}
+          {gigCategory ? (
+            <span>{gigCategory.label}</span>
+          ) : job.roleFamily !== 'unknown' ? (
+            <span>{roleFamilyLabel(job.roleFamily)}</span>
+          ) : null}
           {job.seniority !== 'unknown' && <span>{seniorityLabel(job.seniority)}</span>}
           {job.sourceName && <span>Source: {job.sourceName}</span>}
           {job.postedAt && <span>Posted {formatRelativeTime(job.postedAt)}</span>}
@@ -133,6 +162,24 @@ export function JobDetail({
         </div>
       </header>
       <div className="detail__body">
+        {isGig && (
+          <section className="detail-section gig-glance" aria-labelledby="gig-glance-title">
+            <h2 id="gig-glance-title">Gig at a glance</h2>
+            <dl className="gig-glance__grid">
+              {gigFacts.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            {(!opportunity.projectDuration || !hasPay) && (
+              <p className="field__hint">
+                If duration or pay is missing, confirm it in writing before you start work.
+              </p>
+            )}
+          </section>
+        )}
         <section className="detail-section">
           <h2>{isGig ? 'Pay' : 'Salary'}</h2>
           <p className="salary-figure">

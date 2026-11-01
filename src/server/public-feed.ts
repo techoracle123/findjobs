@@ -32,6 +32,12 @@ export const PUBLIC_SOURCES = SEED_SOURCES.filter(
       'teamtailor',
       'personio',
       'breezy',
+      'workday',
+      'oracle-recruiting',
+      'zoho-recruit',
+      'efcc-recruitment',
+      'fcsc-vacancies',
+      'nnpc-careers',
     ].includes(source.parser),
 )
 // Sources confirm aliveness by rewriting only when content changes (plus a

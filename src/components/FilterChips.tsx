@@ -22,6 +22,7 @@ import {
 import { controlEnabled } from '../shared/quality'
 import type { FieldCoverage } from '../shared/quality'
 import { OPPORTUNITY_FILTER_OPTIONS } from '../shared/opportunities'
+import { GIG_CATEGORIES } from '../shared/gig-categories'
 import { CountryPicker } from './CountryPicker'
 
 interface FilterChipsProps {
@@ -53,6 +54,7 @@ export function FilterChips({
   onReset,
 }: FilterChipsProps) {
   const [open, setOpen] = useState<ChipId | null>(null)
+  const [showAllGigCategories, setShowAllGigCategories] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -81,6 +83,20 @@ export function FilterChips({
     filters.verification.length ||
     worldwide,
   )
+  const normalizedGigQuery = filters.query.trim().toLowerCase()
+  const activeGigCategory = GIG_CATEGORIES.find(
+    (category) =>
+      normalizedGigQuery === category.search.toLowerCase() ||
+      normalizedGigQuery === category.label.toLowerCase(),
+  )
+  const visibleGigCategories = showAllGigCategories
+    ? GIG_CATEGORIES
+    : [
+        ...GIG_CATEGORIES.slice(0, 6),
+        ...(activeGigCategory && !GIG_CATEGORIES.slice(0, 6).includes(activeGigCategory)
+          ? [activeGigCategory]
+          : []),
+      ]
 
   return (
     <div className="chipbar-wrap" ref={wrapRef}>
@@ -109,6 +125,47 @@ export function FilterChips({
           )
         })}
       </div>
+      {filters.opportunityType === 'gig' && (
+        <div className="gig-categories" aria-label="Browse gigs by type of work">
+          <span className="gig-categories__label">Gig types</span>
+          <button
+            type="button"
+            className="chipbtn gig-category-btn"
+            aria-pressed={!activeGigCategory && !normalizedGigQuery}
+            onClick={() =>
+              onChange({ ...filters, query: '', opportunityType: 'gig', roleFamilies: [] })
+            }
+          >
+            All gigs
+          </button>
+          {visibleGigCategories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              className="chipbtn gig-category-btn"
+              aria-pressed={activeGigCategory?.id === category.id}
+              onClick={() =>
+                onChange({
+                  ...filters,
+                  query: category.search,
+                  opportunityType: 'gig',
+                  roleFamilies: [],
+                })
+              }
+            >
+              {category.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="chipbtn gig-category-btn gig-category-btn--more"
+            aria-expanded={showAllGigCategories}
+            onClick={() => setShowAllGigCategories((current) => !current)}
+          >
+            {showAllGigCategories ? 'Fewer types' : 'More types'}
+          </button>
+        </div>
+      )}
       <div className="chipbar">
         <button
           type="button"

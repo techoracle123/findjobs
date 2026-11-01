@@ -47,8 +47,9 @@ export function CvImport({ onApply, onExtracted }: CvImportProps) {
         fileName: file.name,
         fileType: file.type || extracted.kind,
       })
-    } catch {
-      setError(copy('cv.unreadable'))
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : ''
+      setError(message.startsWith('FJ:') ? message.slice(3) : copy('cv.unreadable'))
     } finally {
       setBusy(false)
     }

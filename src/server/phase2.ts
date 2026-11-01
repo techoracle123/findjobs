@@ -1,9 +1,12 @@
 import type {
+  CvAnalysisReport,
+  CvBasicSummary,
   GraduateEligibilityInput,
   GraduateEligibilityState,
   MasterCv,
   ProTrialState,
   Profile,
+  Seniority,
 } from '../shared/types'
 
 export const TRIAL_DAYS = 3
@@ -457,6 +460,52 @@ export async function saveGraduateEligibility(
 
 /* ------------------------------ Master CV ------------------------------ */
 
+function basicSummaryFromReport(report: CvAnalysisReport): CvBasicSummary {
+  return {
+    generatedAt: report.generatedAt,
+    fileName: report.fileName,
+    wordCount: report.wordCount,
+    lineCount: report.lineCount,
+    estimatedPages: report.estimatedPages,
+    detectedSkills: report.detectedSkills,
+    roleFamilies: report.roleFamilies,
+    seniority: report.seniority,
+    sectionsFound: report.sections
+      .filter((section) => section.rating !== 'missing')
+      .map((section) => section.title),
+    summary: report.summary,
+  }
+}
+
+function storedBasicSummary(
+  value: unknown,
+  fileName: string,
+  fallbackDate: string,
+  text: string,
+): CvBasicSummary {
+  const record =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {}
+  const strings = (entry: unknown): string[] =>
+    Array.isArray(entry) ? entry.filter((item): item is string => typeof item === 'string') : []
+  const number = (entry: unknown, fallback: number): number =>
+    typeof entry === 'number' && Number.isFinite(entry) ? entry : fallback
+  const wordCount = (text.match(/\b[\p{L}\p{N}][\p{L}\p{N}'-]*\b/gu) ?? []).length
+  return {
+    generatedAt: typeof record.generatedAt === 'string' ? record.generatedAt : fallbackDate,
+    fileName: typeof record.fileName === 'string' ? record.fileName : fileName,
+    wordCount: number(record.wordCount, wordCount),
+    lineCount: number(record.lineCount, text.split(/\n+/).filter(Boolean).length),
+    estimatedPages: number(record.estimatedPages, Math.max(1, Math.round(wordCount / 550))),
+    detectedSkills: strings(record.detectedSkills),
+    roleFamilies: strings(record.roleFamilies),
+    seniority: strings(record.seniority) as Seniority[],
+    sectionsFound: strings(record.sectionsFound),
+    summary: typeof record.summary === 'string' ? record.summary : 'Your CV text is saved.',
+  }
+}
+
 export async function getMasterCv(
   db: D1Database,
   userId: string,
@@ -478,11 +527,22 @@ export async function getMasterCv(
         updated_at: string
       }>()
     if (!row) return null
+    const stored = JSON.parse(row.report) as unknown
+    const report =
+      stored &&
+      typeof stored === 'object' &&
+      Array.isArray((stored as { sections?: unknown }).sections)
+        ? (stored as CvAnalysisReport)
+        : null
     return {
       fileName: row.file_name,
       fileType: row.file_type,
       textHash: row.text_hash,
-      report: JSON.parse(row.report) as MasterCv['report'],
+      analysisLevel: report ? 'full' : 'saved_only',
+      basicSummary: report
+        ? basicSummaryFromReport(report)
+        : storedBasicSummary(stored, row.file_name, row.updated_at, row.cv_text),
+      report,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       ...(includeText ? { text: row.cv_text } : {}),
@@ -517,7 +577,7 @@ export async function saveMasterCv(
       cv.fileType,
       cv.text,
       cv.textHash,
-      JSON.stringify(cv.report),
+      JSON.stringify(cv.report ?? cv.basicSummary),
       createdAt,
       cv.updatedAt,
     )

@@ -43,10 +43,11 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           saved in that step.
         </p>
         <p>
-          <strong>Saved CV in Pro or the free trial.</strong> The full CV check is a separate
-          choice. Only when you tick the permission box does FJ save the readable text from your CV,
-          a code that identifies that text, and the report in your account. The original PDF or DOCX
-          file is not retained. The saved text is used only to give you the CV check, job checks,
+          <strong>Saved CV text on Free or Pro.</strong> Saving CV text is a separate choice for any
+          signed-in user. Only when you tick the permission box does FJ save the readable text from
+          your CV, a code that identifies that text, and a short summary in your account. A full
+          report is added only when a trial or Pro CV check runs. The original PDF, DOCX or TXT file
+          is not retained. The saved text is used only to give you the CV check, job checks,
           prepared applications and interview practice. FJ does not send it to an employer for you.
           You can view it, download it, replace it or delete it from your profile and Pro tools. It
           is included in account export and removed when you delete it or delete your account.
@@ -173,13 +174,12 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           applying on the original site is always free.
         </p>
         <p>
-          <strong>What is Pro?</strong> Pro adds a saved CV, a full CV check and FJ Match
-          Intelligence. Match Intelligence compares your CV with one advert, separates essential
-          requirements from desirable ones, names missing skills, checks location signals and
-          suggests stronger alternatives. Pro also helps prepare applications, checks adverts, shows
-          best matches, sends Telegram alerts with more filters, tracks stages, lists skills to
-          learn, helps with interviews and checks pay. See <a href="/pricing">Pricing</a> to compare
-          plans.
+          <strong>What is Pro?</strong> Pro adds a full CV check and FJ Match Intelligence. Match
+          Intelligence compares your CV with one advert, separates essential requirements from
+          desirable ones, names missing skills, checks location signals and suggests stronger
+          alternatives. Pro also helps prepare applications, checks adverts, shows best matches,
+          sends Telegram alerts with more filters, tracks stages, lists skills to learn, helps with
+          interviews and checks pay. See <a href="/pricing">Pricing</a> to compare plans.
         </p>
         <p>
           <strong>How does the free trial work?</strong> After creating a free account, you can
@@ -193,9 +193,11 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           pricing page has the checker and exact time windows.
         </p>
         <p>
-          <strong>Does FJ save my CV?</strong> Only if you choose the Pro CV check and tick the
-          permission box. FJ then saves readable text and the report, not the original file. Basic
-          CV import remains on your device. You can download or delete saved text.
+          <strong>Does FJ save my CV?</strong> Only if you choose the separate saved-CV action and
+          tick the permission box. Free and Pro users can save readable CV text and a short summary.
+          The trial or Pro can add a full report. FJ does not keep the original file. Basic CV
+          import remains on your device until you choose to save it. You can download or delete the
+          saved text.
         </p>
         <p>
           <strong>Does FJ apply for me?</strong> No. FJ can prepare the words, but you review and

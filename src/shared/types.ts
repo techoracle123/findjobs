@@ -415,6 +415,24 @@ export interface CvTargetRole {
   missingSkills: string[]
 }
 
+export type CvAnalysisLevel = 'saved_only' | 'full'
+
+/** Small, non-premium facts kept with every saved CV. Saving extracted text is
+ * available to every signed-in user; the detailed report below is the paid
+ * or trial part. The original CV file is never stored by FJ. */
+export interface CvBasicSummary {
+  generatedAt: string
+  fileName: string
+  wordCount: number
+  lineCount: number
+  estimatedPages: number
+  detectedSkills: string[]
+  roleFamilies: string[]
+  seniority: Seniority[]
+  sectionsFound: string[]
+  summary: string
+}
+
 export interface CvAnalysisReport {
   generatedAt: string
   fileName: string
@@ -444,7 +462,10 @@ export interface MasterCv {
   fileName: string
   fileType: string
   textHash: string
-  report: CvAnalysisReport
+  analysisLevel: CvAnalysisLevel
+  basicSummary: CvBasicSummary
+  /** Null when only the extracted text and basic summary have been saved. */
+  report: CvAnalysisReport | null
   createdAt: string
   updatedAt: string
   /** Present only when the owner explicitly asks to download/export it. */
