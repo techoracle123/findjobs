@@ -976,6 +976,39 @@ test('pagination moves through 20-result pages and keeps the page in the URL', a
   await expect(page).toHaveURL(/page=2/)
 })
 
+test('job caution note sits above the card instead of beside it', async ({ page }) => {
+  await signUp(page)
+  await page.goto('/jobs')
+  const wrap = page.locator('.jobrow-wrap').first()
+  await expect(wrap).toBeVisible({ timeout: 30_000 })
+
+  const boxes = await wrap.evaluate((element: HTMLElement) => {
+    const caution = document.createElement('p')
+    caution.className = 'jobrow__caution'
+    caution.textContent =
+      'We can’t confirm this employer yet. Never pay to apply. Report anything that asks you for money.'
+    element.insertBefore(caution, element.firstChild)
+
+    const row = element.querySelector('.jobrow')
+    if (!row) throw new Error('Job row not found')
+    const wrapBox = element.getBoundingClientRect()
+    const cautionBox = caution.getBoundingClientRect()
+    const rowBox = row.getBoundingClientRect()
+    return {
+      wrapWidth: wrapBox.width,
+      cautionWidth: cautionBox.width,
+      cautionLeft: cautionBox.left,
+      cautionBottom: cautionBox.bottom,
+      rowLeft: rowBox.left,
+      rowTop: rowBox.top,
+    }
+  })
+
+  expect(boxes.cautionWidth).toBeGreaterThan(boxes.wrapWidth * 0.98)
+  expect(Math.abs(boxes.rowLeft - boxes.cautionLeft)).toBeLessThanOrEqual(1)
+  expect(boxes.rowTop).toBeGreaterThanOrEqual(boxes.cautionBottom - 1)
+})
+
 test('footer is present on every route with the safety links', async ({ page }) => {
   await signUp(page)
   for (const path of ['/', '/jobs', '/dashboard', '/profile', '/about', '/auth/login']) {

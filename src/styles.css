@@ -2332,9 +2332,11 @@ summary:focus-visible {
   font-weight: 550;
 }
 
-/* Compact job card: monogram, text stack, one tidy action column. */
+/* Compact job card: monogram, text stack, one tidy action column. The
+   optional caution note wraps onto its own full-width line above the card. */
 .jobrow-wrap {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
 }
 .jobrow-wrap .jobrow {
@@ -2664,11 +2666,14 @@ summary:focus-visible {
 }
 
 .jobrow__caution {
+  flex: 0 0 100%;
+  width: 100%;
   margin: 0;
   padding: 6px 12px;
   background: var(--warn-soft);
   color: var(--warn);
   font-size: 13px;
+  line-height: 1.45;
   border-bottom: 1px solid var(--line);
 }
 .leaving-line {
