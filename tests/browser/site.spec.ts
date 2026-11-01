@@ -726,7 +726,10 @@ test('match rings are visible on phones and never show a numeric grade', async (
     await page.getByLabel('preferred profession', { exact: false }).selectOption('administration')
   })
   await page.goto('/jobs')
-  await expect(page.locator('.scorebadge').first()).toBeVisible()
+  // A cold live isolate may need longer than Playwright's 5 second default to
+  // assemble the first public snapshot page.
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('.scorebadge').first()).toBeVisible({ timeout: 30_000 })
   const ringText = await page.locator('.joblist').first().innerText()
   expect(ringText).not.toMatch(/\b\d{1,3}%\b/)
   // The green-circle explainer was removed by product decision.

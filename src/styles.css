@@ -5558,3 +5558,25 @@ textarea:focus-visible {
     width: 100%;
   }
 }
+
+/* Small primary actions stay readable at every width. Disabled buttons use
+   explicit colours instead of low opacity, so their labels never wash out. */
+.btn--primary {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+  color: #fff;
+  opacity: 1;
+}
+
+.btn:disabled {
+  background: var(--surface-sunken);
+  border-color: var(--line-strong);
+  color: var(--muted);
+  opacity: 1;
+}
+
+.btn--primary:disabled {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+  color: #fff;
+}

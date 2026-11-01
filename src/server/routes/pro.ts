@@ -221,6 +221,29 @@ type FullCvOutcome =
     }
   | { kind: 'trial_limit'; trial: Awaited<ReturnType<typeof getTrialState>> }
 
+/**
+ * The market comparison inside a full CV report is useful, but it must never
+ * hold the whole report hostage while a cold edge isolate assembles the
+ * public snapshot. If the snapshot is not ready quickly, return the complete
+ * CV section report with no invented role counts.
+ */
+async function boundedCvMarketJobs(c: AppContext): Promise<Job[]> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const load = salaryJobs(c)
+    .then(({ jobs }) => jobs)
+    .catch((): Job[] => [])
+  try {
+    return await Promise.race([
+      load,
+      new Promise<Job[]>((resolve) => {
+        timer = setTimeout(() => resolve([]), 10_000)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 async function generateFullMasterCv(
   c: AppContext,
   gate: Extract<FeatureGate, { ok: true }>,
@@ -241,7 +264,10 @@ async function generateFullMasterCv(
     return { kind: 'trial_limit', trial: await getTrialState(gate.db, gate.user.id) }
   }
 
-  const [profile, { jobs }] = await Promise.all([getProfile(gate.db, gate.user.id), salaryJobs(c)])
+  const [profile, jobs] = await Promise.all([
+    getProfile(gate.db, gate.user.id),
+    boundedCvMarketJobs(c),
+  ])
   const now = new Date().toISOString()
   const report = buildCvAnalysis(input.text, profile, jobs, input.fileName, now)
   const cv: MasterCv & { text: string } = {
@@ -839,6 +865,13 @@ proRoutes.post('/jobs/:id/interview-prep', async (c) => {
 async function salaryJobs(c: AppContext): Promise<{ jobs: Job[]; updatedAt: string | null }> {
   const published = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
   if (published) return { jobs: published.jobs, updatedAt: published.refreshedAt }
+  const config = readConfig(c.env ?? {})
+  // Production discovery lives in the published snapshot. If that snapshot is
+  // briefly unavailable, Pro market tools should say they have no current
+  // market sample rather than scanning the account database's legacy jobs
+  // table on a user request. Local and test previews still use their small
+  // seeded D1 corpus.
+  if (!config.isLocal && !config.isTest) return { jobs: [], updatedAt: null }
   const listed = await listOpenJobs(c.env?.DB)
   return { jobs: listed.jobs, updatedAt: null }
 }
