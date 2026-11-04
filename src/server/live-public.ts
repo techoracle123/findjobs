@@ -1,7 +1,7 @@
 import { roleFamilyLabel } from '../shared/taxonomy'
 import { matchesOpportunityFilter, opportunityOf } from '../shared/opportunities'
 import { gigCategoryFor } from '../shared/gig-categories'
-import { matchesNormalizedSearchText, normalizeSearchText } from '../shared/search-matching'
+import { compileSearch, normalizeSearchText } from '../shared/search-matching'
 import { marketRank } from '../shared/scoring'
 import type { Job } from '../shared/types'
 import type { JobSearch, JobSearchResult } from './jobs'
@@ -198,6 +198,19 @@ export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResul
 }
 
 const haystackCache = new WeakMap<Job, string>()
+
+// One compiled matcher per request search object. Rebuilding term variants
+// for every listing burned enough CPU, on a cold isolate with a
+// 20,000-listing snapshot, to fail live searches outright.
+const matcherCache = new WeakMap<JobSearch, ((normalizedHaystack: string) => boolean) | null>()
+function matcherFor(search: JobSearch): ((normalizedHaystack: string) => boolean) | null {
+  let matcher = matcherCache.get(search)
+  if (matcher === undefined) {
+    matcher = compileSearch(search.query || '')
+    matcherCache.set(search, matcher)
+  }
+  return matcher
+}
 function haystack(job: Job): string {
   let value = haystackCache.get(job)
   if (value === undefined) {
@@ -212,8 +225,13 @@ function haystack(job: Job): string {
       gigCategory?.search ?? '',
       opportunity.opportunityType === 'gig' ? 'gig gigs contract freelance project' : 'job jobs',
     ].join(' ')
+    // Cap the description slice: haystacks are cached per listing, and over
+    // a 20,000-listing snapshot the uncapped copies pushed a cold isolate
+    // over its CPU/memory budget. Extracted skills (which are in the
+    // haystack in full) carry the specific-tool evidence from later in an
+    // advert, so a generous opening slice keeps search honest.
     value = normalizeSearchText(
-      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${opportunityTerms} ${job.description} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')}`,
+      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${opportunityTerms} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')} ${job.description.slice(0, 2500)}`,
     )
     haystackCache.set(job, value)
   }
@@ -274,8 +292,8 @@ export function publicFacetMatch(job: Job, search: JobSearch): PublicFacetMatch 
   if (Number(country) + Number(roleFamily) + Number(opportunity) < 2)
     return { ...NO_FACET_MATCH, gig }
 
-  if (search.query?.trim() && !matchesNormalizedSearchText(haystack(job), search.query))
-    return { ...NO_FACET_MATCH, gig }
+  const matcher = matcherFor(search)
+  if (matcher && !matcher(haystack(job))) return { ...NO_FACET_MATCH, gig }
 
   return {
     matched: country && roleFamily && opportunity,
@@ -288,6 +306,7 @@ export function publicFacetMatch(job: Job, search: JobSearch): PublicFacetMatch 
 
 export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
   const place = (search.location || '').toLowerCase().trim()
+  const matcher = matcherFor(search)
   return jobs.filter(
     (job) =>
       search.status !== 'closed' &&
@@ -304,6 +323,7 @@ export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
       matchesOpportunityFilter(job, search.opportunityType) &&
       (!search.verification?.length ||
         search.verification.includes(job.verification || 'unverified')) &&
-      matchesNormalizedSearchText(haystack(job), search.query || ''),
+      // No search terms: never build a haystack (the expensive part) at all.
+      (matcher === null || matcher(haystack(job))),
   )
 }

@@ -9,13 +9,14 @@
  */
 
 export function normalizeSearchText(value: string): string {
+  // One pass turns every run of punctuation, symbols and whitespace into a
+  // single space. This runs over every listing description on the server, so
+  // it has to stay cheap.
   return value
     .toLowerCase()
     .replace(/&/g, ' and ')
     .replace(/['’]/g, '')
-    .replace(/[-_/]+/g, ' ')
-    .replace(/[^a-z0-9+# ]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[^a-z0-9+#]+/g, ' ')
     .trim()
 }
 
@@ -53,7 +54,11 @@ interface TermVariants {
   stems: string[]
 }
 
+const variantCache = new Map<string, TermVariants>()
+
 function variantsFor(term: string): TermVariants {
+  const cached = variantCache.get(term)
+  if (cached) return cached
   const phrases = [term, ...(TERM_VARIANTS[term] ?? [])]
   const stems: string[] = []
 
@@ -67,21 +72,35 @@ function variantsFor(term: string): TermVariants {
   if (/^writ(?:e|er|ers|ing|ten)$/.test(term)) stems.push('writ')
   if (/^market(?:ing|er|ers|s)?$/.test(term)) stems.push('market')
 
-  return { phrases, stems }
+  const variants = { phrases, stems }
+  // Search vocabularies repeat heavily; a small cache stops the server from
+  // recomputing the same variants for every one of thousands of listings.
+  if (variantCache.size < 512) variantCache.set(term, variants)
+  return variants
+}
+
+/**
+ * Compile a query once, then test many normalized haystacks against it.
+ * Returns null when the query has no terms (everything matches), so callers
+ * can skip building a haystack at all.
+ */
+export function compileSearch(query: string): ((normalizedHaystack: string) => boolean) | null {
+  const terms = searchTerms(query)
+  if (!terms.length) return null
+  const compiled = terms.map((term) => variantsFor(term))
+  return (normalizedHaystack: string) =>
+    compiled.every(
+      ({ phrases, stems }) =>
+        phrases.some((variant) => normalizedHaystack.includes(variant)) ||
+        stems.some(
+          (stem) => normalizedHaystack.startsWith(stem) || normalizedHaystack.includes(` ${stem}`),
+        ),
+    )
 }
 
 export function matchesNormalizedSearchText(normalizedHaystack: string, query: string): boolean {
-  const terms = searchTerms(query)
-  if (!terms.length) return true
-  return terms.every((term) => {
-    const { phrases, stems } = variantsFor(term)
-    return (
-      phrases.some((variant) => normalizedHaystack.includes(variant)) ||
-      stems.some(
-        (stem) => normalizedHaystack.startsWith(stem) || normalizedHaystack.includes(` ${stem}`),
-      )
-    )
-  })
+  const matcher = compileSearch(query)
+  return matcher === null || matcher(normalizedHaystack)
 }
 
 export function matchesSearchText(haystack: string, query: string): boolean {

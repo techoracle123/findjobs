@@ -9,15 +9,29 @@ if (!base?.startsWith('https://'))
 // This also proves the production sign-up path works end to end.
 let sessionCookie = ''
 async function json(path) {
-  const response = await fetch(`${base}${path}`, {
-    headers: {
-      ...(process.env.HEALTH_CHECK_KEY ? { 'X-Health-Key': process.env.HEALTH_CHECK_KEY } : {}),
-      ...(sessionCookie ? { Cookie: sessionCookie } : {}),
-    },
-    signal: AbortSignal.timeout(30000),
-  })
-  if (!response.ok) throw new Error(`Live check failed: ${path} returned ${response.status}`)
-  return response.json()
+  // A cold isolate answering its first full-corpus search can be slow or
+  // briefly unavailable. Retry GET probes a few times; a persistent failure
+  // still fails the check.
+  let lastError
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(`${base}${path}`, {
+        headers: {
+          ...(process.env.HEALTH_CHECK_KEY ? { 'X-Health-Key': process.env.HEALTH_CHECK_KEY } : {}),
+          ...(sessionCookie ? { Cookie: sessionCookie } : {}),
+        },
+        signal: AbortSignal.timeout(30000),
+      })
+      if (response.ok) return response.json()
+      lastError = new Error(`Live check failed: ${path} returned ${response.status}`)
+      if (response.status < 500) throw lastError
+    } catch (error) {
+      if (error === lastError) throw error
+      lastError = error
+    }
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 5000))
+  }
+  throw lastError
 }
 {
   const signup = await fetch(`${base}/api/auth/signup`, {
