@@ -225,13 +225,15 @@ function haystack(job: Job): string {
       gigCategory?.search ?? '',
       opportunity.opportunityType === 'gig' ? 'gig gigs contract freelance project' : 'job jobs',
     ].join(' ')
-    // Cap the description slice: haystacks are cached per listing, and over
-    // a 20,000-listing snapshot the uncapped copies pushed a cold isolate
-    // over its CPU/memory budget. Extracted skills (which are in the
-    // haystack in full) carry the specific-tool evidence from later in an
-    // advert, so a generous opening slice keeps search honest.
+    // Keep only the opening slice of the description: haystacks are cached
+    // per listing, and over a 20,000-listing snapshot the full-description
+    // copies pushed a cold isolate over its CPU/memory budget, so the
+    // first real search could fail outright. Skill extraction already ran
+    // over the full advert at ingest and the extracted skills are in the
+    // haystack in full, so a specific tool mentioned late in an advert
+    // (WordPress in a long "web developer" posting) is still findable.
     value = normalizeSearchText(
-      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${opportunityTerms} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')} ${job.description.slice(0, 2500)}`,
+      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${opportunityTerms} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')} ${job.description.slice(0, 800)}`,
     )
     haystackCache.set(job, value)
   }
