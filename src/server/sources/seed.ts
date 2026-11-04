@@ -394,7 +394,8 @@ export const SEED_SOURCES: SeedSource[] = [
       [
         'jobicy-india',
         'Jobicy India',
-        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=india',
+        // The India slice answers 400 at count=100; it was healthy at 50.
+        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=india',
         'jobicy',
       ],
       [
@@ -449,7 +450,10 @@ export const SEED_SOURCES: SeedSource[] = [
         id: 'himalayas',
         name: 'Himalayas — public API',
         listingUrl: 'https://himalayas.app/jobs/api',
-        options: { maxPages: 60 },
+        // Live evidence: when every source ran back to back, Himalayas began
+        // returning 429 after roughly 170 requests. 45 pages still returns
+        // about 900 postings and leaves room for the category slices.
+        options: { maxPages: 45 },
         tier: 'six_hourly',
       },
       {
@@ -624,14 +628,14 @@ export const SEED_SOURCES: SeedSource[] = [
         'remotejobs-latest',
         'latest remote jobs',
         'https://remotejobs.org/api/v1/jobs?limit=50',
-        20,
+        28,
         'six_hourly',
       ],
       [
         'remotejobs-programming',
         'programming',
         'https://remotejobs.org/api/v1/jobs?limit=50&category=programming',
-        16,
+        26,
         'daily',
       ],
       [
@@ -652,14 +656,14 @@ export const SEED_SOURCES: SeedSource[] = [
         'remotejobs-contracts',
         'contracts',
         'https://remotejobs.org/api/v1/jobs?limit=50&type=contract',
-        16,
+        19,
         'daily',
       ],
       [
         'remotejobs-freelance',
         'freelance work',
         'https://remotejobs.org/api/v1/jobs?limit=50&type=freelance',
-        6,
+        10,
         'daily',
       ],
       [
@@ -680,14 +684,14 @@ export const SEED_SOURCES: SeedSource[] = [
         'remotejobs-frontend',
         'front-end development',
         'https://remotejobs.org/api/v1/jobs?limit=50&q=frontend%20developer&sort=relevance',
-        6,
+        9,
         'daily',
       ],
       [
         'remotejobs-backend',
         'back-end development',
         'https://remotejobs.org/api/v1/jobs?limit=50&q=backend%20developer&sort=relevance',
-        6,
+        9,
         'daily',
       ],
       [
@@ -708,7 +712,7 @@ export const SEED_SOURCES: SeedSource[] = [
         'remotejobs-customer-support',
         'customer support',
         'https://remotejobs.org/api/v1/jobs?limit=50&category=customer-support',
-        8,
+        12,
         'daily',
       ],
       [
@@ -722,7 +726,7 @@ export const SEED_SOURCES: SeedSource[] = [
         'remotejobs-marketing',
         'marketing',
         'https://remotejobs.org/api/v1/jobs?limit=50&category=marketing',
-        8,
+        12,
         'daily',
       ],
     ] as const
