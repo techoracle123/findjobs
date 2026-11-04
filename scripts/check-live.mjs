@@ -71,21 +71,69 @@ if (!jobLane.total || jobLane.jobs.some((job) => job.opportunityType === 'gig' |
 console.log(
   `::notice title=Live gigs check::${JSON.stringify({ gigChecks, jobLaneTotal: jobLane.total })}`,
 )
+// Category depth is a product promise, not just a total-listings number.
+// Record the exact searches skilled users make first so a larger feed cannot
+// hide a thin WordPress, security, data, media, development or tutoring lane.
+const categoryQueries = [
+  'WordPress',
+  'cybersecurity',
+  'penetration testing',
+  'data analyst',
+  'data analytics',
+  'video editor',
+  'frontend developer',
+  'backend developer',
+  'tutor',
+  'teacher',
+  'contract',
+  'freelance',
+]
+const categoryChecks = []
+for (const query of categoryQueries) {
+  const encoded = encodeURIComponent(query)
+  const all = await json(`/api/jobs?status=open&limit=1&q=${encoded}`)
+  const gigs = await json(`/api/jobs?status=open&type=gig&limit=1&q=${encoded}`)
+  categoryChecks.push({
+    query,
+    all: all.total,
+    gigs: gigs.total,
+    firstTitle: all.jobs[0]?.title ?? null,
+    firstSource: all.jobs[0]?.sourceName ?? null,
+  })
+}
+console.log(`::notice title=Live category depth::${JSON.stringify(categoryChecks)}`)
 const sources =
   process.env.STORAGE_DEGRADED === 'true' ? { sources: [] } : await json('/api/sources')
 console.log(
   `::notice title=Live source status::${JSON.stringify(
     (sources.sources || [])
-      .filter((source) =>
-        [
-          'myjobmag-ng',
-          'hotnigerianjobs',
-          'weworkremotely',
-          'greenhouse-oneacrefund',
-          'greenhouse-givedirectly',
-          'greenhouse-givewell',
-          'greenhouse-acumen',
-        ].includes(source.id),
+      .filter(
+        (source) =>
+          [
+            'myjobmag-ng',
+            'hotnigerianjobs',
+            'weworkremotely',
+            'greenhouse-oneacrefund',
+            'greenhouse-givedirectly',
+            'greenhouse-givewell',
+            'greenhouse-acumen',
+            'arbeitnow',
+            'himalayas',
+            'jobicy',
+            'themuse',
+            'remoteok',
+            'workingnomads',
+            'workday-shell-nigeria',
+            'oracle-mtn-nigeria',
+            'zoho-gtbank',
+            'efcc-recruitment-portal',
+            'fcsc-vacancies',
+            'nnpc-careers',
+          ].includes(source.id) ||
+          source.id.startsWith('himalayas-') ||
+          source.id.startsWith('jobicy-') ||
+          source.id.startsWith('themuse-') ||
+          source.id.startsWith('remotejobs-'),
       )
       .map((source) => ({
         id: source.id,
@@ -105,6 +153,9 @@ console.log(
       jobs: jobs.total,
       gigs: gigChecks[0]?.total ?? 0,
       jobLane: jobLane.total,
+      categories: Object.fromEntries(
+        categoryChecks.map((check) => [check.query, { all: check.all, gigs: check.gigs }]),
+      ),
       nigeria: nigeria.total,
       ratesDate: rates.date,
       ratesSource: rates.source,
