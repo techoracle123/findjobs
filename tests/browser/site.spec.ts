@@ -157,7 +157,10 @@ test('first job card lands within one screen on a phone and search is full width
   const firstCardY = await page.evaluate(
     () => document.querySelector('.jobrow')!.getBoundingClientRect().top + window.scrollY,
   )
-  expect(firstCardY).toBeLessThanOrEqual(500) // measured 1146px before the revamp
+  // 1146px before the revamp pushed the first card below the fold. The
+  // Popular skills row adds one compact scrollable line (~46px), so the
+  // first card now starts around 546px, still well inside the first screen.
+  expect(firstCardY).toBeLessThanOrEqual(600)
   const searchWidth = await page.evaluate(
     () => document.querySelector('.searchbar')!.getBoundingClientRect().width,
   )
