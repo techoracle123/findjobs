@@ -824,13 +824,19 @@ test('changing filters does not refetch account, health or exchange rates', asyn
   page.on('request', (request) => {
     if (/\/api\/(health|rates|account)(?:[?]|$)/.test(request.url())) metadata.push(request.url())
   })
-  await page.getByRole('button', { name: /^Profession/ }).click()
+  // Scope to the filter chip bar: the Popular skills row uses some of the
+  // same skill names, and this test is about the Profession chip.
+  await page
+    .locator('.chipbar')
+    .getByRole('button', { name: /^Profession/ })
+    .click()
   await page
     .locator('.chip-popover')
     .getByRole('button', { name: /Cybersecurity/ })
     .click()
   await page.waitForTimeout(700)
   await page
+    .locator('.chipbar')
     .getByRole('button', { name: /Cybersecurity|Profession/ })
     .first()
     .click()
@@ -841,7 +847,12 @@ test('changing filters does not refetch account, health or exchange rates', asyn
   await page.waitForTimeout(700)
   expect(metadata).toEqual([])
   // The chip reflects the specialist category chosen from the popover.
-  await expect(page.getByRole('button', { name: /Data analytics/ }).first()).toBeVisible()
+  await expect(
+    page
+      .locator('.chipbar')
+      .getByRole('button', { name: /Data analytics/ })
+      .first(),
+  ).toBeVisible()
 })
 
 test('switching accounts never reuses another person’s browser profile', async ({ page }) => {
