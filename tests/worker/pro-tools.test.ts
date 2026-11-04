@@ -21,6 +21,8 @@ async function request(
 }
 
 async function insertJob(id: string, salaryMin: number, salaryMax: number): Promise<void> {
+  // Keep the fixture inside the production staleness window on any test date.
+  const seenAt = new Date().toISOString()
   await env.DB.prepare(
     `INSERT OR REPLACE INTO jobs (id, title, company, role_family, seniority, work_mode,
       location_country, location_label, salary_min, salary_max, salary_currency, salary_period,
@@ -31,10 +33,10 @@ async function insertJob(id: string, salaryMin: number, salaryMax: number): Prom
       'Nigeria · Remote', ?2, ?3, 'NGN', 'month',
       'Build accessible dashboards with TypeScript and React. Send your CV to hiring@example.com.',
       '["TypeScript","React","CSS"]', '["GraphQL"]', '["NG"]', 'unknown', 'test',
-      'https://example.com/jobs/pro', '2026-10-30T00:00:00Z', 0, 'verified', 'open',
-      '2026-10-30T00:00:00Z', '2026-10-30T00:00:00Z', 'https://example.com/jobs/pro/apply', 'external')`,
+      'https://example.com/jobs/pro', ?4, 0, 'verified', 'open',
+      ?4, ?4, 'https://example.com/jobs/pro/apply', 'external')`,
   )
-    .bind(id, salaryMin, salaryMax)
+    .bind(id, salaryMin, salaryMax, seenAt)
     .run()
 }
 
