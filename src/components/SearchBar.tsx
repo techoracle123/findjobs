@@ -11,7 +11,7 @@ export interface SearchValues {
 
 interface SearchBarProps {
   value: SearchValues
-  professionSuggestions: { id: string; label: string }[]
+  professionSuggestions: { id: string; label: string; query?: string }[]
   onSubmit: (value: SearchValues) => void
 }
 
@@ -60,10 +60,19 @@ export function SearchBar({ value, professionSuggestions, onSubmit }: SearchBarP
   const whatSuggestions = [
     ...readRecent()
       .filter((item) => item.toLowerCase().includes(what.toLowerCase()))
-      .map((item) => ({ kind: 'recent' as const, label: item, code: '' })),
+      .map((item) => ({ kind: 'recent' as const, label: item, code: '', query: item })),
     ...professionSuggestions
-      .filter((item) => item.label.toLowerCase().includes(what.toLowerCase()))
-      .map((item) => ({ kind: 'profession' as const, label: item.label, code: item.id })),
+      .filter(
+        (item) =>
+          item.label.toLowerCase().includes(what.toLowerCase()) ||
+          item.query?.toLowerCase().includes(what.toLowerCase()),
+      )
+      .map((item) => ({
+        kind: 'profession' as const,
+        label: item.label,
+        code: item.id,
+        query: item.query ?? item.label,
+      })),
   ].slice(0, 8)
 
   const whereSuggestions = [
@@ -131,7 +140,7 @@ export function SearchBar({ value, professionSuggestions, onSubmit }: SearchBarP
             }
             if (event.key === 'Enter' && whatOpen && whatSuggestions[whatIndex]) {
               event.preventDefault()
-              setWhat(whatSuggestions[whatIndex].label)
+              setWhat(whatSuggestions[whatIndex].query)
               setWhatOpen(false)
             }
             if (event.key === 'Escape') setWhatOpen(false)
@@ -161,10 +170,10 @@ export function SearchBar({ value, professionSuggestions, onSubmit }: SearchBarP
                 className="combolist__item"
                 data-active={index === whatIndex}
                 onPointerDown={() => {
-                  setWhat(item.label)
+                  setWhat(item.query)
                   setWhatOpen(false)
                   onSubmit({
-                    query: item.label,
+                    query: item.query,
                     location: value.location,
                     countryCode: value.countryCode,
                   })

@@ -20,18 +20,18 @@ export interface GigCategory {
 
 export const GIG_CATEGORIES: GigCategory[] = [
   {
+    id: 'wordpress-websites',
+    label: 'WordPress and websites',
+    search: 'WordPress',
+    pattern:
+      /\b(word\s?press|woocommerce|woo commerce|elementor|shopify developer|webflow developer|website\s+(?:build|builder|redesign|migration|maintenance))\b/i,
+  },
+  {
     id: 'web-development',
     label: 'Web development',
     search: 'web developer',
     pattern:
       /\b(web\s+(?:developer|development|designer|app|application)|website\s+(?:developer|development|designer|build)|front[- ]?end|full[- ]?stack|wordpress|shopify|webflow|react(?:\.js)?|next\.js|vue(?:\.js)?|angular|landing page developer)\b/i,
-  },
-  {
-    id: 'software-apps',
-    label: 'Software and apps',
-    search: 'software developer',
-    pattern:
-      /\b(software\s+(?:developer|engineer|development)|mobile\s+(?:app\s+)?(?:developer|engineer)|ios developer|android developer|flutter developer|react native|back[- ]?end\s+(?:developer|engineer)|api developer|devops|site reliability|qa engineer|test automation|programmer|app developer)\b/i,
   },
   {
     id: 'cybersecurity',
@@ -55,11 +55,18 @@ export const GIG_CATEGORIES: GigCategory[] = [
       /\b(video\s+(?:editor|editing|producer|production|content creator)|videograph(?:er|y)|motion\s+(?:graphics|designer)|premiere pro|after effects|final cut|capcut|short-form video|reels editor)\b/i,
   },
   {
-    id: 'photo-editing',
-    label: 'Photo editing',
-    search: 'photo editing',
+    id: 'data-analytics',
+    label: 'Data and analytics',
+    search: 'data analyst',
     pattern:
-      /\b(photo\s+(?:editor|editing|retoucher|retouching)|photograph(?:er|y)|image\s+(?:editor|editing|retouching)|lightroom|photo manipulation)\b/i,
+      /\b(data\s+(?:analyst|analytics|scientist|science|engineer|engineering|visualization|visualisation)|business intelligence|power bi|tableau|looker|sql analyst|machine learning|statistical analyst)\b/i,
+  },
+  {
+    id: 'tutoring-teaching',
+    label: 'Tutoring and teaching',
+    search: 'tutor',
+    pattern:
+      /\b(tutor(?:ing)?|online teacher|esl teacher|language instructor|maths? tutor|science tutor|exam preparation tutor|private lessons?|teaching assistant)\b/i,
   },
   {
     id: 'design',
@@ -69,11 +76,18 @@ export const GIG_CATEGORIES: GigCategory[] = [
       /\b(graphic designer|brand designer|visual designer|ui\/?ux|ux designer|ui designer|product designer|illustrat(?:or|ion)|logo designer|presentation designer|figma designer|canva designer|designer)\b/i,
   },
   {
-    id: 'data-analytics',
-    label: 'Data and analytics',
-    search: 'data analyst',
+    id: 'photo-editing',
+    label: 'Photo editing',
+    search: 'photo editing',
     pattern:
-      /\b(data\s+(?:analyst|analytics|scientist|science|engineer|engineering|visualization|visualisation)|business intelligence|power bi|tableau|looker|sql analyst|machine learning|statistical analyst)\b/i,
+      /\b(photo\s+(?:editor|editing|retoucher|retouching)|photograph(?:er|y)|image\s+(?:editor|editing|retouching)|lightroom|photo manipulation)\b/i,
+  },
+  {
+    id: 'software-apps',
+    label: 'Software and apps',
+    search: 'software developer',
+    pattern:
+      /\b(software\s+(?:developer|engineer|development)|mobile\s+(?:app\s+)?(?:developer|engineer)|ios developer|android developer|flutter developer|react native|back[- ]?end\s+(?:developer|engineer)|api developer|devops|site reliability|qa engineer|test automation|programmer|app developer)\b/i,
   },
   {
     id: 'writing-content',
@@ -105,9 +119,11 @@ const BY_ID = new Map(GIG_CATEGORIES.map((category) => [category.id, category]))
 // "design" if the advert also asks for thumbnails or graphics.
 const DETECTION_ORDER = [
   'penetration-testing',
+  'wordpress-websites',
   'cybersecurity',
   'video-editing',
   'photo-editing',
+  'tutoring-teaching',
   'web-development',
   'data-analytics',
   'design',
@@ -124,6 +140,7 @@ const ROLE_FALLBACK: Record<string, string> = {
   'data-engineering': 'data-analytics',
   ml: 'data-analytics',
   design: 'design',
+  education: 'tutoring-teaching',
   frontend: 'web-development',
   fullstack: 'web-development',
   backend: 'software-apps',
@@ -157,7 +174,6 @@ function firstMatch(text: string): GigCategory | null {
 
 export function gigCategoryFor(input: GigCategoryInput | Job): GigCategory | null {
   const titleMatch = firstMatch(input.title ?? '')
-  if (titleMatch) return titleMatch
 
   const skillText = [
     ...('requiredSkills' in input ? (input.requiredSkills ?? []) : []),
@@ -165,6 +181,15 @@ export function gigCategoryFor(input: GigCategoryInput | Job): GigCategory | nul
     ...('tags' in input ? (input.tags ?? []) : []),
   ].join(' ')
   const skillMatch = firstMatch(skillText)
+
+  // A broad title should not hide specific evidence in the skills. A
+  // "Website Developer" advert that asks for WooCommerce and Elementor is
+  // WordPress work, so when both match, the more specific category wins.
+  if (titleMatch && skillMatch)
+    return DETECTION_ORDER.indexOf(skillMatch.id) < DETECTION_ORDER.indexOf(titleMatch.id)
+      ? skillMatch
+      : titleMatch
+  if (titleMatch) return titleMatch
   if (skillMatch) return skillMatch
 
   const descriptionMatch = firstMatch((input.description ?? '').slice(0, 5000))

@@ -273,6 +273,15 @@ export function JobDetail({
               . Use the apply button above to continue on the linked application page.
             </p>
           )}
+          {job.sourceName?.toLowerCase().includes('remotejobs.org') && (
+            <p>
+              Powered by{' '}
+              <a href="https://remotejobs.org" target="_blank" rel="noopener noreferrer">
+                RemoteJobs.org
+              </a>
+              . Use the apply button above to continue on the linked application page.
+            </p>
+          )}
         </section>
         <ProTools
           key={job.id}

@@ -26,6 +26,7 @@ export const PUBLIC_SOURCES = SEED_SOURCES.filter(
       'himalayas',
       'workingnomads',
       'jobicy',
+      'remotejobs',
       'hn-hiring',
       'themuse',
       'smartrecruiters',

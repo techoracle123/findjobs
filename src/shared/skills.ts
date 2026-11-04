@@ -76,8 +76,12 @@ const GROUPS: string[][] = [
   ['payments', 'paymentsengineering'],
   ['elasticsearch'],
   ['opensearch'],
-  ['wordpress'],
+  ['wordpress', 'word press'],
+  ['woocommerce', 'woo commerce'],
+  ['elementor'],
   ['shopify'],
+  ['webflow'],
+  ['hubspot', 'hubspotcms'],
   ['stripe'],
   ['twilio'],
   ['openai', 'gpt'],
@@ -266,8 +270,29 @@ export const SKILL_CATALOGUE: SkillPattern[] = [
 ]
 
 export const ROLE_FAMILY_KEYWORDS: { family: string; patterns: RegExp[] }[] = [
-  { family: 'frontend', patterns: [word('frontend'), word('front[- ]end'), word('ui engineer')] },
-  { family: 'backend', patterns: [word('backend'), word('back[- ]end'), word('api engineer')] },
+  {
+    family: 'frontend',
+    patterns: [
+      word('frontend'),
+      word('front[- ]end'),
+      word('ui engineer'),
+      word('web developer'),
+      word('website developer'),
+      word('wordpress developer'),
+      word('webflow developer'),
+      word('shopify developer'),
+    ],
+  },
+  {
+    family: 'backend',
+    patterns: [
+      word('backend'),
+      word('back[- ]end'),
+      word('api engineer'),
+      word('php developer'),
+      word('wordpress backend'),
+    ],
+  },
   { family: 'fullstack', patterns: [word('full[- ]?stack')] },
   {
     family: 'data',
@@ -458,4 +483,25 @@ SKILL_CATALOGUE.push(
   { label: 'Adobe Premiere Pro', patterns: [/\bpremiere(?: pro)?\b/i], weight: 4 },
   { label: 'After Effects', patterns: [/\bafter effects\b/i], weight: 4 },
   { label: 'DaVinci Resolve', patterns: [/\bdavinci resolve\b/i], weight: 4 },
+  { label: 'WordPress', patterns: [/\bword\s?press\b/i], weight: 6 },
+  { label: 'WooCommerce', patterns: [/\bwoo\s?commerce\b/i], weight: 5 },
+  { label: 'Elementor', patterns: [/\belementor\b/i], weight: 4 },
+  { label: 'Shopify', patterns: [/\bshopify\b/i], weight: 5 },
+  { label: 'Webflow', patterns: [/\bwebflow\b/i], weight: 5 },
+  { label: 'HubSpot', patterns: [/\bhubspot\b/i], weight: 4 },
+  {
+    label: 'Tutoring',
+    patterns: [/\btutor(?:ing)?\b/i, /\bonline teaching\b/i, /\blesson planning\b/i],
+    weight: 5,
+  },
+  {
+    label: 'Front-end development',
+    patterns: [/\bfront[- ]?end\s+(?:developer|development|engineer)\b/i],
+    weight: 5,
+  },
+  {
+    label: 'Back-end development',
+    patterns: [/\bback[- ]?end\s+(?:developer|development|engineer)\b/i],
+    weight: 5,
+  },
 )

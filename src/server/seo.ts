@@ -220,6 +220,10 @@ export function jobPostingJsonLd(job: Job, origin: string, nonce: string): strin
   // source credit, but not redistribution through Google Jobs/JobPosting
   // structured data or other aggregators.
   if (job.sourcePlatform === 'himalayas' || job.sourceName === 'Himalayas') return null
+  // RemoteJobs.org permits display in FJ with credit and its application
+  // link. Its listings are third-party content, so FJ does not redistribute
+  // them as JobPosting structured data.
+  if (job.sourcePlatform === 'remotejobs' || job.sourceName?.includes('RemoteJobs.org')) return null
 
   const { title } = jobMeta(job, origin)
   const opportunity = opportunityOf(job)

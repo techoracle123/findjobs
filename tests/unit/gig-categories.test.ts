@@ -13,6 +13,20 @@ describe('detailed gig categories', () => {
     expect(gigCategoryFor({ title: 'SOC Analyst, Cybersecurity' })?.id).toBe('cybersecurity')
   })
 
+  it('separates WordPress website work and teaching from broader labels', () => {
+    expect(gigCategoryFor({ title: 'Freelance WordPress Developer' })?.id).toBe(
+      'wordpress-websites',
+    )
+    expect(
+      gigCategoryFor({ title: 'Website Developer', requiredSkills: ['WooCommerce', 'Elementor'] })
+        ?.id,
+    ).toBe('wordpress-websites')
+    expect(gigCategoryFor({ title: 'Online Maths Tutor' })?.id).toBe('tutoring-teaching')
+    expect(gigCategoryFor({ title: 'Contract Instructor', roleFamily: 'education' })?.id).toBe(
+      'tutoring-teaching',
+    )
+  })
+
   it('uses skills and advert wording when the title is broad', () => {
     expect(
       gigCategoryFor({ title: 'Contract Developer', requiredSkills: ['React', 'TypeScript'] })?.id,

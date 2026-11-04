@@ -61,6 +61,12 @@ export const SKILL_DICTIONARY: SkillEntry[] = [
   entry('Storybook', 'frontend', ['storybook']),
   entry('Flutter', 'frontend', ['flutter']),
   entry('Three.js', 'frontend', ['three.js', 'threejs', 'webgl']),
+  entry('WordPress', 'frontend', ['wordpress', 'word press'], ['wp']),
+  entry('WooCommerce', 'frontend', ['woocommerce', 'woo commerce']),
+  entry('Elementor', 'frontend', ['elementor']),
+  entry('Shopify', 'frontend', ['shopify']),
+  entry('Webflow', 'frontend', ['webflow']),
+  entry('HubSpot', 'frontend', ['hubspot', 'hubspot cms', 'hubl']),
   // Backend
   entry('Node.js', 'backend', ['node.js', 'nodejs', 'node js'], ['node']),
   entry('Express', 'backend', ['express', 'express.js', 'expressjs']),
@@ -475,6 +481,9 @@ export const SKILL_DICTIONARY: SkillEntry[] = [
     'curriculum development',
     'lesson planning',
     'tutoring',
+    'tutor',
+    'online teaching',
+    'online tutor',
     'training and development',
   ]),
   entry('Nursing', 'healthcare', [

@@ -34,6 +34,7 @@ import { readLocal, writeLocal } from './lib/storage'
 import { DEFAULT_FILTERS, filterJobs, salaryView, sortJobs } from './lib/ranking'
 import type { Filters, SortKey } from './lib/ranking'
 import { ROLE_FAMILIES, ROLE_FAMILY_LABELS } from './shared/taxonomy'
+import { POPULAR_SKILL_SEARCHES } from './shared/search-shortcuts'
 import { scoreJob } from './shared/scoring'
 import { ProfilePanel, EMPTY_PROFILE } from './components/ProfilePanel'
 import { CvImport, type ImportedCv } from './components/CvImport'
@@ -849,10 +850,17 @@ export default function App() {
               location: filters.location ?? '',
               countryCode: filters.country ?? '',
             }}
-            professionSuggestions={ROLE_FAMILIES.map((family) => ({
-              id: family,
-              label: ROLE_FAMILY_LABELS[family],
-            }))}
+            professionSuggestions={[
+              ...POPULAR_SKILL_SEARCHES.map((shortcut) => ({
+                id: `skill-${shortcut.id}`,
+                label: shortcut.label,
+                query: shortcut.search,
+              })),
+              ...ROLE_FAMILIES.map((family) => ({
+                id: family,
+                label: ROLE_FAMILY_LABELS[family],
+              })),
+            ]}
             onSubmit={(next: SearchValues) => {
               track('search', next.query || next.location || '')
               const updated = {

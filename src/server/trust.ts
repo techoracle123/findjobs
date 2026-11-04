@@ -100,7 +100,7 @@ const KNOWN_COMPANIES = new Set(
 
 /** Apply-link hosts that are themselves evidence of a real, verifiable listing. */
 const VERIFIABLE_HOST =
-  /(?:greenhouse\.io|lever\.co|ashbyhq\.com|smartrecruiters\.com|workable\.com|recruitee\.com|personio\.|teamtailor\.com|breezy\.hr|myworkdayjobs\.com|icims\.com|jobvite\.com|arbeitnow\.|remoteok\.com|himalayas\.app|themuse\.com|jobicy\.com|workingnomads\.com|weworkremotely\.com|myjobmag\.com|jobberman\.com)/i
+  /(?:greenhouse\.io|lever\.co|ashbyhq\.com|smartrecruiters\.com|workable\.com|recruitee\.com|personio\.|teamtailor\.com|breezy\.hr|myworkdayjobs\.com|icims\.com|jobvite\.com|arbeitnow\.|remoteok\.com|remotejobs\.org|himalayas\.app|themuse\.com|jobicy\.com|workingnomads\.com|weworkremotely\.com|myjobmag\.com|jobberman\.com)/i
 
 function hostOf(url: string | undefined): string {
   try {

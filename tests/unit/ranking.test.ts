@@ -76,6 +76,46 @@ describe('filterJobs', () => {
     expect(filterJobs(scored, { ...DEFAULT_FILTERS, query: 'alpha beta' })).toHaveLength(0)
   })
 
+  it('matches common spellings for practical skilled work', () => {
+    const skillJobs = [
+      makeJob({ id: 'front', title: 'Front-End Developer', roleFamily: 'frontend' }),
+      makeJob({ id: 'data', title: 'Data Analyst', roleFamily: 'data' }),
+      makeJob({ id: 'teach', title: 'Online Teacher', roleFamily: 'education' }),
+      makeJob({ id: 'security', title: 'Information Security Analyst', roleFamily: 'security' }),
+      makeJob({
+        id: 'wp',
+        title: 'Website Developer',
+        roleFamily: 'frontend',
+        requiredSkills: ['Word Press'],
+      }),
+      makeJob({ id: 'pentest', title: 'Penetration Tester', roleFamily: 'security' }),
+      makeJob({ id: 'va', title: 'Virtual Assistant', roleFamily: 'operations' }),
+      makeJob({
+        id: 'decoy',
+        title: 'Finance Officer',
+        requiredSkills: ['Credit analysis', 'Latest reporting tools'],
+      }),
+    ].map((job) => scoreJob(job, profile))
+    const idsFor = (query: string) =>
+      filterJobs(skillJobs, { ...DEFAULT_FILTERS, query }).map((entry) => entry.job.id)
+    // The website-developer job is classified frontend, so it is a fair
+    // result for a front-end search too.
+    expect(idsFor('frontend developer')).toEqual(['front', 'wp'])
+    expect(idsFor('front-end development')).toEqual(['front', 'wp'])
+    expect(idsFor('data analytics')).toEqual(['data'])
+    expect(idsFor('tutor')).toEqual(['teach'])
+    // Penetration testing sits in the security family, so it is a fair
+    // result for a cybersecurity search as well.
+    expect(idsFor('cybersecurity')).toEqual(['security', 'pentest'])
+    expect(idsFor('WordPress')).toEqual(['wp'])
+    expect(idsFor('penetration testing')).toEqual(['pentest'])
+    expect(idsFor('virtual assistance')).toEqual(['va'])
+    // Stems match at word starts only: "credit" is not editing work and
+    // "latest" is not testing work.
+    expect(idsFor('editor')).toEqual([])
+    expect(idsFor('testing')).toEqual(['pentest'])
+  })
+
   it('filters by work mode, level and role family', () => {
     expect(filterJobs(scored, { ...DEFAULT_FILTERS, workModes: ['remote'] })).toHaveLength(1)
     expect(filterJobs(scored, { ...DEFAULT_FILTERS, roleFamilies: ['design'] })).toHaveLength(1)

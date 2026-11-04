@@ -23,6 +23,7 @@ import { controlEnabled } from '../shared/quality'
 import type { FieldCoverage } from '../shared/quality'
 import { OPPORTUNITY_FILTER_OPTIONS } from '../shared/opportunities'
 import { GIG_CATEGORIES } from '../shared/gig-categories'
+import { POPULAR_SKILL_SEARCHES } from '../shared/search-shortcuts'
 import { CountryPicker } from './CountryPicker'
 
 interface FilterChipsProps {
@@ -55,6 +56,7 @@ export function FilterChips({
 }: FilterChipsProps) {
   const [open, setOpen] = useState<ChipId | null>(null)
   const [showAllGigCategories, setShowAllGigCategories] = useState(false)
+  const [showAllSkillSearches, setShowAllSkillSearches] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -92,9 +94,22 @@ export function FilterChips({
   const visibleGigCategories = showAllGigCategories
     ? GIG_CATEGORIES
     : [
-        ...GIG_CATEGORIES.slice(0, 6),
-        ...(activeGigCategory && !GIG_CATEGORIES.slice(0, 6).includes(activeGigCategory)
+        ...GIG_CATEGORIES.slice(0, 8),
+        ...(activeGigCategory && !GIG_CATEGORIES.slice(0, 8).includes(activeGigCategory)
           ? [activeGigCategory]
+          : []),
+      ]
+  const activeSkillSearch = POPULAR_SKILL_SEARCHES.find(
+    (shortcut) =>
+      normalizedGigQuery === shortcut.search.toLowerCase() ||
+      normalizedGigQuery === shortcut.label.toLowerCase(),
+  )
+  const visibleSkillSearches = showAllSkillSearches
+    ? POPULAR_SKILL_SEARCHES
+    : [
+        ...POPULAR_SKILL_SEARCHES.slice(0, 8),
+        ...(activeSkillSearch && !POPULAR_SKILL_SEARCHES.slice(0, 8).includes(activeSkillSearch)
+          ? [activeSkillSearch]
           : []),
       ]
 
@@ -163,6 +178,44 @@ export function FilterChips({
             onClick={() => setShowAllGigCategories((current) => !current)}
           >
             {showAllGigCategories ? 'Fewer types' : 'More types'}
+          </button>
+        </div>
+      )}
+      {filters.opportunityType !== 'gig' && (
+        <div className="gig-categories skill-searches" aria-label="Browse by popular skill">
+          <span className="gig-categories__label">Popular skills</span>
+          <button
+            type="button"
+            className="chipbtn gig-category-btn"
+            aria-pressed={!activeSkillSearch && !normalizedGigQuery}
+            onClick={() => onChange({ ...filters, query: '', roleFamilies: [] })}
+          >
+            All skills
+          </button>
+          {visibleSkillSearches.map((shortcut) => (
+            <button
+              key={shortcut.id}
+              type="button"
+              className="chipbtn gig-category-btn"
+              aria-pressed={activeSkillSearch?.id === shortcut.id}
+              onClick={() =>
+                onChange({
+                  ...filters,
+                  query: activeSkillSearch?.id === shortcut.id ? '' : shortcut.search,
+                  roleFamilies: [],
+                })
+              }
+            >
+              {shortcut.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="chipbtn gig-category-btn gig-category-btn--more"
+            aria-expanded={showAllSkillSearches}
+            onClick={() => setShowAllSkillSearches((current) => !current)}
+          >
+            {showAllSkillSearches ? 'Fewer skills' : 'More skills'}
           </button>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { roleFamilyLabel } from '../shared/taxonomy'
 import { matchesOpportunityFilter, opportunityOf } from '../shared/opportunities'
 import { gigCategoryFor } from '../shared/gig-categories'
+import { matchesNormalizedSearchText, normalizeSearchText } from '../shared/search-matching'
 import { marketRank } from '../shared/scoring'
 import type { Job } from '../shared/types'
 import type { JobSearch, JobSearchResult } from './jobs'
@@ -211,8 +212,9 @@ function haystack(job: Job): string {
       gigCategory?.search ?? '',
       opportunity.opportunityType === 'gig' ? 'gig gigs contract freelance project' : 'job jobs',
     ].join(' ')
-    value =
-      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${opportunityTerms} ${job.description} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')}`.toLowerCase()
+    value = normalizeSearchText(
+      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${opportunityTerms} ${job.description} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')}`,
+    )
     haystackCache.set(job, value)
   }
   return value
@@ -272,8 +274,7 @@ export function publicFacetMatch(job: Job, search: JobSearch): PublicFacetMatch 
   if (Number(country) + Number(roleFamily) + Number(opportunity) < 2)
     return { ...NO_FACET_MATCH, gig }
 
-  const terms = (search.query || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
-  if (terms.length && !terms.every((term) => haystack(job).includes(term)))
+  if (search.query?.trim() && !matchesNormalizedSearchText(haystack(job), search.query))
     return { ...NO_FACET_MATCH, gig }
 
   return {
@@ -286,7 +287,6 @@ export function publicFacetMatch(job: Job, search: JobSearch): PublicFacetMatch 
 }
 
 export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
-  const terms = (search.query || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
   const place = (search.location || '').toLowerCase().trim()
   return jobs.filter(
     (job) =>
@@ -304,6 +304,6 @@ export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
       matchesOpportunityFilter(job, search.opportunityType) &&
       (!search.verification?.length ||
         search.verification.includes(job.verification || 'unverified')) &&
-      terms.every((term) => haystack(job).includes(term)),
+      matchesNormalizedSearchText(haystack(job), search.query || ''),
   )
 }

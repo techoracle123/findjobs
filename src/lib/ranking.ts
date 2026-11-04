@@ -10,7 +10,9 @@ import type {
 import { bucketByPeriod, convertAmount } from '../shared/format'
 import { roleFamilyLabel } from '../shared/taxonomy'
 import { compareScoredJobs } from '../shared/scoring'
+import { gigCategoryFor } from '../shared/gig-categories'
 import { matchesOpportunityFilter, opportunityOf } from '../shared/opportunities'
+import { matchesSearchText } from '../shared/search-matching'
 
 export interface Filters {
   query: string
@@ -102,9 +104,9 @@ export function salaryView(
 }
 
 function matchesQuery(job: Job, query: string): boolean {
-  if (!query) return true
-  const needle = query.trim().toLowerCase()
-  if (!needle) return true
+  if (!query.trim()) return true
+  const opportunity = opportunityOf(job)
+  const gigCategory = opportunity.opportunityType === 'gig' ? gigCategoryFor(job) : null
 
   const haystack = [
     job.title,
@@ -113,16 +115,16 @@ function matchesQuery(job: Job, query: string): boolean {
     job.locationLabel,
     job.roleFamily,
     roleFamilyLabel(job.roleFamily),
-    opportunityOf(job).engagementLabel,
-    opportunityOf(job).projectDuration ?? '',
-    opportunityOf(job).opportunityType === 'gig' ? 'gig contract freelance project' : 'job',
+    opportunity.engagementLabel,
+    opportunity.projectDuration ?? '',
+    gigCategory?.label ?? '',
+    gigCategory?.search ?? '',
+    opportunity.opportunityType === 'gig' ? 'gig contract freelance project' : 'job',
     ...job.requiredSkills,
     ...job.usefulSkills,
-  ]
-    .join(' ')
-    .toLowerCase()
+  ].join(' ')
 
-  return needle.split(/\s+/).every((token) => haystack.includes(token))
+  return matchesSearchText(haystack, query)
 }
 
 export function filterJobs(scored: ScoredJob[], filters: Filters): ScoredJob[] {

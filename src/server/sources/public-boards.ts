@@ -1,5 +1,6 @@
 import type { RawPosting, SourceParser, SourceRef } from './types'
 import { stripHtml } from './html'
+import { COUNTRIES } from '../../shared/countries'
 
 /**
  * Public job-board adapters. One parser per response shape; adding a company
@@ -56,6 +57,47 @@ const jsonBoard = (
     return parse(await response.json())
   },
 })
+
+function numberOption(
+  options: Record<string, unknown> | undefined,
+  key: string,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const value = options?.[key]
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, Math.trunc(parsed)))
+}
+
+interface SearchSlice {
+  params: Record<string, string>
+  pages: number
+}
+
+function searchSlicesOption(options: Record<string, unknown> | undefined): SearchSlice[] {
+  const raw = options?.searchSlices
+  if (!Array.isArray(raw)) return []
+  const slices: SearchSlice[] = []
+  for (const item of raw.slice(0, 20)) {
+    if (!item || typeof item !== 'object') continue
+    const record = item as Record<string, unknown>
+    const rawParams =
+      record.params && typeof record.params === 'object'
+        ? (record.params as Record<string, unknown>)
+        : record
+    const params: Record<string, string> = {}
+    for (const [key, value] of Object.entries(rawParams)) {
+      if (key === 'pages' || key === 'params') continue
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+        params[key] = String(value)
+    }
+    if (!Object.keys(params).length) continue
+    slices.push({ params, pages: numberOption(record, 'pages', 5, 1, 50) })
+  }
+  return slices
+}
 
 /** RemoteOK publishes a JSON array; the first element is metadata. */
 export const remoteok = jsonBoard('remoteok', 'remoteok', (body) =>
@@ -153,13 +195,67 @@ export const himalayas: SourceParser = {
   verificationReason: 'A public opportunity; verify with the employer.',
   async fetchPostings(source: SourceRef, fetchImpl: typeof fetch = fetch) {
     // Small pages: each item carries a full description, so a 100-item page
-    // is a multi-MB response that risks fetch timeouts; 25-item pages stay
-    // light. 40 pages bounds one refresh at 1,000 postings (each also costs
-    // a detail write downstream).
-    const pageSize = 25
-    const maxPages = 40
+    // is a multi-MB response that risks fetch timeouts. The publisher caps a
+    // page at 20. Source-specific page bounds keep one refresh finite while
+    // separate search slices give skilled categories real depth.
+    const pageSize = 20
+    const maxPages = numberOption(source.options, 'maxPages', 40, 1, 150)
     const seen = new Set<string>()
     const postings: RawPosting[] = []
+
+    const addJobs = (jobs: Record<string, unknown>[]): number => {
+      let fresh = 0
+      for (const item of jobs) {
+        const mapped = himalayasPosting(item)
+        if (!mapped || seen.has(mapped.id)) continue
+        seen.add(mapped.id)
+        fresh += 1
+        postings.push(mapped.posting)
+      }
+      return fresh
+    }
+
+    const fetchSearch = async (
+      params: Record<string, string>,
+      pages: number,
+      required = false,
+    ): Promise<void> => {
+      const origin = new URL(source.listingUrl)
+      for (let page = 1; page <= pages; page += 1) {
+        const url = new URL('/jobs/api/search', origin)
+        for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
+        if (!url.searchParams.has('sort')) url.searchParams.set('sort', 'recent')
+        url.searchParams.set('page', String(page))
+        const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
+        if (!response.ok) {
+          if (required && page === 1) throw new Error(`himalayas returned ${response.status}`)
+          break
+        }
+        const body = (await response.json()) as {
+          jobs?: Record<string, unknown>[]
+          totalCount?: number
+        }
+        const jobs = body.jobs ?? []
+        const fresh = addJobs(jobs)
+        if (!jobs.length || fresh === 0 || jobs.length < 20) break
+        if (typeof body.totalCount === 'number' && page * 20 >= body.totalCount) break
+      }
+    }
+
+    const listing = new URL(source.listingUrl)
+    if (listing.pathname.endsWith('/search')) {
+      const params = Object.fromEntries(listing.searchParams.entries())
+      await fetchSearch(params, numberOption(source.options, 'maxPages', 10, 1, 50), true)
+      for (const slice of searchSlicesOption(source.options)) {
+        try {
+          await fetchSearch(slice.params, slice.pages)
+        } catch {
+          // One unavailable category must not discard the slices already read.
+        }
+      }
+      return postings
+    }
+
     let cursor: string | null = null
     for (let page = 0; page < maxPages; page += 1) {
       const url = cursor
@@ -175,14 +271,7 @@ export const himalayas: SourceParser = {
         nextCursor?: string | null
       }
       const jobs = body.jobs ?? []
-      let fresh = 0
-      for (const item of jobs) {
-        const mapped = himalayasPosting(item)
-        if (!mapped || seen.has(mapped.id)) continue
-        seen.add(mapped.id)
-        fresh += 1
-        postings.push(mapped.posting)
-      }
+      const fresh = addJobs(jobs)
       cursor = typeof body.nextCursor === 'string' && body.nextCursor ? body.nextCursor : null
       // Follow the cursor, not the requested size: the publisher may serve
       // fewer items per page than asked (it caps at 20), and treating that
@@ -191,37 +280,16 @@ export const himalayas: SourceParser = {
     }
 
     // The full recent feed can bury time-bounded work under permanent roles.
-    // Himalayas' documented search endpoint lets the same source top up real
-    // contractor and temporary listings without creating a second source or
-    // duplicate job IDs: every result is deduped by its stable guid above.
+    // Himalayas' documented search endpoint lets the main source top up real
+    // contractor and temporary listings without creating duplicate job IDs:
+    // every result is deduped by its stable guid above. Dedicated search
+    // sources in seed.ts handle the deeper WordPress, security, data, media,
+    // development and teaching slices.
     try {
-      const base = new URL(source.listingUrl)
-      if (base.hostname.endsWith('himalayas.app')) {
-        for (const employmentType of ['Contractor', 'Temporary']) {
-          for (let page = 1; page <= 5; page += 1) {
-            const url = new URL('/jobs/api/search', base)
-            url.searchParams.set('employment_type', employmentType)
-            url.searchParams.set('sort', 'recent')
-            url.searchParams.set('page', String(page))
-            const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
-            if (!response.ok) break
-            const body = (await response.json()) as { jobs?: Record<string, unknown>[] }
-            const jobs = body.jobs ?? []
-            let fresh = 0
-            for (const item of jobs) {
-              const mapped = himalayasPosting(item)
-              if (!mapped || seen.has(mapped.id)) continue
-              seen.add(mapped.id)
-              fresh += 1
-              postings.push(mapped.posting)
-            }
-            if (!jobs.length || fresh === 0 || jobs.length < 20) break
-          }
-        }
+      if (listing.hostname.endsWith('himalayas.app') && source.id === 'himalayas') {
+        for (const employmentType of ['Contractor', 'Temporary'])
+          await fetchSearch({ employment_type: employmentType }, 5)
 
-        // One relevance-ranked page for the detailed kinds of short-term work
-        // people ask for by name. The employment-type filter stays on, and
-        // results are deduped into the same source by guid.
         for (const query of [
           'video editor',
           'photo editor',
@@ -229,23 +297,13 @@ export const himalayas: SourceParser = {
           'cybersecurity',
           'web developer',
           'data analyst',
-        ]) {
-          const url = new URL('/jobs/api/search', base)
-          url.searchParams.set('employment_type', 'Contractor')
-          url.searchParams.set('q', query)
-          url.searchParams.set('sort', 'recent')
-          url.searchParams.set('page', '1')
-          const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
-          if (!response.ok) continue
-          const body = (await response.json()) as { jobs?: Record<string, unknown>[] }
-          for (const item of body.jobs ?? []) {
-            const mapped = himalayasPosting(item)
-            if (!mapped || seen.has(mapped.id)) continue
-            seen.add(mapped.id)
-            postings.push(mapped.posting)
-          }
-        }
+          'WordPress',
+          'tutor',
+        ])
+          await fetchSearch({ employment_type: 'Contractor', q: query }, 1)
       }
+      for (const slice of searchSlicesOption(source.options))
+        await fetchSearch(slice.params, slice.pages)
     } catch {
       // The browse feed is the source of truth; a search-top-up failure must
       // not discard hundreds of valid listings already fetched.
@@ -270,9 +328,13 @@ export const themuse: SourceParser = {
   async fetchPostings(source: SourceRef, fetchImpl: typeof fetch = fetch) {
     const seen = new Set<string>()
     const postings: RawPosting[] = []
-    for (let page = 0; page < 25; page += 1) {
-      const base = source.listingUrl || 'https://www.themuse.com/api/public/jobs'
-      const response = await fetchImpl(`${base}?page=${page}`, {
+    const maxPages = numberOption(source.options, 'maxPages', 25, 1, 100)
+    const maxAgeDays = numberOption(source.options, 'maxAgeDays', 0, 0, 3650)
+    const oldestAllowed = maxAgeDays > 0 ? Date.now() - maxAgeDays * 86_400_000 : null
+    for (let page = 0; page < maxPages; page += 1) {
+      const url = new URL(source.listingUrl || 'https://www.themuse.com/api/public/jobs')
+      url.searchParams.set('page', String(page))
+      const response = await fetchImpl(url, {
         headers: { accept: 'application/json' },
       })
       if (!response.ok) {
@@ -288,6 +350,14 @@ export const themuse: SourceParser = {
       for (const item of results) {
         const id = String(item.id ?? '')
         if (!id || seen.has(id)) continue
+        const publishedAt = typeof item.publication_date === 'string' ? item.publication_date : null
+        if (
+          oldestAllowed !== null &&
+          (!publishedAt ||
+            !Number.isFinite(Date.parse(publishedAt)) ||
+            Date.parse(publishedAt) < oldestAllowed)
+        )
+          continue
         seen.add(id)
         fresh += 1
         const company = (item.company ?? {}) as { name?: string }
@@ -298,6 +368,23 @@ export const themuse: SourceParser = {
               .filter(Boolean)
               .join(', ')
           : ''
+        const namedTags = (value: unknown): string[] =>
+          Array.isArray(value)
+            ? value
+                .map((entry) =>
+                  typeof entry === 'string'
+                    ? entry
+                    : entry && typeof entry === 'object'
+                      ? String((entry as { name?: unknown }).name ?? '')
+                      : '',
+                )
+                .filter(Boolean)
+            : []
+        const tags = [
+          ...namedTags(item.categories),
+          ...namedTags(item.levels),
+          ...namedTags(item.tags),
+        ]
         postings.push(
           posting(
             id,
@@ -307,13 +394,14 @@ export const themuse: SourceParser = {
             locations,
             stripHtml(String(item.contents ?? '')),
             {
-              publishedAt: typeof item.publication_date === 'string' ? item.publication_date : null,
+              publishedAt,
+              tags,
               remote: /flexible|remote/i.test(locations),
             },
           ),
         )
       }
-      if (!results.length || fresh === 0) break
+      if (!results.length || (fresh === 0 && oldestAllowed === null)) break
       if (typeof body.page_count === 'number' && page + 1 >= body.page_count) break
     }
     return postings
@@ -439,7 +527,11 @@ export const jobicy: SourceParser = {
       }
     }
 
-    await walk(base, 4, true)
+    await walk(
+      base,
+      numberOption(source.options, 'walkPages', source.id === 'jobicy' ? 8 : 4, 1, 20),
+      true,
+    )
 
     // Jobicy's `tag` filter searches available job content. On the global
     // feed only, top up explicitly titled contract/freelance work plus one
@@ -448,14 +540,20 @@ export const jobicy: SourceParser = {
     // classifier still decides whether it belongs in the gig lane.
     if (source.id === 'jobicy' && base.hostname.endsWith('jobicy.com')) {
       const topUps: Array<{ tag: string; pages: number; count?: string }> = [
-        { tag: 'contract', pages: 2 },
-        { tag: 'freelance', pages: 2 },
-        { tag: 'video editor', pages: 1, count: '20' },
-        { tag: 'photo editor', pages: 1, count: '20' },
-        { tag: 'penetration testing', pages: 1, count: '20' },
-        { tag: 'cybersecurity', pages: 1, count: '20' },
-        { tag: 'web developer', pages: 1, count: '20' },
-        { tag: 'data analyst', pages: 1, count: '20' },
+        { tag: 'contract', pages: 3 },
+        { tag: 'freelance', pages: 3 },
+        { tag: 'video editor', pages: 2, count: '50' },
+        { tag: 'photo editor', pages: 2, count: '50' },
+        { tag: 'penetration testing', pages: 2, count: '50' },
+        { tag: 'cybersecurity', pages: 2, count: '50' },
+        { tag: 'web developer', pages: 2, count: '50' },
+        { tag: 'WordPress', pages: 2, count: '50' },
+        { tag: 'data analyst', pages: 2, count: '50' },
+        { tag: 'data analytics', pages: 2, count: '50' },
+        { tag: 'frontend developer', pages: 2, count: '50' },
+        { tag: 'backend developer', pages: 2, count: '50' },
+        { tag: 'tutor', pages: 2, count: '50' },
+        { tag: 'teacher', pages: 2, count: '50' },
       ]
       for (const topUp of topUps) {
         const targeted = new URL(base)
@@ -468,6 +566,171 @@ export const jobicy: SourceParser = {
           // Keep the main Jobicy feed if a category top-up is unavailable.
         }
       }
+    }
+    return postings
+  },
+}
+
+const COUNTRY_NAME_BY_CODE = new Map(COUNTRIES.map((country) => [country.code, country.name]))
+
+function remoteJobsRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+function remoteJobsStrings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .map(String)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : []
+}
+
+function remoteJobsLocation(item: Record<string, unknown>): string {
+  const applicant = remoteJobsRecord(item.applicant_location_requirements)
+  const normalized = remoteJobsRecord(item.location_normalization)
+  if (applicant.scope === 'worldwide' || normalized.scope === 'worldwide') return 'Remote worldwide'
+  const allowed = remoteJobsStrings(applicant.allowed_countries).length
+    ? remoteJobsStrings(applicant.allowed_countries)
+    : remoteJobsStrings(normalized.allowed_countries)
+  const regions = [
+    ...remoteJobsStrings(applicant.regions),
+    ...remoteJobsStrings(applicant.allowed_regions),
+    ...remoteJobsStrings(normalized.regions),
+  ]
+  const places = [
+    ...new Set([
+      ...regions,
+      ...allowed.map((code) => COUNTRY_NAME_BY_CODE.get(code.toUpperCase()) ?? code),
+    ]),
+  ]
+  if (places.length > 5) return 'Remote, multiple countries'
+  if (places.length) return places.join(', ')
+  return typeof item.location === 'string' && item.location.trim() ? item.location.trim() : 'Remote'
+}
+
+function remoteJobsPosting(
+  item: Record<string, unknown>,
+): { id: string; posting: RawPosting } | null {
+  const id = String(item.id ?? item.url ?? '')
+  const url = String(item.url ?? '')
+  if (!id || !url) return null
+  const company = remoteJobsRecord(item.company)
+  const category = remoteJobsRecord(item.category)
+  const applicant = remoteJobsRecord(item.applicant_location_requirements)
+  const normalized = remoteJobsRecord(item.location_normalization)
+  const facts = remoteJobsRecord(item.search_facts)
+  const location = remoteJobsLocation(item)
+  const workArrangement = String(applicant.work_arrangement ?? normalized.work_arrangement ?? '')
+  const numberOrNull = (value: unknown): number | null => {
+    const number =
+      typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+    return Number.isFinite(number) && number > 0 ? number : null
+  }
+  const min = numberOrNull(item.salary_min)
+  const max = numberOrNull(item.salary_max)
+  const description = stripHtml(String(item.description ?? '')).replace(
+    /\s*Apply directly on RemoteJobs\.org:\s*https?:\/\/\S+\s*$/i,
+    '',
+  )
+  const employmentTypes = remoteJobsStrings(item.employment_types)
+  const tags = [
+    typeof category.name === 'string' ? category.name : '',
+    typeof facts.role_family === 'string' ? facts.role_family : '',
+    typeof facts.seniority === 'string' ? facts.seniority : '',
+    ...remoteJobsStrings(facts.required_skills),
+    ...remoteJobsStrings(facts.mentioned_skills),
+    ...remoteJobsStrings(facts.preferred_skills),
+  ].filter(Boolean)
+
+  return {
+    id,
+    posting: posting(
+      id,
+      String(item.title ?? ''),
+      String(company.name ?? 'Employer not stated'),
+      url,
+      location,
+      description,
+      {
+        applyUrl: typeof item.apply_url === 'string' && item.apply_url ? item.apply_url : url,
+        companyUrl: typeof company.website === 'string' ? company.website : undefined,
+        remote:
+          workArrangement.toLowerCase() === 'remote' ||
+          applicant.scope === 'worldwide' ||
+          normalized.scope === 'worldwide' ||
+          /remote/i.test(location),
+        tags,
+        jobType:
+          typeof item.type === 'string' && item.type ? item.type : employmentTypes.join(', '),
+        publishedAt: typeof item.posted_at === 'string' ? item.posted_at : null,
+        salary:
+          (min ?? max) !== null && typeof item.salary_currency === 'string' && item.salary_currency
+            ? {
+                min,
+                max,
+                currency: item.salary_currency,
+                period: jobicySalaryPeriod(item.salary_period),
+              }
+            : null,
+      },
+    ),
+  }
+}
+
+/**
+ * RemoteJobs.org publishes a documented, no-key API for job boards. Keep the
+ * publisher's application link intact and show its Powered by credit on the
+ * listing page. The API allows 200 requests per hour per IP; source page
+ * bounds in seed.ts keep a full refresh comfortably below that.
+ */
+export const remoteJobsOrg: SourceParser = {
+  id: 'remotejobs',
+  name: 'RemoteJobs.org',
+  kind: 'api',
+  platform: 'remotejobs',
+  homepage: 'https://remotejobs.org',
+  attribution: 'Powered by RemoteJobs.org',
+  verification: 'unverified',
+  verificationReason: 'A public opportunity; verify with the employer.',
+  async fetchPostings(source: SourceRef, fetchImpl: typeof fetch = fetch) {
+    const seen = new Set<string>()
+    const postings: RawPosting[] = []
+    const maxPages = numberOption(source.options, 'maxPages', 10, 1, 40)
+    const base = new URL(source.listingUrl || 'https://remotejobs.org/api/v1/jobs')
+    let offset = Number(base.searchParams.get('offset') ?? 0)
+    if (!Number.isFinite(offset) || offset < 0) offset = 0
+
+    for (let page = 0; page < maxPages; page += 1) {
+      const url = new URL(base)
+      url.searchParams.set('limit', '50')
+      url.searchParams.set('offset', String(offset))
+      const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
+      if (!response.ok) {
+        if (page === 0) throw new Error(`remotejobs returned ${response.status}`)
+        break
+      }
+      const body = (await response.json()) as {
+        data?: Record<string, unknown>[]
+        pagination?: { total?: number; has_more?: boolean }
+      }
+      const jobs = body.data ?? []
+      let fresh = 0
+      for (const item of jobs) {
+        const mapped = remoteJobsPosting(item)
+        if (!mapped || seen.has(mapped.id)) continue
+        seen.add(mapped.id)
+        fresh += 1
+        postings.push(mapped.posting)
+      }
+      offset += jobs.length
+      if (
+        !jobs.length ||
+        fresh === 0 ||
+        body.pagination?.has_more === false ||
+        (typeof body.pagination?.total === 'number' && offset >= body.pagination.total)
+      )
+        break
     }
     return postings
   },
@@ -573,6 +836,7 @@ export const PUBLIC_BOARD_PARSERS: SourceParser[] = [
   themuse,
   workingNomads,
   jobicy,
+  remoteJobsOrg,
   workable,
   hnHiring,
 ]

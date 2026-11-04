@@ -353,56 +353,60 @@ export const SEED_SOURCES: SeedSource[] = [
   ...(
     [
       ['remoteok', 'RemoteOK', 'https://remoteok.com/api', 'remoteok'],
-      ['himalayas', 'Himalayas', 'https://himalayas.app/jobs/api', 'himalayas'],
       [
         'workingnomads',
         'Working Nomads',
         'https://www.workingnomads.com/api/exposed_jobs/',
         'workingnomads',
       ],
-      ['jobicy', 'Jobicy', 'https://jobicy.com/api/v2/remote-jobs?count=50', 'jobicy'],
+      ['jobicy', 'Jobicy', 'https://jobicy.com/api/v2/remote-jobs?count=100', 'jobicy'],
       // Jobicy geo slices: each returns a different regional slice of the board.
       [
         'jobicy-usa',
         'Jobicy USA',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=usa',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=usa',
         'jobicy',
       ],
-      ['jobicy-uk', 'Jobicy UK', 'https://jobicy.com/api/v2/remote-jobs?count=50&geo=uk', 'jobicy'],
+      [
+        'jobicy-uk',
+        'Jobicy UK',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=uk',
+        'jobicy',
+      ],
       [
         'jobicy-canada',
         'Jobicy Canada',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=canada',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=canada',
         'jobicy',
       ],
       [
         'jobicy-australia',
         'Jobicy Australia',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=australia',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=australia',
         'jobicy',
       ],
       [
         'jobicy-germany',
         'Jobicy Germany',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=germany',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=germany',
         'jobicy',
       ],
       [
         'jobicy-india',
         'Jobicy India',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=india',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=india',
         'jobicy',
       ],
       [
         'jobicy-latam',
         'Jobicy LatAm',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=latam',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=latam',
         'jobicy',
       ],
       [
         'jobicy-apac',
         'Jobicy APAC',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=apac',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=apac',
         'jobicy',
       ],
       ['themuse', 'The Muse', 'https://www.themuse.com/api/public/jobs', 'themuse'],
@@ -435,6 +439,308 @@ export const SEED_SOURCES: SeedSource[] = [
     kind: 'api' as const,
     enabled: true,
   },
+
+  // Himalayas' general feed is only the newest slice of a much larger
+  // documented API. Dedicated search sources give practical skills depth
+  // without asking one refresh to walk the whole catalogue.
+  ...(
+    [
+      {
+        id: 'himalayas',
+        name: 'Himalayas — public API',
+        listingUrl: 'https://himalayas.app/jobs/api',
+        options: { maxPages: 60 },
+        tier: 'six_hourly',
+      },
+      {
+        id: 'himalayas-nigeria-skills',
+        name: 'Himalayas — Nigeria-eligible skilled work',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=WordPress&country=NG&sort=recent',
+        options: {
+          maxPages: 3,
+          searchSlices: [
+            { params: { q: 'cybersecurity', country: 'NG' }, pages: 4 },
+            { params: { q: 'penetration tester', country: 'NG' }, pages: 1 },
+            { params: { q: 'data analyst', country: 'NG' }, pages: 5 },
+            { params: { q: 'video editor', country: 'NG' }, pages: 2 },
+            { params: { q: 'frontend developer', country: 'NG' }, pages: 4 },
+            { params: { q: 'backend developer', country: 'NG' }, pages: 6 },
+            { params: { q: 'tutor', country: 'NG' }, pages: 2 },
+          ],
+        },
+        tier: 'six_hourly',
+      },
+      {
+        id: 'himalayas-wordpress',
+        name: 'Himalayas — WordPress',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=WordPress&sort=recent',
+        options: { maxPages: 12 },
+        tier: 'daily',
+      },
+      {
+        id: 'himalayas-security-data',
+        name: 'Himalayas — cybersecurity and data',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=cybersecurity&sort=recent',
+        options: {
+          maxPages: 10,
+          searchSlices: [
+            { params: { q: 'data analyst' }, pages: 10 },
+            { params: { q: 'data analytics' }, pages: 6 },
+            { params: { q: 'penetration tester' }, pages: 4 },
+          ],
+        },
+        tier: 'daily',
+      },
+      {
+        id: 'himalayas-development',
+        name: 'Himalayas — web and software development',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=frontend%20developer&sort=recent',
+        options: {
+          maxPages: 10,
+          searchSlices: [
+            { params: { q: 'backend developer' }, pages: 10 },
+            { params: { q: 'web developer' }, pages: 10 },
+            { params: { q: 'full stack developer' }, pages: 6 },
+          ],
+        },
+        tier: 'daily',
+      },
+      {
+        id: 'himalayas-creative-education',
+        name: 'Himalayas — creative work and teaching',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=video%20editor&sort=recent',
+        options: {
+          maxPages: 10,
+          searchSlices: [
+            { params: { q: 'tutor' }, pages: 8 },
+            { params: { q: 'teacher' }, pages: 6 },
+            { params: { q: 'graphic designer' }, pages: 6 },
+            { params: { q: 'photo editor' }, pages: 4 },
+          ],
+        },
+        tier: 'daily',
+      },
+      {
+        id: 'himalayas-business-support',
+        name: 'Himalayas — business and support',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=customer%20support&sort=recent',
+        options: {
+          maxPages: 8,
+          searchSlices: [
+            { params: { q: 'virtual assistant' }, pages: 6 },
+            { params: { q: 'marketing' }, pages: 8 },
+            { params: { q: 'sales' }, pages: 6 },
+            { params: { q: 'writer' }, pages: 6 },
+          ],
+        },
+        tier: 'daily',
+      },
+    ] as {
+      id: string
+      name: string
+      listingUrl: string
+      options: Record<string, unknown>
+      tier: 'six_hourly' | 'daily'
+    }[]
+  ).map((source) => ({
+    id: source.id,
+    parser: 'himalayas',
+    name: source.name,
+    listingUrl: source.listingUrl,
+    company: 'himalayas',
+    companyLabel: 'Himalayas',
+    options: source.options,
+    country: 'WW',
+    tags: ['api', 'public-board', 'remote'],
+    tier: source.tier,
+    rateLimitPerHour: 30,
+    kind: 'api' as const,
+    enabled: true,
+  })),
+
+  // The Muse's first general pages hide most remote category depth. These
+  // documented category and Flexible / Remote slices are bounded and, for
+  // the expanded slices, limited to the last year of publication dates.
+  ...(
+    [
+      [
+        'themuse-software-remote',
+        'Software Engineering',
+        'https://www.themuse.com/api/public/jobs?category=Software%20Engineering&location=Flexible%20%2F%20Remote',
+        37,
+      ],
+      [
+        'themuse-data-remote',
+        'Data and Analytics',
+        'https://www.themuse.com/api/public/jobs?category=Data%20and%20Analytics&location=Flexible%20%2F%20Remote',
+        32,
+      ],
+      [
+        'themuse-it-remote',
+        'Computer and IT',
+        'https://www.themuse.com/api/public/jobs?category=Computer%20and%20IT&location=Flexible%20%2F%20Remote',
+        10,
+      ],
+      [
+        'themuse-design-remote',
+        'Design and UX',
+        'https://www.themuse.com/api/public/jobs?category=Design%20and%20UX&location=Flexible%20%2F%20Remote',
+        10,
+      ],
+      [
+        'themuse-writing-remote',
+        'Writing and Editing',
+        'https://www.themuse.com/api/public/jobs?category=Writing%20and%20Editing&location=Flexible%20%2F%20Remote',
+        10,
+      ],
+      [
+        'themuse-education-remote',
+        'Education',
+        'https://www.themuse.com/api/public/jobs?category=Education&location=Flexible%20%2F%20Remote',
+        10,
+      ],
+    ] as const
+  ).map(([id, label, listingUrl, maxPages]) => ({
+    id,
+    parser: 'themuse',
+    name: `The Muse — ${label} remote`,
+    listingUrl,
+    company: 'themuse',
+    companyLabel: 'The Muse',
+    options: { maxPages, maxAgeDays: 365 },
+    country: 'WW',
+    tags: ['api', 'public-board', 'remote'],
+    tier: 'daily' as const,
+    rateLimitPerHour: 40,
+    kind: 'api' as const,
+    enabled: true,
+  })),
+
+  // RemoteJobs.org's documented public API. Page bounds keep the combined
+  // refresh below its stated 200 requests per hour per IP limit.
+  ...(
+    [
+      [
+        'remotejobs-latest',
+        'latest remote jobs',
+        'https://remotejobs.org/api/v1/jobs?limit=50',
+        20,
+        'six_hourly',
+      ],
+      [
+        'remotejobs-programming',
+        'programming',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=programming',
+        16,
+        'daily',
+      ],
+      [
+        'remotejobs-data',
+        'data science',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=data-science',
+        15,
+        'daily',
+      ],
+      [
+        'remotejobs-cybersecurity',
+        'cybersecurity',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=cyber-security',
+        8,
+        'daily',
+      ],
+      [
+        'remotejobs-contracts',
+        'contracts',
+        'https://remotejobs.org/api/v1/jobs?limit=50&type=contract',
+        16,
+        'daily',
+      ],
+      [
+        'remotejobs-freelance',
+        'freelance work',
+        'https://remotejobs.org/api/v1/jobs?limit=50&type=freelance',
+        6,
+        'daily',
+      ],
+      [
+        'remotejobs-wordpress',
+        'WordPress',
+        'https://remotejobs.org/api/v1/jobs?limit=50&q=WordPress&sort=relevance',
+        3,
+        'daily',
+      ],
+      [
+        'remotejobs-video',
+        'video editing',
+        'https://remotejobs.org/api/v1/jobs?limit=50&q=video%20editor&sort=relevance',
+        5,
+        'daily',
+      ],
+      [
+        'remotejobs-frontend',
+        'front-end development',
+        'https://remotejobs.org/api/v1/jobs?limit=50&q=frontend%20developer&sort=relevance',
+        6,
+        'daily',
+      ],
+      [
+        'remotejobs-backend',
+        'back-end development',
+        'https://remotejobs.org/api/v1/jobs?limit=50&q=backend%20developer&sort=relevance',
+        6,
+        'daily',
+      ],
+      [
+        'remotejobs-tutoring',
+        'tutoring and teaching',
+        'https://remotejobs.org/api/v1/jobs?limit=50&q=tutor&sort=relevance',
+        5,
+        'daily',
+      ],
+      [
+        'remotejobs-design',
+        'design',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=design',
+        8,
+        'daily',
+      ],
+      [
+        'remotejobs-customer-support',
+        'customer support',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=customer-support',
+        8,
+        'daily',
+      ],
+      [
+        'remotejobs-writing',
+        'writing',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=writing',
+        8,
+        'daily',
+      ],
+      [
+        'remotejobs-marketing',
+        'marketing',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=marketing',
+        8,
+        'daily',
+      ],
+    ] as const
+  ).map(([id, label, listingUrl, maxPages, tier]) => ({
+    id,
+    parser: 'remotejobs',
+    name: `RemoteJobs.org — ${label}`,
+    listingUrl,
+    company: 'remotejobs',
+    companyLabel: 'RemoteJobs.org',
+    options: { maxPages },
+    country: 'WW',
+    tags: ['api', 'public-board', 'remote'],
+    tier,
+    rateLimitPerHour: 30,
+    kind: 'api' as const,
+    enabled: true,
+  })),
 
   // --- Workable boards: apply.workable.com widget API -------------------
   ...([['blueground', 'Blueground', 'WW']] as const).map(([slug, label, country]) => ({
