@@ -40,8 +40,10 @@ test('the public catalogue provides real pagination, filters and responsive evid
   await expect(page.locator('.ideas-hero__stats')).toContainText(
     body.catalogTotal.toLocaleString('en-NG'),
   )
-  await expect(page.locator('body')).toContainText('Evidence is not a promise.')
-  await expect(page.locator('.idea-results__head')).toContainText('Official data refreshed')
+  await expect(page.locator('body')).toContainText('The figures are only a starting point.')
+  await expect(page.locator('.idea-results__head')).toContainText(
+    'FJ checked the official figures on',
+  )
 
   if (body.total > 24) {
     const nextResponse = page.waitForResponse(

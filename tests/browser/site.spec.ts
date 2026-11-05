@@ -115,11 +115,9 @@ test('homepage explains the platform in plain words and sends people to sign up'
   await expect(page.locator('body')).toContainText('FJ Match Intelligence')
   await expect(page.locator('body')).toContainText('will not ask you to pay to get a job')
   await expect(
-    page.getByRole('heading', { name: 'Every preparation tool is free for now' }),
+    page.getByRole('heading', { name: 'Every job preparation tool is free for now' }),
   ).toBeVisible()
-  await expect(
-    page.getByRole('heading', { name: 'No card. No trial limit. Payments paused.' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'No card or trial needed' })).toBeVisible()
   await expect(page.locator('.home-pro')).toContainText('You do not need to start a trial')
   await expect(page.locator('.home-ideas-teaser')).toContainText(
     'product ideas for different places',
@@ -319,9 +317,9 @@ test('pricing stays findable and honestly explains free access with payments pau
   await expect(included).toContainText('FJ Match Intelligence')
   await expect(included).toContainText('Check an advert before you apply')
   await expect(included).toContainText('which requirements you meet')
-  await expect(included).toContainText('suggests stronger alternatives')
+  await expect(included).toContainText('other adverts that may fit you better')
   await expect(
-    page.getByRole('heading', { name: 'No checkout. No card. No trial limit.' }),
+    page.getByRole('heading', { name: 'You do not need a card or a trial' }),
   ).toBeVisible()
   await expect(page.locator('body')).toContainText('Payments are paused')
   await expect(page.getByRole('button', { name: /Buy|Start.*trial|Check payment/ })).toHaveCount(0)
@@ -338,7 +336,9 @@ test('homepage and pricing explain Phase 2 cleanly at phone, tablet and desktop 
     await expect(page.getByRole('heading', { level: 1 })).toContainText(
       'Thousands of job opportunities',
     )
-    await expect(page.locator('.home-pro')).toContainText('Every preparation tool is free for now')
+    await expect(page.locator('.home-pro')).toContainText(
+      'Every job preparation tool is free for now',
+    )
     await expect(page.locator('.home-ideas-teaser')).toContainText('product idea')
     await expectNoHorizontalOverflow(page)
     await page.screenshot({ path: testInfo.outputPath(`phase2-home-${width}.png`) })
@@ -351,7 +351,7 @@ test('homepage and pricing explain Phase 2 cleanly at phone, tablet and desktop 
       page.locator('.site-header .topnav').getByRole('link', { name: 'Pricing' }),
     ).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'No checkout. No card. No trial limit.' }),
+      page.getByRole('heading', { name: 'You do not need a card or a trial' }),
     ).toBeVisible()
     await expect(page.locator('.free-access-grid')).toContainText('Save and check your CV')
     await expect(page.locator('.free-access-grid')).toContainText(
