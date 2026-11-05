@@ -477,7 +477,7 @@ export function AlertsPanel({
                 <strong>Pro alert with filters</strong>
                 <small>
                   {PRO_FREE_FOR_ALL
-                    ? 'Included free during early access. Choose score, country, pay, company and words to avoid.'
+                    ? 'Free for now. Choose a match score, country, pay, company and words to avoid.'
                     : 'Choose score, country, pay, company and words to avoid.'}
                 </small>
               </span>

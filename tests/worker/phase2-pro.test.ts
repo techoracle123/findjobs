@@ -485,7 +485,7 @@ describe('advert checks, best matches and skill gaps', () => {
     expect(body.check.nigeria.status).toBe('nigeria-named')
     expect(body.check.salaryStated).toBe(true)
     expect(body.check.deadlineText).toContain('Apply by')
-    expect(body.check.headline).toContain('not employer verification')
+    expect(body.check.headline).toContain('does not prove the employer is genuine')
   })
 
   it('checks pasted adverts for restrictions and visible danger signs', async () => {

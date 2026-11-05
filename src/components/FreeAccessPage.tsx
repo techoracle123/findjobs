@@ -9,8 +9,8 @@ export function FreeAccessPage() {
     <div className="app">
       <SiteHeader current="pricing" />
       <main className="content info-page free-access-page">
-        <p className="eyebrow">Free early access</p>
-        <h1>Everything in FJ is free for now</h1>
+        <p className="eyebrow">Free for now</p>
+        <h1>Everything on FJ is free for now</h1>
         <p className="lede">{FREE_ACCESS_MESSAGE}</p>
         <div className="home-hero__actions">
           <a className="btn btn--primary" href="/auth/signup?returnTo=%2Fjobs">
@@ -24,11 +24,11 @@ export function FreeAccessPage() {
         <section className="free-access-notice" aria-label="Payments paused">
           <ShieldCheck size={22} aria-hidden="true" />
           <div>
-            <h2>No checkout. No card. No trial limit.</h2>
+            <h2>You do not need a card or a trial</h2>
             <p>
-              Payments are paused while FJ is in free early access. Existing paid subscriptions and
-              billing records are preserved for later. Applying on an employer or client website
-              remains free too.
+              Payments are paused, so you cannot buy or renew a plan. Existing paid plans and
+              payment records are not deleted. Applying on an employer or client website is still
+              free.
             </p>
           </div>
         </section>
@@ -45,24 +45,25 @@ export function FreeAccessPage() {
         </section>
 
         <section className="info-section">
-          <h2>What free access does not change</h2>
+          <h2>What stays the same</h2>
           <ul>
             {PRO_LIMITS.map((limit) => (
               <li key={limit}>{limit}</li>
             ))}
             <li>Private account information and saved CV text still require sign-in.</li>
-            <li>Fair-use and safety limits still protect the service and its data sources.</li>
+            <li>Rules that keep FJ safe and fair for everyone still apply.</li>
           </ul>
         </section>
 
         <section className="info-section">
           <h2>Problems and product ideas are included too</h2>
           <p>
-            Explore dated evidence by country, physical and software product ideas, and current
-            search trends. Product ideas are hypotheses to validate, not guaranteed businesses.
+            Look at official figures for different countries, find physical and software products
+            you could build or sell, and see what people are searching for. Every idea needs to be
+            checked with real people. None is a guaranteed business.
           </p>
           <a className="btn btn--primary" href="/ideas">
-            Find a problem worth solving <ArrowRight size={17} />
+            See ideas for your location <ArrowRight size={17} />
           </a>
         </section>
       </main>

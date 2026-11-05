@@ -21,7 +21,7 @@ export const FREE_FEATURES: PlanFeature[] = [
   {
     id: 'fit',
     title: 'See why work fits you',
-    what: 'FJ uses your skills, preferred work setting, and whether you want jobs, gigs or both to score each listing.',
+    what: 'FJ uses your skills and the kind of work you want to show which adverts may fit you.',
     why: 'You can see which adverts need a closer look.',
   },
   {
@@ -54,7 +54,7 @@ export const PRO_FEATURES: PlanFeature[] = [
   {
     id: 'cv_check',
     title: 'FJ Match Intelligence',
-    what: 'FJ compares your CV with one advert. It separates essential requirements from desirable ones, shows matching qualifications, names missing skills and gaps, checks location signals, and suggests stronger alternatives.',
+    what: 'FJ compares your CV with an advert. It shows which requirements you meet, which skills are missing, whether the location works for you, and other adverts that may fit you better.',
     why: 'You can decide where your time is best spent before applying.',
   },
   {
@@ -66,7 +66,7 @@ export const PRO_FEATURES: PlanFeature[] = [
   {
     id: 'advert_check',
     title: 'Check an advert before you apply',
-    what: 'Check work on FJ or paste an advert from another place. FJ looks for Nigeria rules, missing details and warning signs in the text.',
+    what: 'Check work on FJ or paste an advert from another place. FJ looks for rules about working from Nigeria, missing details and warning signs in the text.',
     why: 'You can avoid work you cannot take and adverts that ask for money.',
   },
   {
@@ -78,7 +78,7 @@ export const PRO_FEATURES: PlanFeature[] = [
   {
     id: 'smart_alerts',
     title: 'Telegram alerts with more filters',
-    what: 'Choose a minimum score, country, work setting, pay, companies and words to avoid. The jobs or gigs choice stays free.',
+    what: 'Choose a minimum match score, country, work setting, pay, companies and words to avoid. The jobs or gigs choice stays free.',
     why: 'You get fewer alerts that do not fit.',
   },
   {

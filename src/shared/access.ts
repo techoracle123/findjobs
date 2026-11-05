@@ -6,4 +6,4 @@
 export const PAYMENTS_PAUSED = true
 export const PRO_FREE_FOR_ALL = true
 export const FREE_ACCESS_MESSAGE =
-  'Every current FJ tool is free for now. Payments are paused. No card or trial is needed.'
+  'Every current FJ tool is free for now. You cannot pay right now, and you do not need a card or a trial.'

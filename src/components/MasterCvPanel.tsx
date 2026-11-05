@@ -297,7 +297,7 @@ export function MasterCvPanel({
         <div>
           <p className="eyebrow">
             {PRO_FREE_FOR_ALL
-              ? 'Free early access · Full CV check included'
+              ? 'Free for now · Full CV check included'
               : 'Free save · Full check with trial or Pro'}
           </p>
           <h2 className="panel__title" id="master-cv-heading">
@@ -309,7 +309,7 @@ export function MasterCvPanel({
       <div className="panel__body stack">
         <p className="panel__note">
           {PRO_FREE_FOR_ALL
-            ? 'Save the readable text from your CV and run a full check that shows what to fix first. Both are included during free early access.'
+            ? 'Save the readable text from your CV and run a full check that shows what to fix first. Both are free for now.'
             : 'Save the readable text from your CV free. A trial or Pro plan can also make a full check that shows what to fix first.'}
         </p>
         <p className="field__hint">
@@ -692,7 +692,7 @@ export function MasterCvPanel({
             {fullReport ? (
               <p className="field__hint">
                 FJ has not added any experience, employer, qualification, date or result. Replace
-                every bracket with true evidence from your own work.
+                every bracket with true details from your own work.
               </p>
             ) : null}
           </div>

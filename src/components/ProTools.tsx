@@ -81,7 +81,7 @@ const ANSWER_FIELDS: Array<{
   },
   {
     key: 'workPermission',
-    label: 'Work permission and location position',
+    label: 'Permission to work and location',
     textarea: true,
     placeholder: 'Where you can work, whether you can travel, and any permit position.',
   },
@@ -285,9 +285,10 @@ export function ProTools({ job, proEnabled, trial, onRefresh, onOpenJob }: ProTo
       <section className="detail-section pro-tools" aria-label="Pro tools">
         <h2>More help with this application</h2>
         <p>
-          FJ Match Intelligence compares your CV with this advert, separates essential requirements
-          from desirable ones, shows missing skills, checks location signals, and suggests stronger
-          alternatives. Pro also helps you prepare answers and get ready for an interview.
+          FJ Match Intelligence compares your CV with this advert, shows which requirements you meet
+          and which skills are missing, checks whether the location works for you, and suggests
+          other adverts that may fit you better. Pro also helps you prepare answers and get ready
+          for an interview.
         </p>
         <ul className="plain-list">
           <li>FJ Match Intelligence is included in every Pro plan.</li>
@@ -450,7 +451,7 @@ export function ProTools({ job, proEnabled, trial, onRefresh, onOpenJob }: ProTo
         </p>
         <div className="field">
           <label className="field__label" htmlFor="pro-cv-text">
-            Different CV text, optional
+            Use different CV text (optional)
           </label>
           <textarea
             id="pro-cv-text"

@@ -128,10 +128,10 @@ function materialize(candidate: Candidate): ProductIdea {
     product: concept.product,
     firstVersion: concept.firstVersion,
     validationSteps: [
-      `Speak with at least five ${concept.buyer} in ${place}. Investigate ${category.validationFocus}.`,
+      `Speak with at least five ${concept.buyer} in ${place}. Ask about ${category.validationFocus}.`,
       `Offer this small first version: ${concept.firstVersion}`,
-      'Ask for a real commitment appropriate to the idea: a paid preorder, a signed pilot or a repeat order. Do not treat compliments as proof of demand.',
-      `Write down what would make you stop. Recheck the official evidence and its limits: ${category.interpretation}`,
+      'Ask for a real next step, such as a paid preorder, an agreement to run a small trial, or another order. Kind words do not prove that people will buy.',
+      `Write down what would make you stop. Check the official figures again and remember their limits: ${category.interpretation}`,
     ],
     revenueModel: concept.revenueModel,
     testWindow: concept.testWindow,
@@ -141,9 +141,9 @@ function materialize(candidate: Candidate): ProductIdea {
       ...(concept.format === 'software'
         ? []
         : [
-            'Use authorised suppliers and check warranty, safety and return terms before reselling equipment.',
+            'Use approved suppliers and check the warranty, safety and return terms before reselling equipment.',
           ]),
-      'The official indicator supports the broad context only. It does not prove demand for this exact product.',
+      'The official figure helps explain the broader problem. It does not prove that people will buy this exact product.',
     ],
     evidence: {
       indicatorId: observation.indicatorId,
@@ -215,7 +215,7 @@ function facets(candidates: Candidate[], key: 'category' | 'format'): IdeaFacet[
   const labels: Record<string, string> = {
     physical: 'Physical product',
     software: 'Software product',
-    hybrid: 'Physical + software',
+    hybrid: 'Physical product with software',
   }
   for (const category of IDEA_CATEGORIES) labels[category.id] = category.label
   return [...counts.entries()]

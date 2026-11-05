@@ -74,7 +74,7 @@ describe('FJ Match Intelligence', () => {
     expect(result.essentialPercent).toBeGreaterThan(0)
     expect(result.desirablePercent).toBe(100)
     expect(result.gaps.join(' ')).toContain('Kubernetes')
-    expect(result.actions.join(' ')).toContain('payment is released')
+    expect(result.actions.join(' ')).toContain('when you will be paid')
     expect(result.limitations.join(' ')).toContain('makes the final decision')
   })
 
@@ -95,7 +95,7 @@ describe('FJ Match Intelligence', () => {
     expect(result.alternatives[0].job.id).toBe('better')
     expect(result.alternatives[0].essentialPercent).toBe(100)
     expect(result.alternatives[0].missingEssential).toEqual([])
-    expect(result.alternatives[0].reasons.join(' ')).toContain('Essential fit is 100%')
+    expect(result.alternatives[0].reasons.join(' ')).toContain('100% of the must-have requirements')
   })
 
   it('still finds the strongest alternative in a large related pool', () => {

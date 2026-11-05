@@ -231,24 +231,25 @@ export function HomePage() {
 
         <section className="home-section home-ideas-teaser" aria-labelledby="home-ideas-heading">
           <p className="eyebrow">Beyond finding work</p>
-          <h2 id="home-ideas-heading">See problems. Get a product idea. Test it.</h2>
+          <h2 id="home-ideas-heading">Find a product idea and check it with real people</h2>
           <p className="home-lead">
-            Explore physical and software products you could build or sell, backed by dated location
-            evidence and separate live search trends. Choose Nigeria, another country or a worldwide
-            view. Every idea includes a buyer, a first version, risks and a validation plan.
+            Look at official figures for Nigeria, another country or the whole world. Find physical
+            and software products you could build or sell, and see what people are searching for.
+            Every idea includes who it is for, a simple first version, possible risks and checks to
+            do before spending money.
           </p>
           {ideaTotal !== null ? (
             <p className="home-idea-count">
-              <Lightbulb size={19} /> <strong>{number(ideaTotal)}</strong> localized product ideas
-              in the current evidence catalogue
+              <Lightbulb size={19} /> <strong>{number(ideaTotal)}</strong> product ideas for
+              different places, each linked to official figures
             </p>
           ) : null}
           <p className="field__hint">
-            Evidence supports the broad problem context. It does not prove demand or guarantee a
-            successful business.
+            The figures help explain a problem. They do not prove that people will buy the product
+            or that the business will succeed.
           </p>
           <a className="btn btn--primary" href="/ideas">
-            Find a problem worth solving <ArrowRight size={17} />
+            Explore product ideas <ArrowRight size={17} />
           </a>
         </section>
 
@@ -271,13 +272,13 @@ export function HomePage() {
         </section>
 
         <section className="home-section home-pro" aria-labelledby="home-pro-heading">
-          <p className="eyebrow">Free early access</p>
-          <h2 id="home-pro-heading">Every preparation tool is free for now</h2>
+          <p className="eyebrow">Free for now</p>
+          <h2 id="home-pro-heading">Every job preparation tool is free for now</h2>
           <p className="home-lead">
-            Finding work is only one part. FJ Match Intelligence compares your CV with an advert,
-            separates essential requirements from desirable ones, names missing skills, checks
-            location signals, and points to stronger alternatives. Other Pro tools help you prepare
-            and check safety signs in the advert text.
+            Finding work is only one part. FJ Match Intelligence compares your CV with an advert. It
+            shows which requirements you meet, which skills are missing, whether the location works
+            for you, and other adverts that may fit you better. Other Pro tools help you prepare and
+            spot warning signs in the advert.
           </p>
           <div className="home-feature-grid">
             {PRO_FEATURES.map((feature) => (
@@ -290,7 +291,7 @@ export function HomePage() {
           </div>
           <div className="home-trial-band">
             <div>
-              <h3>No card. No trial limit. Payments paused.</h3>
+              <h3>No card or trial needed</h3>
               <p>
                 Use the CV check, FJ Match Intelligence, application preparation, interview help and
                 the other current tools with your free account. You do not need to start a trial or
@@ -302,8 +303,8 @@ export function HomePage() {
             </a>
           </div>
           <p className="field__hint">
-            Private CV text and account information still require sign-in and your permission.
-            Normal fair-use and safety limits still apply.
+            Private CV text and account information still require sign-in and your permission. Rules
+            that keep FJ safe and fair for everyone still apply.
           </p>
         </section>
 
@@ -331,8 +332,9 @@ export function HomePage() {
               <p>
                 Work from your home in Nigeria for a company in another country. Many of these
                 companies pay in dollars or other foreign currencies, which can mean much better pay
-                than the same work at home. Always check the advert’s country, work-authorisation
-                and time-zone wording; “remote” does not always mean open from Nigeria.
+                than the same work at home. Always check which countries the advert accepts, whether
+                you need permission to work there, and the working hours. “Remote” does not always
+                mean you can apply from Nigeria.
               </p>
             </div>
           </div>
@@ -373,9 +375,9 @@ export function HomePage() {
             <li>
               <Check size={17} />
               <span>
-                <strong>Apply early and apply often.</strong> New jobs get many applications in the
-                first days. People who apply every week, not once in a while, are the ones who get
-                interviews.
+                <strong>Apply early and keep trying.</strong> New jobs can receive many applications
+                quickly. Set aside time each week to look for suitable work and send careful
+                applications.
               </span>
             </li>
             <li>
@@ -399,10 +401,10 @@ export function HomePage() {
             <ShieldCheck size={20} />
             <p>
               A real employer or client will not ask you to pay to get work. Do not pay for a form,
-              training or uniform. For a gig, agree the scope, deadline, revisions and payment
-              schedule in writing before you start. The advert check in Pro can review advert text,
-              but it does not approve a company or client. Check each one yourself before you share
-              personal documents.
+              training or uniform. For a gig, write down the exact work, deadline, changes included
+              and when you will be paid before you start. The advert check in Pro can review advert
+              text, but it does not approve a company or client. Check each one yourself before you
+              share personal documents.
             </p>
           </div>
         </section>

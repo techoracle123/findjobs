@@ -61,20 +61,20 @@ export function suggestFromKeywords(text: string): CvSuggestion {
 
   const notes: string[] = []
   if (skills.length === 0) {
-    notes.push('No catalogue skills were detected. Try a CV with a skills section.')
+    notes.push('No listed skills were found. Try a CV with a skills section.')
   }
   if (roleFamilies.length === 0) {
-    notes.push('No role family was detected, so the results are ranked on skills alone.')
+    notes.push('No type of role was found, so the results are sorted by skills alone.')
   }
   if (workModes.length === 0) {
-    notes.push('No work mode was detected, so eligibility filtering stays broad.')
+    notes.push('No work setting was found, so FJ will keep the search broad.')
   }
 
   const top = scored.slice(0, 3).map((entry) => entry.label)
   const summary =
     top.length > 0
-      ? `Detected ${skills.length} skills, strongest in ${top.join(', ')}.`
-      : 'No skills were detected in the supplied text.'
+      ? `FJ found ${skills.length} skills, with the most matches for ${top.join(', ')}.`
+      : 'FJ could not find any skills in the text supplied.'
 
   return {
     skills,

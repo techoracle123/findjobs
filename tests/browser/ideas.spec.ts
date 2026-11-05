@@ -33,7 +33,9 @@ test('the public catalogue provides real pagination, filters and responsive evid
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/ideas')
-  await expect(page.getByRole('heading', { name: 'Find a problem worth solving.' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Find a practical idea to build or sell.' }),
+  ).toBeVisible()
   await expect(page.locator('.idea-grid .idea-card')).toHaveCount(Math.min(24, body.total))
   await expect(page.locator('.ideas-hero__stats')).toContainText(
     body.catalogTotal.toLocaleString('en-NG'),
@@ -116,11 +118,11 @@ test('an idea can be saved, shared, checked and downloaded with its evidence', a
   expect(detailResponse.ok()).toBe(true)
   const detailBody = (await detailResponse.json()) as { idea: { evidence: { value: number } } }
   const exactValue = String(detailBody.idea.evidence.value)
-  await expect(page.locator('.idea-evidence-panel')).toContainText('Exact source value')
+  await expect(page.locator('.idea-evidence-panel')).toContainText('Exact figure from the source')
   await expect(page.locator('.idea-evidence-panel dd').first()).toHaveText(exactValue)
-  await expect(page.locator('.idea-evidence-panel')).toContainText('Source release')
-  await expect(page.locator('.idea-evidence-panel')).toContainText('Observation year')
-  await expect(page.locator('.idea-evidence-panel')).toContainText('not a World Bank endorsement')
+  await expect(page.locator('.idea-evidence-panel')).toContainText('Source last updated')
+  await expect(page.locator('.idea-evidence-panel')).toContainText('Year measured')
+  await expect(page.locator('.idea-evidence-panel')).toContainText('World Bank does not endorse it')
   await expect(page.getByRole('link', { name: 'Check the World Bank source' })).toHaveAttribute(
     'href',
     /^https:\/\/data\.worldbank\.org\//,
@@ -139,20 +141,20 @@ test('an idea can be saved, shared, checked and downloaded with its evidence', a
   await expect(page.locator('.validation-list input').first()).toBeChecked()
 
   const downloadEvent = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Download brief' }).click()
+  await page.getByRole('button', { name: 'Download idea' }).click()
   const download = await downloadEvent
-  expect(download.suggestedFilename()).toMatch(/-validation-brief\.txt$/)
+  expect(download.suggestedFilename()).toMatch(/-idea-checklist\.txt$/)
   const stream = await download.createReadStream()
   expect(stream).not.toBeNull()
   let brief = ''
   for await (const chunk of stream!) brief += String(chunk)
   expect(brief).toContain(title)
   expect(brief).toContain(evidence)
-  expect(brief).toContain(`EXACT SOURCE VALUE: ${exactValue}`)
-  expect(brief).toContain('DATASET RELEASE:')
+  expect(brief).toContain(`EXACT FIGURE FROM SOURCE: ${exactValue}`)
+  expect(brief).toContain('SOURCE LAST UPDATED:')
   expect(brief).toContain('UNIT:')
   expect(brief).toContain('SOURCE LINK: https://data.worldbank.org/')
-  expect(brief).toContain('not proof of demand')
+  expect(brief).toContain('not proof that people will buy it')
 
   const accessibility = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -200,14 +202,13 @@ test('trends show their collection time, source and honest traffic limitation', 
   )
   await page.goto('/ideas')
   await expect(page.locator('.idea-grid .idea-card').first()).toBeVisible()
-  await page.getByRole('button', { name: 'Live trends', exact: true }).click()
+  await page.getByRole('button', { name: 'Trending searches', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'solar water pumps' })).toBeVisible()
   await expect(page.locator('.trend-source-note')).toContainText('Collected')
   await expect(page.locator('.trend-source-note')).toContainText('browser-test fixture')
   await expect(page.locator('.trend-card')).toContainText('2K+')
-  await expect(page.locator('.trend-traffic-note')).toContainText(
-    'not an exact count or proof of product demand',
-  )
+  await expect(page.locator('.trend-traffic-note')).toContainText('not an exact count')
+  await expect(page.locator('.trend-traffic-note')).toContainText('does not prove people will buy')
   await expect(page.getByRole('link', { name: 'Open in Google Trends' })).toHaveAttribute(
     'href',
     /trends\.google\.com/,
@@ -223,6 +224,6 @@ test('an unknown idea returns a useful not-found state', async ({ page }) => {
     await expect(page.getByRole('link', { name: 'Explore current jobs on FJ' })).toBeVisible()
     return
   }
-  await expect(page.getByRole('alert')).toContainText('not in the current evidence catalogue')
+  await expect(page.getByRole('alert')).toContainText('not in the current collection')
   await expect(page.getByRole('link', { name: 'Back to product ideas' })).toBeVisible()
 })

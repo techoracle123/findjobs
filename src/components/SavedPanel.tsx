@@ -91,7 +91,7 @@ export function SavedPanel({
       <div className="panel__body stack">
         <p className="panel__note">
           {PRO_FREE_FOR_ALL
-            ? 'Saving jobs and gigs is free. All application stages and follow-up dates are included during free early access.'
+            ? 'Saving jobs and gigs is free. All application stages and follow-up dates are included for now.'
             : 'Saving jobs and gigs and marking them as applied is free. Pro adds more stages and follow up dates.'}
         </p>
         {due.length ? (

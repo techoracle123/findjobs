@@ -117,7 +117,7 @@ function IdeaCard({
         <Users size={14} /> For {idea.buyer}
       </p>
       <a className="idea-card__link" href={`/ideas/${encodeURIComponent(idea.id)}`}>
-        See the product and validation plan <ArrowRight size={15} />
+        See the idea and how to test it <ArrowRight size={15} />
       </a>
     </article>
   )
@@ -137,7 +137,8 @@ function TrendCard({ trend }: { trend: LiveTrend }) {
         <strong>{trend.trafficLabel}</strong>
       </div>
       <p className="trend-traffic-note">
-        Google’s approximate search traffic, not an exact count or proof of product demand.
+        Google’s rough estimate of search interest. It is not an exact count and does not prove
+        people will buy.
       </p>
       {trend.news.length ? (
         <div className="trend-news">
@@ -280,10 +281,11 @@ export function IdeasPage() {
             <p className="eyebrow">
               <Lightbulb size={16} /> Problems and product ideas
             </p>
-            <h1>Find a problem worth solving.</h1>
+            <h1>Find a practical idea to build or sell.</h1>
             <p>
-              Explore dated evidence by location and detailed physical or software products you can
-              build or sell. Then test the idea with real people before spending serious money.
+              Look at official figures for Nigeria, another country or the whole world. Use them to
+              find physical or software products you could build or sell. Talk to real people before
+              spending money.
             </p>
             <div className="ideas-hero__actions">
               <a className="btn btn--primary" href="#idea-results">
@@ -294,31 +296,31 @@ export function IdeasPage() {
                 type="button"
                 onClick={() => setTab('trends')}
               >
-                See live trends <TrendingUp size={17} />
+                See trending searches <TrendingUp size={17} />
               </button>
             </div>
           </div>
-          <div className="ideas-hero__stats" aria-label="Catalogue summary">
+          <div className="ideas-hero__stats" aria-label="Ideas summary">
             <div>
               <strong>{data ? number(data.catalogTotal) : '—'}</strong>
-              <span>localized product ideas</span>
+              <span>product ideas for different places</span>
             </div>
             <div>
               <strong>{data ? number(data.evidence.countryCount) : '—'}</strong>
-              <span>countries with evidence</span>
+              <span>countries covered</span>
             </div>
             <div>
               <strong>{data?.evidence.indicatorCount ?? 12}</strong>
-              <span>official problem indicators</span>
+              <span>types of official figures</span>
             </div>
           </div>
         </section>
 
         <div className="ideas-trust-strip">
-          <strong>Evidence is not a promise.</strong>
+          <strong>The figures are only a starting point.</strong>
           <span>
-            An idea is a product blueprint paired with location evidence. The number supports the
-            broad problem context, not demand for that exact product.
+            Each idea is linked to an official figure for that place. The figure helps explain the
+            problem, but it does not show whether people will want or pay for the product.
           </span>
         </div>
 
@@ -335,7 +337,7 @@ export function IdeasPage() {
             className={tab === 'trends' ? 'active' : ''}
             onClick={() => setTab('trends')}
           >
-            Live trends
+            Trending searches
           </button>
           <button
             type="button"
@@ -350,11 +352,11 @@ export function IdeasPage() {
           <section className="trends-panel" aria-labelledby="trends-heading">
             <div className="trends-panel__head">
               <div>
-                <p className="eyebrow">Current search attention</p>
+                <p className="eyebrow">What people are searching for</p>
                 <h2 id="trends-heading">Trending searches by country</h2>
                 <p>
-                  Not every trend is a business opportunity. Look for a repeated problem behind the
-                  attention, then validate it directly.
+                  A trending search is not proof of a good business idea. Look for a real problem,
+                  then speak to the people who have it.
                 </p>
               </div>
               <div className="trend-controls">
@@ -374,7 +376,7 @@ export function IdeasPage() {
                 <button
                   className="icon-button"
                   type="button"
-                  aria-label="Refresh live trends"
+                  aria-label="Check for new trending searches"
                   onClick={() => setTrendReload((value) => value + 1)}
                 >
                   <RefreshCw size={18} />
@@ -399,7 +401,7 @@ export function IdeasPage() {
                   <a href={trends.sourceUrl} target="_blank" rel="noopener noreferrer">
                     {trends.sourceName}
                   </a>
-                  . Google controls availability and ranking.
+                  . Google chooses which searches appear and how they are ranked.
                 </p>
                 {trends.trends.length ? (
                   <div className="trend-grid">
@@ -409,8 +411,8 @@ export function IdeasPage() {
                   </div>
                 ) : (
                   <p>
-                    No trending searches were published for this location just now. Try another
-                    country or explore the evidence catalogue.
+                    No trending searches were published for this place just now. Try another country
+                    or look through the product ideas.
                   </p>
                 )}
               </>
@@ -460,7 +462,7 @@ export function IdeasPage() {
                       <option value="">Physical and software</option>
                       <option value="physical">Physical products</option>
                       <option value="software">Software products</option>
-                      <option value="hybrid">Physical + software</option>
+                      <option value="hybrid">Physical product with software</option>
                     </select>
                   </label>
                   <label>
@@ -469,8 +471,8 @@ export function IdeasPage() {
                       value={sort}
                       onChange={(event) => resetPage(setSort, event.target.value)}
                     >
-                      <option value="evidence">Strongest problem signal</option>
-                      <option value="recent">Newest official evidence</option>
+                      <option value="evidence">Official figures, strongest first</option>
+                      <option value="recent">Newest official figures</option>
                     </select>
                   </label>
                 </div>
@@ -505,7 +507,7 @@ export function IdeasPage() {
               <div className="idea-results__head">
                 <div>
                   <p className="eyebrow">
-                    {tab === 'saved' ? 'Your shortlist' : 'Evidence-linked ideas'}
+                    {tab === 'saved' ? 'Your shortlist' : 'Ideas linked to official figures'}
                   </p>
                   <h2>
                     {tab === 'saved'
@@ -515,14 +517,14 @@ export function IdeasPage() {
                 </div>
                 {data && tab === 'ideas' ? (
                   <p>
-                    Official data refreshed {date(data.evidence.refreshedAt)} · source release{' '}
-                    {data.evidence.sourceLastUpdated}
+                    FJ checked the official figures on {date(data.evidence.refreshedAt)} · World
+                    Bank last updated them on {data.evidence.sourceLastUpdated}
                   </p>
                 ) : null}
               </div>
               {loading ? (
                 <p className="ideas-loading" role="status">
-                  Loading evidence-backed ideas…
+                  Loading product ideas…
                 </p>
               ) : null}
               {error ? (
@@ -666,28 +668,28 @@ export function IdeaDetailPage({ id }: { id: string }) {
       `BUYER: ${idea.buyer}`,
       `ROUTE: ${IDEA_ROUTE_LABELS[idea.route]}`,
       `FIRST VERSION: ${idea.firstVersion}`,
-      `REVENUE ROUTE: ${idea.revenueModel}`,
+      `HOW IT COULD MAKE MONEY: ${idea.revenueModel}`,
       '',
-      `OFFICIAL EVIDENCE: ${idea.evidence.indicatorName}: ${idea.evidence.displayValue} (${idea.evidence.year})`,
-      `EXACT SOURCE VALUE: ${idea.evidence.value}`,
+      `OFFICIAL FIGURE: ${idea.evidence.indicatorName}: ${idea.evidence.displayValue} (${idea.evidence.year})`,
+      `EXACT FIGURE FROM SOURCE: ${idea.evidence.value}`,
       `UNIT: ${IDEA_UNIT_LABELS[idea.evidence.unit]}`,
-      `DATASET RELEASE: ${idea.evidence.sourceLastUpdated}`,
+      `SOURCE LAST UPDATED: ${idea.evidence.sourceLastUpdated}`,
       `SOURCE: ${idea.evidence.sourceName}`,
       `SOURCE LINK: ${idea.evidence.sourceUrl}`,
-      `LIMIT: ${idea.evidence.interpretation}`,
+      `WHAT THE FIGURE DOES NOT SHOW: ${idea.evidence.interpretation}`,
       '',
-      'VALIDATION PLAN',
+      'CHECKS BEFORE SPENDING MONEY',
       ...idea.validationSteps.map((step, index) => `${index + 1}. ${step}`),
       '',
       'RISKS AND LIMITS',
       ...idea.risks.map((risk) => `- ${risk}`),
       '',
-      'This is a product hypothesis, not proof of demand or a guaranteed business.',
+      'This is an idea to test, not proof that people will buy it or that the business will succeed.',
     ].join('\n')
     const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }))
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `${idea.conceptId}-validation-brief.txt`
+    anchor.download = `${idea.conceptId}-idea-checklist.txt`
     anchor.click()
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
@@ -711,7 +713,7 @@ export function IdeaDetailPage({ id }: { id: string }) {
         ) : null}
         {!idea && !error ? (
           <p className="ideas-loading" role="status">
-            Loading the idea and its evidence…
+            Loading the idea and its official figures…
           </p>
         ) : null}
         {idea ? (
@@ -734,7 +736,7 @@ export function IdeaDetailPage({ id }: { id: string }) {
                   <Share2 size={17} /> Share idea
                 </button>
                 <button className="btn btn--primary" type="button" onClick={download}>
-                  <Download size={17} /> Download brief
+                  <Download size={17} /> Download idea
                 </button>
               </div>
               <p className="field__hint" aria-live="polite">
@@ -744,38 +746,38 @@ export function IdeaDetailPage({ id }: { id: string }) {
             <div className="idea-detail-layout">
               <div className="idea-detail-content">
                 <section>
-                  <p className="eyebrow">The problem context</p>
-                  <h2>Why this may be worth investigating</h2>
+                  <p className="eyebrow">The problem</p>
+                  <h2>Why this idea may be useful</h2>
                   <p>{idea.problem}</p>
                   <p>
                     <strong>Who it is for:</strong> {idea.buyer}
                   </p>
                 </section>
                 <section>
-                  <p className="eyebrow">The first version</p>
-                  <h2>Start small enough to learn</h2>
+                  <p className="eyebrow">A simple first version</p>
+                  <h2>Start small and learn what works</h2>
                   <p>{idea.firstVersion}</p>
                   <div className="idea-detail-facts">
                     <div>
-                      <span>Route</span>
+                      <span>How to provide it</span>
                       <strong>{IDEA_ROUTE_LABELS[idea.route]}</strong>
                     </div>
                     <div>
-                      <span>Suggested test</span>
+                      <span>Time for a first test</span>
                       <strong>{idea.testWindow}</strong>
                     </div>
                     <div>
-                      <span>Revenue route</span>
+                      <span>How it could make money</span>
                       <strong>{idea.revenueModel}</strong>
                     </div>
                   </div>
                 </section>
                 <section className="validation-section">
-                  <p className="eyebrow">Validation before investment</p>
-                  <h2>Test the idea, not your enthusiasm</h2>
+                  <p className="eyebrow">Before you spend money</p>
+                  <h2>Talk to people and test the idea</h2>
                   <p>
-                    {checks.filter(Boolean).length} of {idea.validationSteps.length} checks marked
-                    on this device. Completing the list does not prove demand.
+                    {checks.filter(Boolean).length} of {idea.validationSteps.length} checks ticked
+                    on this device. Ticking every box does not prove people will buy.
                   </p>
                   <div className="validation-list">
                     {idea.validationSteps.map((step, index) => (
@@ -810,7 +812,7 @@ export function IdeaDetailPage({ id }: { id: string }) {
                 </section>
               </div>
               <aside className="idea-evidence-panel">
-                <p className="eyebrow">Official location evidence</p>
+                <p className="eyebrow">Official figures for this place</p>
                 <strong className="idea-evidence-value">{idea.evidence.displayValue}</strong>
                 <h2>{idea.evidence.indicatorName}</h2>
                 <p>
@@ -819,7 +821,7 @@ export function IdeaDetailPage({ id }: { id: string }) {
                 <p>{idea.evidence.interpretation}</p>
                 <dl>
                   <div>
-                    <dt>Exact source value</dt>
+                    <dt>Exact figure from the source</dt>
                     <dd>{idea.evidence.value}</dd>
                   </div>
                   <div>
@@ -827,11 +829,11 @@ export function IdeaDetailPage({ id }: { id: string }) {
                     <dd>{IDEA_UNIT_LABELS[idea.evidence.unit]}</dd>
                   </div>
                   <div>
-                    <dt>Source release</dt>
+                    <dt>Source last updated</dt>
                     <dd>{idea.evidence.sourceLastUpdated}</dd>
                   </div>
                   <div>
-                    <dt>Observation year</dt>
+                    <dt>Year measured</dt>
                     <dd>{idea.evidence.year}</dd>
                   </div>
                 </dl>
@@ -839,9 +841,9 @@ export function IdeaDetailPage({ id }: { id: string }) {
                   Check the World Bank source <ExternalLink size={14} />
                 </a>
                 <small>
-                  {idea.evidence.sourceName}. FJ created the localized product hypothesis; this is
-                  not a World Bank endorsement. Evidence supports the broad context, not this exact
-                  product’s demand.
+                  {idea.evidence.sourceName}. FJ created this product idea for the location. The
+                  World Bank does not endorse it. The official figure helps explain the broader
+                  problem, not whether people will buy this product.
                 </small>
               </aside>
             </div>

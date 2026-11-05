@@ -26,14 +26,14 @@ interface MatchIntelligencePanelProps {
 }
 
 const GROUP_ORDER: Array<{ id: MatchRequirementGroup; title: string }> = [
-  { id: 'essential', title: 'Essential requirements' },
-  { id: 'desirable', title: 'Desirable requirements' },
-  { id: 'eligibility', title: 'Location and work eligibility' },
+  { id: 'essential', title: 'Must-have requirements' },
+  { id: 'desirable', title: 'Nice-to-have requirements' },
+  { id: 'eligibility', title: 'Location and work rules' },
   { id: 'practical', title: 'Practical fit' },
 ]
 
 const STATUS_LABELS: Record<MatchRequirementStatus, string> = {
-  met: 'Shown in your evidence',
+  met: 'Shown in your CV or profile',
   partial: 'Partly shown',
   missing: 'Not shown',
   'needs-check': 'Needs checking',
@@ -73,7 +73,7 @@ function RequirementRow({ item }: { item: MatchRequirement }) {
 function percentage(value: number | null, label: string) {
   return (
     <div className="match-metric">
-      <strong>{value === null ? 'Not enough data' : `${value}%`}</strong>
+      <strong>{value === null ? 'Not enough information' : `${value}%`}</strong>
       <span>{label}</span>
     </div>
   )
@@ -120,17 +120,17 @@ export function MatchIntelligencePanel({
         <BrainCircuit size={18} aria-hidden="true" /> 2. Decide if this advert is worth your time
       </h3>
       <p>
-        FJ compares the advert with your saved CV and profile. It separates essential requirements
-        from desirable ones, shows the evidence behind each result, checks location signals, and
-        suggests stronger live alternatives when they exist.
+        FJ compares the advert with your saved CV and profile. It shows which requirements you meet,
+        which skills are missing, whether the location works for you, and other adverts that may fit
+        you better.
       </p>
       <p className="field__hint">
-        This is a decision aid based on words and evidence. It is not a hiring prediction.
+        FJ uses the words in your CV and the advert. It cannot predict whether you will get the job.
       </p>
 
       <div className="field">
         <label className="field__label" htmlFor={`match-cv-${job.id}`}>
-          Different CV text, optional
+          Use different CV text (optional)
         </label>
         <textarea
           id={`match-cv-${job.id}`}
@@ -163,22 +163,22 @@ export function MatchIntelligencePanel({
         <div className="match-result stack" aria-live="polite">
           <div className="match-result__hero">
             <div>
-              <p className="eyebrow">Decision view</p>
+              <p className="eyebrow">Your result</p>
               <h4>{result.headline}</h4>
               <p>{result.summary}</p>
               <p className="field__hint">
                 Based on{' '}
-                {result.basis === 'cv-and-profile' ? 'your CV and profile' : 'your profile'}.
-                Confidence: {result.confidence}. Checked{' '}
+                {result.basis === 'cv-and-profile' ? 'your CV and profile' : 'your profile'}. How
+                certain FJ is: {result.confidence}. Checked{' '}
                 {new Date(result.generatedAt).toLocaleString('en-NG')}.
               </p>
             </div>
             <div
               className="match-score"
-              aria-label={`Overall fit index ${result.fitScore} out of 100`}
+              aria-label={`Overall match score ${result.fitScore} out of 100`}
             >
               <strong>{result.fitScore}</strong>
-              <span>fit index / 100</span>
+              <span>match score / 100</span>
               <meter min={0} max={100} value={result.fitScore}>
                 {result.fitScore}%
               </meter>
@@ -186,9 +186,9 @@ export function MatchIntelligencePanel({
           </div>
 
           <div className="match-metrics" aria-label="Match measures">
-            {percentage(result.essentialPercent, 'essential requirements covered')}
-            {percentage(result.desirablePercent, 'desirable requirements covered')}
-            {percentage(result.evidencePercent, 'requirements with CV or profile evidence')}
+            {percentage(result.essentialPercent, 'must-have requirements met')}
+            {percentage(result.desirablePercent, 'nice-to-have requirements met')}
+            {percentage(result.evidencePercent, 'requirements shown in your CV or profile')}
           </div>
 
           <section className={`match-eligibility match-eligibility--${result.eligibility.status}`}>
@@ -217,7 +217,7 @@ export function MatchIntelligencePanel({
                   ))}
                 </ul>
               ) : (
-                <p>No strong matched qualification was clear from the evidence supplied.</p>
+                <p>No strong match was clear from the CV or profile supplied.</p>
               )}
             </section>
             <section>
@@ -229,7 +229,7 @@ export function MatchIntelligencePanel({
                   ))}
                 </ul>
               ) : (
-                <p>No major gap was clear from the scored requirements.</p>
+                <p>No major gap was clear from the requirements FJ checked.</p>
               )}
             </section>
           </div>
@@ -260,7 +260,7 @@ export function MatchIntelligencePanel({
 
           {result.alternatives.length ? (
             <section>
-              <h4>Stronger alternatives to compare</h4>
+              <h4>Other adverts that may fit you better</h4>
               <div className="best-match-grid">
                 {result.alternatives.map((alternative) => {
                   const badge = opportunityBadge(alternative.job)
@@ -273,13 +273,15 @@ export function MatchIntelligencePanel({
                             {alternative.job.company} · {alternative.job.locationLabel}
                           </p>
                         </div>
-                        <span className="status-pill status-open">Fit {alternative.score}/100</span>
+                        <span className="status-pill status-open">
+                          Match score {alternative.score}/100
+                        </span>
                       </div>
                       {badge ? <span className="chip chip--gig">{badge}</span> : null}
                       <p>
-                        Essential fit:{' '}
+                        Must-have requirements met:{' '}
                         {alternative.essentialPercent === null
-                          ? 'not enough data'
+                          ? 'not enough information'
                           : `${alternative.essentialPercent}%`}
                       </p>
                       <ul className="plain-list">
@@ -299,14 +301,14 @@ export function MatchIntelligencePanel({
                           type="button"
                           onClick={() => onOpenJob(alternative.job)}
                         >
-                          View this alternative <ArrowRight size={14} />
+                          View this advert <ArrowRight size={14} />
                         </button>
                       ) : (
                         <a
                           className="btn btn--sm"
                           href={`/jobs/${encodeURIComponent(alternative.job.id)}`}
                         >
-                          View this alternative <ArrowRight size={14} />
+                          View this advert <ArrowRight size={14} />
                         </a>
                       )}
                     </article>

@@ -121,7 +121,9 @@ test('homepage explains the platform in plain words and sends people to sign up'
     page.getByRole('heading', { name: 'No card. No trial limit. Payments paused.' }),
   ).toBeVisible()
   await expect(page.locator('.home-pro')).toContainText('You do not need to start a trial')
-  await expect(page.locator('.home-ideas-teaser')).toContainText('localized product ideas')
+  await expect(page.locator('.home-ideas-teaser')).toContainText(
+    'product ideas for different places',
+  )
   await expect(page.locator('.home-user-count')).toContainText(/registered on FJ/)
   await expect(page.locator('.home-user-count strong')).toHaveText(/^\d[\d,]*$/)
   await expect(page.locator('.home-stat').first()).toHaveClass(/home-stat--users/)
@@ -302,7 +304,7 @@ test('pricing stays findable and honestly explains free access with payments pau
   await page.locator('.topnav').getByRole('link', { name: 'Pricing' }).click()
   await expect(page).toHaveURL(/\/pricing$/)
   await expect(
-    page.getByRole('heading', { name: 'Everything in FJ is free for now', level: 1 }),
+    page.getByRole('heading', { name: 'Everything on FJ is free for now', level: 1 }),
   ).toBeVisible()
   const pricingNav = page.locator('.site-header .topnav')
   await expect(pricingNav.getByRole('link', { name: 'Home' })).toBeVisible()
@@ -316,7 +318,7 @@ test('pricing stays findable and honestly explains free access with payments pau
   await expect(included).toContainText('Prepare your application or pitch')
   await expect(included).toContainText('FJ Match Intelligence')
   await expect(included).toContainText('Check an advert before you apply')
-  await expect(included).toContainText('essential requirements from desirable ones')
+  await expect(included).toContainText('which requirements you meet')
   await expect(included).toContainText('suggests stronger alternatives')
   await expect(
     page.getByRole('heading', { name: 'No checkout. No card. No trial limit.' }),
@@ -343,7 +345,7 @@ test('homepage and pricing explain Phase 2 cleanly at phone, tablet and desktop 
 
     await page.goto('/pricing')
     await expect(
-      page.getByRole('heading', { name: 'Everything in FJ is free for now', level: 1 }),
+      page.getByRole('heading', { name: 'Everything on FJ is free for now', level: 1 }),
     ).toBeVisible()
     await expect(
       page.locator('.site-header .topnav').getByRole('link', { name: 'Pricing' }),
@@ -483,7 +485,7 @@ NYSC completed in 2024.`
   await page.setViewportSize({ width: 390, height: 844 })
   await signUp(page)
   await page.goto('/dashboard?tab=plan')
-  await expect(page.getByRole('heading', { name: 'Free early access' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Free for now' })).toBeVisible()
   await expect(page.locator('body')).toContainText('Payments are paused')
   await expect(page.locator('body')).toContainText('nothing on FJ asks for card details')
   await expect(page.getByRole('button', { name: /Buy|Start.*trial|Check payment/ })).toHaveCount(0)
@@ -502,7 +504,7 @@ NYSC completed in 2024.`
   await expect(freeSavedCv).not.toContainText('trial or Pro')
 
   await page.goto('/dashboard?tab=plan')
-  await expect(page.getByRole('heading', { name: 'Free early access' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Free for now' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start my 3-day free trial' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Buy Pro/ })).toHaveCount(0)
   await expectNoHorizontalOverflow(page)
@@ -526,7 +528,9 @@ NYSC completed in 2024.`
   await expect(page.getByRole('link', { name: /Apply for this (role|gig|contract)/ })).toBeVisible()
   const proTools = page.locator('.pro-tools')
   await proTools.getByRole('button', { name: 'Check this advert' }).click()
-  await expect(proTools).toContainText('not employer verification', { timeout: 30_000 })
+  await expect(proTools).toContainText('does not prove the employer is genuine', {
+    timeout: 30_000,
+  })
   await proTools.getByRole('button', { name: 'Run Match Intelligence' }).click()
   await expect(proTools.locator('.match-result')).toBeVisible({ timeout: 30_000 })
   await expect(proTools).toContainText('Your matching qualifications')
@@ -604,7 +608,7 @@ NYSC completed in 2024.`
   if (bestMatchesBody.matches.length) {
     await expect(page.locator('.best-match-card').first()).toBeVisible({ timeout: 30_000 })
   } else {
-    await expect(page.getByText('No current listing reaches a useful fit yet.')).toBeVisible()
+    await expect(page.getByText('No current advert is a strong match yet.')).toBeVisible()
   }
   await page.getByRole('button', { name: 'Show skills to learn' }).click()
   await expect(page.getByRole('heading', { name: 'Skills to learn' })).toBeVisible()

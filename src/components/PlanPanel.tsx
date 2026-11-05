@@ -241,11 +241,11 @@ export function PlanPanel({
 
   if (PRO_FREE_FOR_ALL) {
     return (
-      <section className="panel-page plan-panel" aria-label="Free early access">
+      <section className="panel-page plan-panel" aria-label="Free for now">
         <header className="panel-head">
           <div>
             <p className="eyebrow">Your FJ access</p>
-            <h2>Free early access</h2>
+            <h2>Free for now</h2>
             <p className="muted">{FREE_ACCESS_MESSAGE}</p>
           </div>
           <div className="plan-actions">
@@ -261,15 +261,15 @@ export function PlanPanel({
         <div className="billing-box">
           <h3>Payments are paused</h3>
           <p className="muted">
-            There is no checkout and nothing on FJ asks for card details. Existing paid
-            subscriptions and billing records are preserved for later. You can use the tools below
-            now, subject to normal fair-use and safety limits.
+            You cannot buy or renew a plan, and nothing on FJ asks for card details. Existing paid
+            plans and payment records are not deleted. You can use the tools below now, within the
+            rules that keep FJ safe and fair for everyone.
           </p>
         </div>
         <div className="plan-feature-grid">
           <article className="plan-column">
             <p className="eyebrow">Included now</p>
-            <h3>Everything in FJ</h3>
+            <h3>Everything on FJ</h3>
             {[...FREE_FEATURES, ...PRO_FEATURES].map((feature) => (
               <div className="plan-feature" key={feature.id}>
                 <strong>{feature.title}</strong>
@@ -280,15 +280,15 @@ export function PlanPanel({
           </article>
           <article className="plan-column">
             <p className="eyebrow">Still important</p>
-            <h3>What free access does not change</h3>
+            <h3>What stays the same</h3>
             {PRO_LIMITS.map((limit) => (
               <p className="plan-limit" key={limit}>
                 {limit}
               </p>
             ))}
             <p className="plan-limit">
-              Saved CV text and account information stay private. Product ideas and live trends are
-              free to explore without a paid plan.
+              Saved CV text and account information stay private. Product ideas and trending
+              searches are free to explore without a paid plan.
             </p>
           </article>
         </div>

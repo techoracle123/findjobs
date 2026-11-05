@@ -589,7 +589,7 @@ export default function App() {
           {account.mode === 'signed-in' && (
             <a className="chip chip--plain plan-chip" href="/dashboard?tab=plan">
               {PRO_FREE_FOR_ALL
-                ? 'Free early access'
+                ? 'Free for now'
                 : account.proTrial.status === 'active'
                   ? 'Pro trial active'
                   : proEnabled
@@ -991,7 +991,7 @@ export default function App() {
             {loading ? (
               <div className="empty" role="status">
                 <span className="spinner" />
-                <p>Finding your next opportunity…</p>
+                <p>Loading jobs and gigs…</p>
               </div>
             ) : sorted.jobs.length === 0 ? (
               <div className="empty">

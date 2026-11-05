@@ -34,7 +34,7 @@ function MatchCard({ match, onOpenJob }: { match: BestMatch; onOpenJob: (job: Jo
             {match.job.company} · {match.job.locationLabel}
           </p>
         </div>
-        <span className="status-pill status-open">Fit score {match.score}/100</span>
+        <span className="status-pill status-open">Match score {match.score}/100</span>
       </div>
       {opportunityBadge(match.job) ? (
         <span className="chip chip--gig">{opportunityBadge(match.job)}</span>
@@ -47,7 +47,7 @@ function MatchCard({ match, onOpenJob }: { match: BestMatch; onOpenJob: (job: Jo
       </ul>
       {match.matchedSkills.length ? (
         <p>
-          <strong>Your evidence:</strong> {match.matchedSkills.join(', ')}
+          <strong>Skills found:</strong> {match.matchedSkills.join(', ')}
         </p>
       ) : null}
       {match.missingSkills.length ? (
@@ -110,7 +110,7 @@ export function ProInsightsPanel({
     <section className="panel" aria-labelledby="pro-insights-heading">
       <div className="panel__head panel-head-row">
         <div>
-          <p className="eyebrow">{PRO_FREE_FOR_ALL ? 'Pro · free early access' : 'Pro'}</p>
+          <p className="eyebrow">{PRO_FREE_FOR_ALL ? 'Pro · free for now' : 'Pro'}</p>
           <h2 className="panel__title" id="pro-insights-heading">
             Best matches and skills to learn
           </h2>
@@ -128,7 +128,7 @@ export function ProInsightsPanel({
             <p>
               Pro checks current jobs, gigs and contracts against your profile and saved CV. It
               shows your best matches and the skills you may need to learn. Open a listing to run FJ
-              Match Intelligence for a deeper decision check.
+              Match Intelligence for a fuller CV check.
             </p>
             <button className="btn btn-primary" type="button" onClick={onOpenPlan}>
               {trial.status === 'not_started' ? 'Trial or buy Pro' : 'Buy Pro'}
@@ -177,13 +177,13 @@ export function ProInsightsPanel({
                   </div>
                 ) : (
                   <p>
-                    No current listing reaches a useful fit yet. Widen your target roles or add more
-                    skills.
+                    No current advert is a strong match yet. Try more kinds of work or add more
+                    skills to your profile.
                   </p>
                 )}
               </div>
             ) : busy === 'best' ? (
-              <p role="status">Ranking current work against your profile…</p>
+              <p role="status">Checking current work against your profile…</p>
             ) : null}
 
             {plan ? (

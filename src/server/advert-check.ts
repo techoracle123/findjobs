@@ -314,13 +314,13 @@ export function buildAdvertCheck(rawInput: AdvertCheckInput, now = new Date()): 
 
   const nextSteps = [
     'Open the employer’s official website yourself and confirm that this exact vacancy is listed there.',
-    'Compare the job title, closing date and application route with the advert you checked.',
-    'Never pay to apply, train, buy equipment or unlock an interview.',
+    'Compare the job title, closing date and how to apply with the advert you checked.',
+    'Never pay to apply, train, buy equipment or get an interview.',
     'Do not send BVN, bank login details, card details or identity documents through chat.',
   ]
   if (riskLevel === 'warning-signs-found')
     nextSteps.unshift(
-      'Stop and verify independently before sending personal documents or continuing.',
+      'Stop and check the employer yourself before sending personal documents or continuing.',
     )
 
   return {
@@ -329,10 +329,10 @@ export function buildAdvertCheck(rawInput: AdvertCheckInput, now = new Date()): 
     riskScore,
     headline:
       riskLevel === 'warning-signs-found'
-        ? 'Warning signs found. Do not pay or send sensitive documents until you verify this independently. This is not employer verification.'
+        ? 'Warning signs found. Do not pay or send personal documents until you have checked the employer yourself. This check does not prove the employer is genuine.'
         : riskLevel === 'caution'
-          ? 'Use caution. Some information needs independent checking. This is not employer verification.'
-          : 'No warning signs found in the text supplied. This is not employer verification.',
+          ? 'Use caution. Check the missing or unclear information yourself. This check does not prove the employer is genuine.'
+          : 'No warning signs found in the text supplied. This does not prove the employer is genuine.',
     signals,
     nigeria: nigeriaCheck(input, text),
     missingInformation,

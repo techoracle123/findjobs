@@ -749,7 +749,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       direction: 'lower_access',
       scaleMax: 100,
       problem:
-        'Adult literacy gaps create demand hypotheses around patient instruction, local-language materials, practice and accessible learning support.',
+        'Adult literacy gaps suggest a need for clear instructions, local-language materials, practice and accessible learning support.',
       interpretation:
         'This measures the stated adult literacy definition used by the source. It does not measure school quality, digital literacy or every learner’s needs.',
       validationFocus:
@@ -1532,7 +1532,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
         'software',
         'build',
         'schools and community sports organisers',
-        'A decision aid using an approved local air-quality source and organiser-defined thresholds, with the source and timestamp shown.',
+        'A simple guide that uses an approved local air-quality source. It shows the source, the time it was checked, and the levels the event organiser chooses.',
         'Have the organisation’s safety lead review one week of decisions.',
         'Organisation subscription.',
         'air quality activity school software',

@@ -158,7 +158,7 @@ describe('Nigeria advert evidence', () => {
         'Guaranteed outcome wording',
       ]),
     )
-    expect(check.headline).toContain('not employer verification')
+    expect(check.headline).toContain('does not prove the employer is genuine')
     expect(check.nextSteps.join(' ')).toContain('Never pay')
   })
 })

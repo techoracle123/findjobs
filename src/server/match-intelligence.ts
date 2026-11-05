@@ -599,14 +599,14 @@ function eligibilityRequirement(job: Job, profile: Profile): MatchRequirement {
   const detail =
     eligibility.tier === 'eligible'
       ? country
-        ? `The advert gives a positive signal for ${country}. Still confirm the final terms before applying.`
-        : 'The advert gives a positive eligibility signal. Still confirm the final terms before applying.'
+        ? `The advert suggests that people in ${country} can apply. Check the final terms before applying.`
+        : 'The advert suggests that you may be able to apply. Check the final terms before applying.'
       : eligibility.tier === 'restricted'
-        ? 'The location and sponsorship signals look like a blocker for your profile country.'
+        ? 'The location and sponsorship details suggest that you may not be able to apply from your country.'
         : eligibility.reason
 
   return {
-    label: 'Location and work eligibility',
+    label: 'Location and permission to work',
     group: 'eligibility',
     status,
     detail,
@@ -616,8 +616,8 @@ function eligibilityRequirement(job: Job, profile: Profile): MatchRequirement {
     ],
     action:
       status === 'met'
-        ? 'Confirm the accepted locations again on the final application page.'
-        : 'Confirm accepted work locations and sponsorship before spending time on a long application.',
+        ? 'Check the accepted locations again on the application page.'
+        : 'Check where applicants can work from and whether sponsorship is available before writing a long application.',
   }
 }
 
@@ -633,7 +633,7 @@ function practicalRequirements(
     const matchesTarget = profile.targetRoleFamilies.includes(job.roleFamily)
     const matchesCv = cvRoleFamilies.includes(job.roleFamily)
     requirements.push({
-      label: 'Role focus',
+      label: 'Type of role',
       group: 'practical',
       status:
         matchesTarget || matchesCv
@@ -643,27 +643,27 @@ function practicalRequirements(
             : 'needs-check',
       detail:
         matchesTarget || matchesCv
-          ? 'This work matches the role focus shown by your CV or profile.'
-          : 'This role focus is not one of the main targets in your profile. Check whether your strongest work transfers well.',
+          ? 'This kind of work matches the roles in your CV or profile.'
+          : 'This kind of work is not one of your target roles. Check whether your experience is relevant.',
       evidence: [`Advert: ${job.title} at ${job.company}`],
       action:
         matchesTarget || matchesCv
-          ? 'Lead with your most relevant role example.'
-          : 'Only apply if you can show transferable results for this kind of work.',
+          ? 'Start with your most relevant example.'
+          : 'Apply only if you can show relevant results for this kind of work.',
     })
   }
 
   if (profile.preferredWorkModes.length && job.workMode !== 'unknown') {
     const matched = profile.preferredWorkModes.includes(job.workMode)
     requirements.push({
-      label: 'Work location type',
+      label: 'Work setting',
       group: 'practical',
       status: matched ? 'met' : job.workMode === 'hybrid' ? 'partial' : 'missing',
       detail: matched
         ? `This is ${job.workMode}, which matches your profile choices.`
         : `This is ${job.workMode}. Your profile choices are ${profile.preferredWorkModes.join(', ')}.`,
       evidence: job.locationLabel ? [`Advert location: ${job.locationLabel}`] : [],
-      action: 'Confirm the working pattern and time zone expectations before applying.',
+      action: 'Check the working hours and time zone before applying.',
     })
   }
 
@@ -681,10 +681,10 @@ function practicalRequirements(
     status: chosenTypes.length === 0 ? 'needs-check' : matchesType ? 'met' : 'partial',
     detail:
       chosenTypes.length === 0
-        ? 'Choose jobs, gigs and contracts, or both in your profile if you want this check to reflect your preference.'
+        ? 'Choose whether you want jobs, gigs and contracts, or both in your profile so this check can use your preference.'
         : matchesType
           ? 'This matches your work type choice.'
-          : 'This is outside the single work type selected in your profile.',
+          : 'This does not match the work type you chose in your profile.',
     evidence: [
       ...(opportunity.engagementLabel
         ? [
@@ -811,16 +811,16 @@ function buildAlternatives(
     const reasons: string[] = []
     if (essentialImprovement > 0) {
       reasons.push(
-        `Essential fit is ${candidatePercent}% here, compared with ${currentPercent}% for the current advert.`,
+        `Your CV or profile shows ${candidatePercent}% of the must-have requirements here, compared with ${currentPercent}% for the current advert.`,
       )
     }
     if (tierImprovement > 0) {
-      reasons.push('The location and eligibility signals look clearer for your work country.')
+      reasons.push('This advert is clearer about location and permission to work in your country.')
     }
     if (matchedSkills.length)
-      reasons.push(`Your evidence covers ${matchedSkills.slice(0, 3).join(', ')}.`)
+      reasons.push(`Your CV or profile shows ${matchedSkills.slice(0, 3).join(', ')}.`)
     if (opportunityOf(candidate).opportunityType === 'gig') {
-      reasons.push('It is classified as gig or contract work from the advert wording.')
+      reasons.push('The advert describes this as gig or contract work.')
     }
     if (!reasons.length) reasons.push('It has a higher overall match score for your profile.')
 
@@ -958,41 +958,39 @@ export function analyzeMatchIntelligence(
 
   const headline =
     verdict === 'strong-match'
-      ? 'Strong match on the evidence supplied'
+      ? 'Strong match based on your CV and profile'
       : verdict === 'possible-match'
-        ? 'A realistic match with some gaps to address'
+        ? 'A possible match with some gaps'
         : verdict === 'stretch'
-          ? 'A stretch based on the evidence supplied'
+          ? 'You may need more skills or experience for this one'
           : verdict === 'check-location-first'
             ? eligibility.tier === 'restricted'
-              ? 'Check eligibility before spending time on this'
-              : 'Check location and eligibility before you decide'
-            : 'Not enough evidence for a firm decision yet'
+              ? 'Check whether you can apply before spending time on this'
+              : 'Check the location and work rules before you decide'
+            : 'Not enough information for a clear result yet'
 
   const summaryParts: string[] = []
   if (essentialPercent !== null) {
     summaryParts.push(
-      `Your evidence clearly covers ${essentialPercent}% of the essential requirements that could be scored.`,
+      `Your CV or profile shows ${essentialPercent}% of the must-have requirements FJ could check.`,
     )
   }
   if (desirablePercent !== null) {
-    summaryParts.push(`It covers ${desirablePercent}% of the desirable requirements.`)
+    summaryParts.push(`It shows ${desirablePercent}% of the nice-to-have requirements.`)
   }
   if (eligibility.tier === 'restricted')
-    summaryParts.push('The location signals are the main blocker.')
+    summaryParts.push('The location details are the main problem.')
   else if (eligibility.tier === 'unknown') {
-    summaryParts.push('Eligibility is not clear enough from the advert.')
+    summaryParts.push('The advert does not make it clear whether you can apply.')
   }
   if (opportunity.opportunityType === 'gig') {
     summaryParts.push(
       `This looks like ${opportunity.engagementLabel.toLowerCase()} work${opportunity.projectDuration ? ` for ${opportunity.projectDuration}` : ''}.`,
     )
   }
-  if (!cleanCv)
-    summaryParts.push('This view used your profile because no saved CV text was supplied.')
+  if (!cleanCv) summaryParts.push('FJ used your profile because no saved CV text was supplied.')
   const summary =
-    summaryParts.join(' ') ||
-    'The advert does not contain enough scored requirements for a firm view.'
+    summaryParts.join(' ') || 'The advert does not list enough requirements for a clear result.'
 
   const strengths = dedupedRequirements
     .filter((item) => item.status === 'met')
@@ -1018,36 +1016,36 @@ export function analyzeMatchIntelligence(
       `If you have used ${missingEssential
         .slice(0, 3)
         .map((item) => item.label)
-        .join(', ')}, add the work and result to your CV. Do not add a skill you cannot support.`,
+        .join(', ')}, add the work and result to your CV. Do not add a skill you do not have.`,
     )
   }
   const firstPartial = essential.find((item) => item.status === 'partial')
   if (firstPartial) {
     actions.push(
-      `Add a clear project example for ${firstPartial.label}. State what you delivered and the result.`,
+      `Add a clear project example for ${firstPartial.label}. Say what you did and what happened.`,
     )
   }
   if (eligibility.tier !== 'eligible') {
-    actions.push('Confirm the accepted work locations before writing a long application.')
+    actions.push('Check where applicants can work from before writing a long application.')
   }
   if (opportunity.opportunityType === 'gig') {
     actions.push(
-      'Before you commit, confirm the scope, deadline, milestones, revisions, who owns the work, and when payment is released.',
+      'Before you agree, confirm the exact work, deadline, stages, changes included, who owns the work, and when you will be paid.',
     )
   }
   if (strengths.length) {
     actions.push(
-      'Put your strongest matching result near the top of your CV summary and use the advert skill names where they are truthful.',
+      'Put your strongest relevant result near the top of your CV summary. Use the advert’s skill names only when they are true for you.',
     )
   }
   if (job.sponsorship === 'available') {
     actions.push(
-      'The advert records sponsorship as available. Confirm whether it covers your country and this exact role.',
+      'The advert says sponsorship is available. Check whether it applies to your country and this role.',
     )
   }
   if (!actions.length) {
     actions.push(
-      'Review the gaps below, then compare this advert with the stronger alternatives before applying.',
+      'Read the gaps below, then compare this advert with the other matches before applying.',
     )
   }
 
@@ -1063,24 +1061,20 @@ export function analyzeMatchIntelligence(
     eligibility.tier,
   )
   if (alternatives.length) {
-    actions.push(
-      'Compare the stronger alternatives below before spending more time on this advert.',
-    )
+    actions.push('Compare the other matches below before spending more time on this advert.')
   }
 
   const limitations = [
-    'This checks words and evidence in the advert and your CV or profile. It cannot judge the quality of your work.',
-    'A skill missing from your CV may still be a skill you have.',
+    'FJ compares the words in the advert with your CV or profile. It cannot judge the quality of your work.',
+    'A skill may be missing from your CV even if you have it.',
     'The employer or client makes the final decision.',
   ]
   if (job.description.trim().length < 1000) {
-    limitations.push(
-      'The available advert text is short, so some requirements may be missing from this check.',
-    )
+    limitations.push('The advert text is short, so FJ may have missed some requirements.')
   }
   if (!cleanCv) {
     limitations.push(
-      'Add your CV text for a stronger check based on work evidence, not profile skills alone.',
+      'Add your CV text for a fuller check based on your work, not just the skills in your profile.',
     )
   }
 
@@ -1109,10 +1103,10 @@ export function analyzeMatchIntelligence(
             : 'needs-check',
       headline:
         eligibility.tier === 'eligible'
-          ? 'Positive eligibility signal found'
+          ? 'The advert suggests you can apply'
           : eligibility.tier === 'restricted'
-            ? 'Possible eligibility blocker found'
-            : 'Eligibility needs checking',
+            ? 'You may not be able to apply from your country'
+            : 'Check whether you can apply',
       evidence: eligibility.evidence,
       notes: eligibility.notes,
     },

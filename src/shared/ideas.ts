@@ -137,11 +137,11 @@ export const IDEA_UNIT_LABELS: Record<IdeaObservation['unit'], string> = {
 export const IDEA_FORMAT_LABELS: Record<IdeaFormat, string> = {
   physical: 'Physical product',
   software: 'Software product',
-  hybrid: 'Physical + software',
+  hybrid: 'Physical product with software',
 }
 
 export const IDEA_ROUTE_LABELS: Record<IdeaRoute, string> = {
-  build: 'Build it',
-  sell: 'Source and sell it',
-  both: 'Build or source',
+  build: 'Make it yourself',
+  sell: 'Buy it from a supplier and sell it',
+  both: 'Make it or buy it to sell',
 }

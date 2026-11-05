@@ -297,7 +297,7 @@ export function JobDetail({
           </div>
           {isGig ? (
             <ul className="application-tips">
-              <li>Read the full advert and check the scope, deadline and expected result.</li>
+              <li>Read the full advert and check the exact work, deadline and expected result.</li>
               <li>
                 Confirm price or rate, milestones, revisions, payment dates and who owns the
                 finished work in writing.

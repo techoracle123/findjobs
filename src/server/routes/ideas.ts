@@ -15,7 +15,7 @@ ideaRoutes.get('/ideas', async (c) => {
     return c.json(
       {
         error: 'idea_evidence_unavailable',
-        message: 'The evidence catalogue is being refreshed. Please try again shortly.',
+        message: 'The official figures are being updated. Please try again shortly.',
       },
       503,
     )
@@ -55,7 +55,7 @@ ideaRoutes.get('/ideas/:id', async (c) => {
   const result = findIdea(snapshot, c.req.param('id'))
   if (!result)
     return c.json(
-      { error: 'idea_not_found', message: 'That idea is not in the current evidence catalogue.' },
+      { error: 'idea_not_found', message: 'That idea is not in the current collection.' },
       404,
     )
   c.header('Cache-Control', 'public, max-age=60')
@@ -80,7 +80,7 @@ ideaRoutes.get('/idea-trends', async (c) => {
       {
         error: 'trends_unavailable',
         message:
-          'Live trends are unavailable for this location right now. Product ideas and dated evidence are still available.',
+          'Trending searches are not available for this place right now. You can still look through product ideas and official figures.',
       },
       503,
     )

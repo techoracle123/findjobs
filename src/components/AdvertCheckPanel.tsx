@@ -15,7 +15,7 @@ export function AdvertCheckResultView({ check }: { check: AdvertCheckResult }) {
     'FJ advert check',
     check.headline,
     '',
-    `Nigeria eligibility: ${check.nigeria.headline}`,
+    `Working from Nigeria: ${check.nigeria.headline}`,
     ...check.nigeria.evidence.map((line) => `- ${line}`),
     '',
     'Warning signs:',
@@ -26,7 +26,7 @@ export function AdvertCheckResultView({ check }: { check: AdvertCheckResult }) {
     'Before you apply:',
     ...check.nextSteps.map((line) => `- ${line}`),
     '',
-    'This is not employer verification. Check the employer independently and never pay to get a job.',
+    'This check does not prove the employer is genuine. Check the employer yourself and never pay to get a job.',
   ].join('\n')
 
   return (
@@ -42,7 +42,7 @@ export function AdvertCheckResultView({ check }: { check: AdvertCheckResult }) {
       <p>{check.headline}</p>
 
       <section>
-        <h4>Nigeria eligibility</h4>
+        <h4>Working from Nigeria</h4>
         <p>
           <strong>{check.nigeria.headline}</strong>
         </p>
@@ -63,12 +63,12 @@ export function AdvertCheckResultView({ check }: { check: AdvertCheckResult }) {
         </p>
         {check.nigeria.sponsorship.length ? (
           <p>
-            <strong>Sponsorship words:</strong> {check.nigeria.sponsorship.join(' · ')}
+            <strong>Visa sponsorship mentioned:</strong> {check.nigeria.sponsorship.join(' · ')}
           </p>
         ) : null}
         {check.nigeria.timeZones.length ? (
           <p>
-            <strong>Time-zone words:</strong> {check.nigeria.timeZones.join(' · ')}
+            <strong>Time zones mentioned:</strong> {check.nigeria.timeZones.join(' · ')}
           </p>
         ) : null}
         {check.nigeria.countriesNamed.length ? (
@@ -100,8 +100,8 @@ export function AdvertCheckResultView({ check }: { check: AdvertCheckResult }) {
           </ul>
         ) : (
           <p>
-            None of the warning signs FJ checks for were found. This does not verify the employer or
-            prove the job is safe.
+            None of the warning signs FJ checks for were found. This does not prove the employer is
+            genuine or that the job is safe.
           </p>
         )}
       </section>
