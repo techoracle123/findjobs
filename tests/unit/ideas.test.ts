@@ -28,6 +28,21 @@ describe('localized product idea catalogue', () => {
     }
   })
 
+  it('uses unique, everyday titles without technical labels', () => {
+    expect(new Set(IDEA_CONCEPTS.map((idea) => idea.title)).size).toBe(IDEA_CONCEPTS.length)
+    const byId = new Map(IDEA_CONCEPTS.map((idea) => [idea.id, idea]))
+    expect(byId.get('health-access-medicine-organiser')?.title).toBe('Paper medicine schedule')
+    expect(byId.get('health-access-clinic-queue-display')?.title).toBe(
+      'Clinic queue board without patient names',
+    )
+    expect(byId.get('health-access-provider-navigation')?.title).toBe(
+      'Clinic and care service directory',
+    )
+    const technicalLabels =
+      /non-digital|privacy-safe|qualified-care|wayfinding|consent-based|clinician-reviewed|numeracy|facilitation|traceability|\brota\b|\bregister\b|off-grid|sizing|ventilated|caddy|\btoken\b|documentation|capacity|unit-cost|logbook|\boffline\b/i
+    for (const idea of IDEA_CONCEPTS) expect(idea.title).not.toMatch(technicalLabels)
+  })
+
   it('computes more than 15,000 ideas from eligible observations, without a hardcoded marketing total', () => {
     const snapshot = makeIdeaSnapshot()
     const response = searchIdeas(snapshot, { country: 'ALL', limit: 24 })

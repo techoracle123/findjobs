@@ -120,7 +120,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'energy-access',
         'clinic-cold-box',
-        'Solar-assisted cold storage for small clinics',
+        'Cold storage with solar power for small clinics',
         'hybrid',
         'both',
         'clinics and community health workers',
@@ -144,7 +144,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'energy-access',
         'home-lighting-pack',
-        'Basic lighting pack for off-grid homes',
+        'Basic lighting pack for homes without electricity',
         'physical',
         'both',
         'households without an electricity connection',
@@ -168,7 +168,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'energy-access',
         'energy-stock-planner',
-        'Solar stock and sizing planner',
+        'Solar stock and quote planner',
         'software',
         'build',
         'solar equipment sellers',
@@ -263,7 +263,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'water-access',
         'storage-upgrade',
-        'Covered household water-storage upgrade',
+        'Covered home water-storage kit',
         'physical',
         'both',
         'households that store water at home',
@@ -347,7 +347,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'water-access',
         'quality-log',
-        'Water-quality result register',
+        'Water test result record',
         'software',
         'build',
         'organisations that arrange water testing',
@@ -383,7 +383,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'water-access',
         'water-vendor-comparison',
-        'Water vendor price and terms comparison',
+        'Water seller price and terms comparison',
         'software',
         'build',
         'households and small businesses that buy delivered water',
@@ -395,7 +395,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'water-access',
         'water-leak-report',
-        'Shared water-point fault reporter',
+        'Shared water-point repair reporter',
         'software',
         'build',
         'community groups and water-point operators',
@@ -430,7 +430,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'sanitation-waste',
         'toilet-cleaning-kit',
-        'Controlled toilet-cleaning kit',
+        'Toilet-cleaning safety kit',
         'physical',
         'both',
         'schools, small businesses and cleaning teams',
@@ -442,7 +442,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'sanitation-waste',
         'waste-separation-set',
-        'Small-site waste separation set',
+        'Small waste-sorting set',
         'physical',
         'both',
         'shops, schools and small offices',
@@ -454,7 +454,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'sanitation-waste',
         'sanitation-service-cart',
-        'Washroom service cart for small facilities',
+        'Washroom cleaning cart',
         'physical',
         'both',
         'professional cleaning teams',
@@ -490,7 +490,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'sanitation-waste',
         'compost-caddy',
-        'Ventilated organic-waste caddy',
+        'Food-waste bin with air holes',
         'physical',
         'both',
         'households and small food businesses with a compost outlet',
@@ -502,7 +502,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'sanitation-waste',
         'collection-rota',
-        'Waste collection rota and proof of service',
+        'Waste collection schedule and service record',
         'software',
         'build',
         'waste collectors and building managers',
@@ -514,7 +514,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'sanitation-waste',
         'cleaning-inspection',
-        'Washroom cleaning inspection log',
+        'Washroom cleaning checklist',
         'software',
         'build',
         'schools and multi-site small businesses',
@@ -526,7 +526,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'sanitation-waste',
         'waste-buyer-directory',
-        'Recyclable-material buyer directory',
+        'Recycling buyer directory',
         'software',
         'build',
         'small collectors and businesses with recyclable material',
@@ -550,7 +550,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'sanitation-waste',
         'waste-report-map',
-        'Community waste-point report register',
+        'Community waste-point report record',
         'software',
         'build',
         'residents associations and local service teams',
@@ -597,7 +597,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'digital-access',
         'device-setup-kit',
-        'Starter device setup and protection kit',
+        'Phone and computer setup and protection kit',
         'physical',
         'both',
         'first-time smartphone and computer users',
@@ -609,7 +609,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'digital-access',
         'shared-device-locker',
-        'Charging locker for shared learning devices',
+        'Charging locker for shared devices',
         'physical',
         'both',
         'schools and community centres',
@@ -645,7 +645,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'digital-access',
         'accessibility-mount',
-        'Adjustable shared-device mount',
+        'Adjustable stand for shared devices',
         'physical',
         'both',
         'libraries, training centres and users with limited desk space',
@@ -657,7 +657,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'digital-access',
         'data-router-backup',
-        'Ready-to-use low-power internet kit',
+        'Ready-to-use internet kit',
         'hybrid',
         'both',
         'small offices and community hubs',
@@ -681,7 +681,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'digital-access',
         'lite-business-ledger',
-        'Low-data small-business record book',
+        'Small-business records that use little data',
         'software',
         'build',
         'very small business owners',
@@ -693,7 +693,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'digital-access',
         'digital-skills-coach',
-        'Guided phone and computer practice',
+        'Phone and computer practice lessons',
         'software',
         'build',
         'adults learning basic computer and phone tasks',
@@ -705,7 +705,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'digital-access',
         'shared-device-privacy',
-        'Shared-device privacy checklist',
+        'Shared-device sign-out checklist',
         'software',
         'build',
         'libraries and shared-device venues',
@@ -717,7 +717,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'digital-access',
         'data-use-planner',
-        'Data-use budget planner',
+        'Internet data cost planner',
         'software',
         'build',
         'students and small teams',
@@ -729,7 +729,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'digital-access',
         'download-distribution',
-        'Permitted learning-content sharing tool',
+        'Learning-content sharing tool',
         'software',
         'build',
         'schools and training providers',
@@ -800,7 +800,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'learning-literacy',
         'learning-manipulatives',
-        'Everyday numeracy practice set',
+        'Everyday maths practice set',
         'physical',
         'both',
         'adult education providers',
@@ -812,7 +812,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'learning-literacy',
         'teaching-organiser',
-        'Community teacher organiser case',
+        'Community teacher supply case',
         'physical',
         'both',
         'community literacy teachers',
@@ -824,7 +824,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'learning-literacy',
         'visual-form-guide',
-        'Visual guide to common forms',
+        'Picture guide to common forms',
         'physical',
         'both',
         'adult learning centres',
@@ -836,7 +836,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'learning-literacy',
         'read-aloud-practice',
-        'Offline read-aloud practice',
+        'Read-aloud practice without internet',
         'software',
         'build',
         'adult learners with access to a shared phone',
@@ -848,7 +848,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'learning-literacy',
         'tutor-progress-log',
-        'Literacy tutor progress log',
+        'Reading and writing tutor progress record',
         'software',
         'build',
         'literacy tutors and programme coordinators',
@@ -884,7 +884,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'learning-literacy',
         'picture-lesson-builder',
-        'Picture-based lesson builder for tutors',
+        'Picture lesson builder for tutors',
         'software',
         'build',
         'literacy tutors',
@@ -896,7 +896,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'learning-literacy',
         'reading-club-kit',
-        'Reading-club facilitation toolkit',
+        'Reading-club leader toolkit',
         'hybrid',
         'both',
         'community reading clubs',
@@ -979,7 +979,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'youth-livelihoods',
         'maker-project-box',
-        'Guided maker project box',
+        'Guided practical project box',
         'physical',
         'both',
         'training centres teaching practical projects',
@@ -1003,7 +1003,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'youth-livelihoods',
         'project-evidence-builder',
-        'Project record and work-sample builder',
+        'Project and work-sample recorder',
         'software',
         'build',
         'young job seekers and freelancers',
@@ -1015,7 +1015,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'youth-livelihoods',
         'apprenticeship-logbook',
-        'Apprenticeship learning logbook',
+        'Apprenticeship learning record',
         'software',
         'build',
         'apprentices and supervisors',
@@ -1027,7 +1027,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'youth-livelihoods',
         'local-gig-quoter',
-        'Simple quote and work-plan builder for first gigs',
+        'Simple quote and work-plan builder for first jobs',
         'software',
         'build',
         'new freelancers and local service providers',
@@ -1051,7 +1051,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'youth-livelihoods',
         'buyer-interview-guide',
-        'Local buyer interview guide',
+        'Customer interview guide',
         'software',
         'build',
         'people exploring a business and youth business programmes',
@@ -1063,7 +1063,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'youth-livelihoods',
         'microbusiness-cashbook',
-        'First-business cashbook and stock tracker',
+        'First-business cash and stock tracker',
         'software',
         'build',
         'young very small business owners',
@@ -1097,7 +1097,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'food-security',
         'produce-crate',
-        'Ventilated reusable produce crate',
+        'Reusable produce crate with air holes',
         'physical',
         'both',
         'smallholder farmers and produce traders',
@@ -1109,7 +1109,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'food-security',
         'grain-storage-upgrade',
-        'Improved dry-grain storage pack',
+        'Dry-grain storage pack',
         'physical',
         'both',
         'small grain producers and household storage groups',
@@ -1121,7 +1121,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'food-security',
         'produce-shade-cover',
-        'Portable produce shade and display cover',
+        'Portable produce shade cover',
         'physical',
         'both',
         'market fruit and vegetable sellers',
@@ -1169,7 +1169,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'food-security',
         'harvest-buyer-board',
-        'Harvest availability and buyer board',
+        'Harvest and buyer notice board',
         'software',
         'build',
         'producer groups and verified business buyers',
@@ -1181,7 +1181,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'food-security',
         'food-loss-log',
-        'Food-loss tracking for small sellers',
+        'Food-waste tracker for small sellers',
         'software',
         'build',
         'produce traders and small food shops',
@@ -1193,7 +1193,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'food-security',
         'batch-traceability',
-        'Simple food-batch traceability',
+        'Simple food-batch record',
         'software',
         'build',
         'small food processors',
@@ -1205,7 +1205,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'food-security',
         'group-purchasing',
-        'Producer group purchasing organiser',
+        'Producer group buying organiser',
         'software',
         'build',
         'farm cooperatives and small food businesses',
@@ -1217,7 +1217,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'food-security',
         'market-price-diary',
-        'Verified local market-price diary',
+        'Local market-price diary',
         'software',
         'build',
         'traders, producers and researchers',
@@ -1264,7 +1264,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'health-access',
         'clinic-queue-tokens',
-        'Simple clinic queue token set',
+        'Clinic queue number set',
         'physical',
         'both',
         'small clinics',
@@ -1300,7 +1300,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'health-access',
         'clinic-wayfinding-pack',
-        'Clinic wayfinding sign pack',
+        'Clinic direction sign pack',
         'physical',
         'both',
         'small hospitals and health centres',
@@ -1312,7 +1312,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'health-access',
         'medicine-organiser',
-        'Non-digital medicine schedule organiser',
+        'Paper medicine schedule',
         'physical',
         'both',
         'carers supporting people with clinician-approved routines',
@@ -1324,7 +1324,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'health-access',
         'clinic-record-folder',
-        'Secure clinic record-folder system',
+        'Secure clinic record folders',
         'physical',
         'both',
         'small clinics using paper records',
@@ -1336,7 +1336,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'health-access',
         'appointment-reminder',
-        'Consent-based appointment reminders',
+        'Appointment reminders chosen by patients',
         'software',
         'build',
         'small clinics',
@@ -1348,7 +1348,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'health-access',
         'provider-navigation',
-        'Qualified-care navigation directory',
+        'Clinic and care service directory',
         'software',
         'build',
         'community organisations and patients',
@@ -1360,7 +1360,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'health-access',
         'clinic-queue-display',
-        'Privacy-safe clinic queue display',
+        'Clinic queue board without patient names',
         'software',
         'build',
         'busy small clinics',
@@ -1372,7 +1372,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'health-access',
         'care-visit-log',
-        'Secure home-care visit log',
+        'Private home-care visit record',
         'software',
         'build',
         'licensed home-care providers',
@@ -1384,7 +1384,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'health-access',
         'referral-tracker',
-        'Clinic referral status tracker',
+        'Clinic referral tracker',
         'software',
         'build',
         'qualified clinics and referral coordinators',
@@ -1396,7 +1396,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'health-access',
         'health-information-library',
-        'Clinician-reviewed patient information library',
+        'Patient information checked by qualified health workers',
         'software',
         'build',
         'clinics and community health programmes',
@@ -1431,7 +1431,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'air-environment',
         'filter-service-kit',
-        'Air-filter inspection and service kit',
+        'Air-filter check and service kit',
         'physical',
         'both',
         'offices and technicians maintaining existing air filters',
@@ -1443,7 +1443,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'air-environment',
         'room-air-monitor',
-        'Room air-quality monitor with an accuracy check',
+        'Room air-quality monitor',
         'hybrid',
         'both',
         'schools and workplaces',
@@ -1455,7 +1455,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'air-environment',
         'clean-air-corner',
-        'Tested small-room filtration setup',
+        'Small-room air filter setup',
         'physical',
         'both',
         'small offices and classrooms',
@@ -1503,7 +1503,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'air-environment',
         'sensor-data-log',
-        'Air-sensor reading and accuracy-check log',
+        'Air-sensor reading record',
         'software',
         'build',
         'schools and environmental projects',
@@ -1527,7 +1527,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'air-environment',
         'exposure-activity-planner',
-        'Air-quality activity planner',
+        'Air-quality planner for outdoor activities',
         'software',
         'build',
         'schools and community sports organisers',
@@ -1539,7 +1539,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'air-environment',
         'environment-report-map',
-        'Community environmental observation register',
+        'Community environment report record',
         'software',
         'build',
         'community environmental groups',
@@ -1551,7 +1551,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'air-environment',
         'building-maintenance-log',
-        'Ventilation maintenance log',
+        'Fan and vent maintenance record',
         'software',
         'build',
         'small building managers',
@@ -1563,7 +1563,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'air-environment',
         'sensor-education-kit',
-        'Air-quality learning display',
+        'Air-quality teaching display',
         'hybrid',
         'both',
         'schools and science clubs',
@@ -1598,7 +1598,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'repair-request-kit',
-        'Rental minor-repair documentation kit',
+        'Rental repair record kit',
         'physical',
         'both',
         'small landlords and tenants',
@@ -1610,7 +1610,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'move-in-crate',
-        'Reusable move-in crate and label set',
+        'Reusable moving crate and labels',
         'physical',
         'both',
         'renters and small moving teams',
@@ -1622,7 +1622,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'shared-bin-store',
-        'Lockable shared-bin storage upgrade',
+        'Lockable shared-bin storage',
         'physical',
         'both',
         'small residential compounds',
@@ -1634,7 +1634,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'water-leak-detection',
-        'Basic leak-detection and shutoff-label kit',
+        'Leak check and water shutoff label kit',
         'physical',
         'both',
         'small property managers',
@@ -1646,7 +1646,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'shared-laundry-organiser',
-        'Shared-laundry organisation set',
+        'Shared laundry organiser set',
         'physical',
         'both',
         'small shared housing and laundries',
@@ -1670,7 +1670,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'property-maintenance-log',
-        'Small-property maintenance log',
+        'Property repair and maintenance record',
         'software',
         'build',
         'landlords and small property managers',
@@ -1682,7 +1682,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'move-inventory',
-        'Move-in condition and belongings recorder',
+        'Move-in condition and belongings record',
         'software',
         'build',
         'renters and small landlords',
@@ -1694,7 +1694,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'shared-facility-booking',
-        'Shared-space booking and care register',
+        'Shared-space booking and care record',
         'software',
         'build',
         'residents associations and small compounds',
@@ -1706,7 +1706,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'local-service-rota',
-        'Neighbourhood service rota',
+        'Neighbourhood service schedule',
         'software',
         'build',
         'small estates and service coordinators',
@@ -1718,7 +1718,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'rental-document-pack',
-        'Plain-language rental document organiser',
+        'Simple rental document organiser',
         'software',
         'build',
         'small landlords and tenants',
@@ -1730,7 +1730,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'urban-services',
         'delivery-instructions',
-        'Readable delivery instruction and access tool',
+        'Clear delivery instruction and access tool',
         'software',
         'build',
         'small apartment buildings and local couriers',
@@ -1765,7 +1765,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'prices-commerce',
         'price-label-system',
-        'Reusable small-shop price-label system',
+        'Reusable price labels for small shops',
         'physical',
         'both',
         'small retailers',
@@ -1777,7 +1777,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'prices-commerce',
         'stock-count-organiser',
-        'Small-stock counting and storage organiser',
+        'Small-shop stock counting and storage organiser',
         'physical',
         'both',
         'very small retailers and market sellers',
@@ -1801,7 +1801,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'prices-commerce',
         'reusable-packaging-set',
-        'Returnable small-business packaging set',
+        'Returnable packaging for small businesses',
         'physical',
         'both',
         'local sellers with repeat customers',
@@ -1813,7 +1813,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'prices-commerce',
         'market-display-scale',
-        'Market display and checked scale setup',
+        'Market display and checked scale',
         'physical',
         'both',
         'market sellers using weighted goods',
@@ -1825,7 +1825,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'prices-commerce',
         'cash-box-audit-kit',
-        'Small-shop cash-control kit',
+        'Small-shop cash record kit',
         'physical',
         'both',
         'very small retailers',
@@ -1837,7 +1837,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'prices-commerce',
         'supplier-quote-compare',
-        'Supplier quote comparison tool',
+        'Supplier price-quote comparison tool',
         'software',
         'build',
         'small shops and buying groups',
@@ -1849,7 +1849,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'prices-commerce',
         'unit-cost-calculator',
-        'Product unit-cost and price calculator',
+        'Product cost and price calculator',
         'software',
         'build',
         'makers and small food or retail businesses',
@@ -1861,7 +1861,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'prices-commerce',
         'stock-reorder-planner',
-        'Stock reorder and slow-item planner',
+        'Stock reorder and slow-sales planner',
         'software',
         'build',
         'small retailers',
@@ -1873,7 +1873,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'prices-commerce',
         'price-change-notice',
-        'Plain-language price-change notice builder',
+        'Simple price-change notice builder',
         'software',
         'build',
         'small service and retail businesses',
@@ -1932,7 +1932,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'rural-logistics',
         'cargo-protection',
-        'Weather-resistant rural cargo protection set',
+        'Weather-resistant rural cargo cover',
         'physical',
         'both',
         'small transport operators',
@@ -1944,7 +1944,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'rural-logistics',
         'repair-parts-pack',
-        'Route-specific equipment spare-parts pack',
+        'Equipment spare parts for rural routes',
         'physical',
         'both',
         'technicians serving dispersed customers',
@@ -1956,7 +1956,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'rural-logistics',
         'mobile-service-case',
-        'Portable field-service case',
+        'Portable repair and service case',
         'physical',
         'both',
         'mobile repair, education and administrative service providers',
@@ -1968,7 +1968,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'rural-logistics',
         'collection-point-locker',
-        'Simple secure collection-point locker',
+        'Lockable collection-point locker',
         'physical',
         'both',
         'shops acting as local parcel collection points',
@@ -1992,7 +1992,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'rural-logistics',
         'field-weather-station',
-        'Basic field-weather recording kit',
+        'Basic weather recording kit',
         'hybrid',
         'both',
         'farm groups and field coordinators',
@@ -2004,7 +2004,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'rural-logistics',
         'route-order-board',
-        'Shared rural route order board',
+        'Shared rural delivery order board',
         'software',
         'build',
         'transport operators and groups of small sellers',
@@ -2016,7 +2016,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'rural-logistics',
         'collection-handover',
-        'Collection-point handover register',
+        'Collection-point handover record',
         'software',
         'build',
         'local shops and community collection points',
@@ -2040,7 +2040,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'rural-logistics',
         'rural-supplier-directory',
-        'Dated rural supplier and repair directory',
+        'Rural supplier and repair directory',
         'software',
         'build',
         'producer groups and rural households',
@@ -2052,7 +2052,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'rural-logistics',
         'return-trip-marketplace',
-        'Return-trip capacity notice board',
+        'Return-trip space notice board',
         'software',
         'build',
         'small independent transport operators',
@@ -2064,7 +2064,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'rural-logistics',
         'mobile-service-records',
-        'Mobile-service record book that works without internet',
+        'Mobile-service records without internet',
         'software',
         'build',
         'field workers and mobile service teams',
@@ -2350,7 +2350,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'money-records',
         'savings-group-tracker',
-        'Private savings group tracker',
+        'Private savings group record book',
         'software',
         'build',
         'savings group leaders',
@@ -2386,7 +2386,7 @@ export const IDEA_CATEGORY_DEFINITIONS = [
       product(
         'money-records',
         'tax-record-organiser',
-        'Tax record organiser without tax advice',
+        'Simple tax record organiser',
         'software',
         'build',
         'small businesses',
