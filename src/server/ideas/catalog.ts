@@ -30,6 +30,7 @@ export interface IdeaQuery {
   country?: string
   category?: string
   format?: string
+  route?: string
   q?: string
   limit?: number
   offset?: number
@@ -38,6 +39,22 @@ export interface IdeaQuery {
 
 const categoryById = new Map(IDEA_CATEGORIES.map((entry) => [entry.id, entry]))
 const conceptById = new Map(IDEA_CONCEPTS.map((entry) => [entry.id, entry]))
+// Reuse normalised text across filters and requests instead of rebuilding it for every candidate.
+const categorySearchText = new Map(
+  IDEA_CATEGORIES.map((entry) => [entry.id, normalizeSearchText(entry.label)]),
+)
+const conceptSearchText = new Map(
+  IDEA_CONCEPTS.map((entry) => [
+    entry.id,
+    normalizeSearchText(
+      `${entry.title} ${entry.product} ${entry.buyer} ${entry.keywords.join(' ')} ${entry.format}`,
+    ),
+  ]),
+)
+const conceptTitleSearchText = new Map(
+  IDEA_CONCEPTS.map((entry) => [entry.id, normalizeSearchText(entry.title)]),
+)
+const countrySearchText = new WeakMap<IdeaCountry, string>()
 const indexCache = new WeakMap<IdeaEvidenceSnapshot, IdeaIndex>()
 
 function strengthFor(concept: IdeaConcept, country: IdeaCountry): number | null {
@@ -167,10 +184,10 @@ function materialize(candidate: Candidate): ProductIdea {
     product: concept.product,
     firstVersion: concept.firstVersion,
     validationSteps: [
-      `Speak with at least five ${concept.buyer} in ${place}. Ask about ${category.validationFocus}.`,
-      `Offer this small first version: ${concept.firstVersion}`,
-      'Ask for a real next step, such as a paid preorder, an agreement to run a small trial, or another order. Kind words do not prove that people will buy.',
-      `Write down what would make you stop. Check the official figures again and remember their limits: ${category.interpretation}`,
+      `Talk to five possible customers in ${place} (${concept.buyer}). Ask about ${category.validationFocus}.`,
+      `Show them this small version: ${concept.firstVersion}`,
+      'Ask for a real next step, such as a small paid trial, a preorder with clear refund terms, or another order. Polite interest is not a sale.',
+      `Decide what would make you stop or change the idea. Remember what the local figure cannot tell you: ${category.interpretation}`,
     ],
     revenueModel: concept.revenueModel,
     testWindow: concept.testWindow,
@@ -182,7 +199,7 @@ function materialize(candidate: Candidate): ProductIdea {
         : [
             'Use approved suppliers and check the warranty, safety and return terms before reselling equipment.',
           ]),
-      'The official figure helps explain the broader problem. It does not prove that people will buy this exact product.',
+      'The local figure gives background. It does not show whether people will buy this product.',
     ],
     evidence: {
       indicatorId: observation.indicatorId,
@@ -200,37 +217,52 @@ function materialize(candidate: Candidate): ProductIdea {
   }
 }
 
-function matches(candidate: Candidate, query: string): boolean {
-  if (!query) return true
-  const text = normalizeSearchText(
-    `${candidate.concept.title} ${candidate.concept.product} ${candidate.concept.buyer} ${candidate.concept.keywords.join(' ')} ${candidate.category.label} ${candidate.country.name} ${candidate.country.region} ${candidate.concept.format}`,
+function matches(candidate: Candidate, terms: string[]): boolean {
+  if (!terms.length) return true
+  const conceptText = conceptSearchText.get(candidate.concept.id) ?? ''
+  const categoryText = categorySearchText.get(candidate.category.id) ?? ''
+  let countryText = countrySearchText.get(candidate.country)
+  if (countryText === undefined) {
+    countryText = normalizeSearchText(`${candidate.country.name} ${candidate.country.region}`)
+    countrySearchText.set(candidate.country, countryText)
+  }
+  return terms.every(
+    (term) =>
+      conceptText.includes(term) || categoryText.includes(term) || countryText.includes(term),
   )
-  return normalizeSearchText(query)
-    .split(' ')
-    .filter(Boolean)
-    .every((term) => text.includes(term))
 }
 
 function filtered(index: IdeaIndex, query: IdeaQuery, omit?: 'category' | 'format'): Candidate[] {
   const country = (query.country || 'NGA').toUpperCase()
   const category = omit === 'category' ? '' : (query.category ?? '')
   const format = omit === 'format' ? '' : (query.format ?? '')
+  const route = query.route ?? ''
   const text = (query.q ?? '').trim().slice(0, 100)
+  const terms = normalizeSearchText(text).split(' ').filter(Boolean)
   const source = country === 'ALL' ? allCandidates(index) : countryCandidates(index, country)
-  return source.filter(
-    (candidate) =>
+  return source.filter((candidate) => {
+    const routeMatches =
+      !route ||
+      (route === 'build'
+        ? candidate.concept.route !== 'sell'
+        : route === 'sell'
+          ? candidate.concept.route !== 'build'
+          : candidate.concept.route === route)
+    return (
       (!category || candidate.category.id === category) &&
       (!format || candidate.concept.format === format) &&
-      matches(candidate, text),
-  )
+      routeMatches &&
+      matches(candidate, terms)
+    )
+  })
 }
 
 function sorted(candidates: Candidate[], query: IdeaQuery): Candidate[] {
   const text = normalizeSearchText(query.q ?? '')
   return [...candidates].sort((a, b) => {
     if (text) {
-      const aTitle = normalizeSearchText(a.concept.title).includes(text) ? 1 : 0
-      const bTitle = normalizeSearchText(b.concept.title).includes(text) ? 1 : 0
+      const aTitle = (conceptTitleSearchText.get(a.concept.id) ?? '').includes(text) ? 1 : 0
+      const bTitle = (conceptTitleSearchText.get(b.concept.id) ?? '').includes(text) ? 1 : 0
       if (aTitle !== bTitle) return bTitle - aTitle
     }
     if (query.sort === 'recent' && a.observation.year !== b.observation.year) {
@@ -253,8 +285,8 @@ function facets(candidates: Candidate[], key: 'category' | 'format'): IdeaFacet[
   }
   const labels: Record<string, string> = {
     physical: 'Physical product',
-    software: 'Software product',
-    hybrid: 'Physical product with software',
+    software: 'Software or app',
+    hybrid: 'Product and software',
   }
   for (const category of IDEA_CATEGORIES) labels[category.id] = category.label
   return [...counts.entries()]

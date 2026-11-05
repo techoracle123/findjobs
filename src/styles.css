@@ -5786,7 +5786,7 @@ textarea:focus-visible {
 
 .idea-filter-row {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
+  grid-template-columns: 1.35fr repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-top: 14px;
 }
@@ -5808,6 +5808,21 @@ textarea:focus-visible {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   background: #fff;
+}
+
+.idea-clear-filters {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 4px 0 -8px auto;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .idea-category-scroll {
@@ -6326,6 +6341,60 @@ textarea:focus-visible {
   line-height: 1.5;
 }
 
+.idea-build-steps {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.idea-build-steps li {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  line-height: 1.55;
+}
+
+.idea-build-steps strong {
+  color: var(--accent-ink);
+  font-size: 12px;
+}
+
+.idea-start-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.idea-start-grid > div {
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--surface-sunken);
+}
+
+.idea-start-grid h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.idea-start-grid ul {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+
+.idea-start-grid p {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .validation-list {
   display: grid;
   gap: 10px;
@@ -6561,8 +6630,14 @@ textarea:focus-visible {
   .idea-grid,
   .trend-grid,
   .free-access-grid,
-  .idea-detail-facts {
+  .idea-detail-facts,
+  .idea-start-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .idea-build-steps li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
   }
 
   .trends-panel {

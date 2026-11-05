@@ -56,11 +56,11 @@ export function FreeAccessPage() {
         </section>
 
         <section className="info-section">
-          <h2>Problems and product ideas are included too</h2>
+          <h2>Practical ideas are included too</h2>
           <p>
-            Look at official figures for different countries, find physical and software products
-            you could build or sell, and see what people are searching for. Every idea needs to be
-            checked with real people. None is a guaranteed business.
+            Find physical products, websites and apps you could build or sell. Each idea has simple
+            build steps, costs to check and local background figures. Test every idea with real
+            people. None is guaranteed to make money.
           </p>
           <a className="btn btn--primary" href="/ideas">
             See ideas for your location <ArrowRight size={17} />

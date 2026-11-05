@@ -18,7 +18,8 @@ test('the public catalogue provides real pagination, filters and responsive evid
   const body = await response.json()
   expect(body.catalogTotal).toBeGreaterThan(15000)
   expect(body.total).toBeGreaterThan(0)
-  expect(body.total).toBeLessThanOrEqual(144)
+  const nigeria = body.countries.find((entry: { iso3: string }) => entry.iso3 === 'NGA')
+  expect(body.total).toBe(nigeria.count)
   expect(body.ideas).toHaveLength(Math.min(24, body.total))
   for (const idea of body.ideas) {
     expect(idea.evidence.displayValue).toBeTruthy()
@@ -33,6 +34,11 @@ test('the public catalogue provides real pagination, filters and responsive evid
     expect(filtered.ok()).toBe(true)
     expect((await filtered.json()).total).toBeGreaterThan(0)
   }
+  for (const topic of ['clean-cooking', 'money-records', 'older-care']) {
+    const filtered = await page.request.get(`/api/ideas?country=NGA&category=${topic}&limit=1`)
+    expect(filtered.ok()).toBe(true)
+    expect((await filtered.json()).total).toBe(12)
+  }
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/ideas')
@@ -43,10 +49,8 @@ test('the public catalogue provides real pagination, filters and responsive evid
   await expect(page.locator('.ideas-hero__stats')).toContainText(
     body.catalogTotal.toLocaleString('en-NG'),
   )
-  await expect(page.locator('body')).toContainText('The figures are only a starting point.')
-  await expect(page.locator('.idea-results__head')).toContainText(
-    'FJ checked the official figures on',
-  )
+  await expect(page.locator('body')).toContainText('No idea is guaranteed to make money.')
+  await expect(page.locator('.idea-results__head')).toContainText('Figures checked')
 
   if (body.total > 24) {
     const nextResponse = page.waitForResponse(
@@ -70,8 +74,34 @@ test('the public catalogue provides real pagination, filters and responsive evid
   expect((await softwareResponse).ok()).toBe(true)
   await expect(page.locator('.idea-grid .idea-card').first()).toBeVisible()
   await expect(page.locator('.idea-format')).toHaveText(
-    Array.from({ length: await page.locator('.idea-format').count() }, () => 'Software product'),
+    Array.from({ length: await page.locator('.idea-format').count() }, () => 'Software or app'),
   )
+
+  const routeResponse = page.waitForResponse(
+    (item) =>
+      item.url().includes('/api/ideas?') &&
+      new URL(item.url()).searchParams.get('route') === 'build',
+  )
+  await page.getByLabel('How to start').selectOption('build')
+  expect((await routeResponse).ok()).toBe(true)
+  await expect(page.locator('.idea-grid .idea-card').first()).toBeVisible()
+
+  await page.getByLabel('Product type').selectOption('')
+  const resaleResponse = page.waitForResponse(
+    (item) =>
+      item.url().includes('/api/ideas?') &&
+      new URL(item.url()).searchParams.get('route') === 'sell',
+  )
+  await page.getByLabel('How to start').selectOption('sell')
+  expect((await resaleResponse).ok()).toBe(true)
+  await expect(page.locator('.idea-results__head')).toContainText('ideas to buy and resell')
+  await expect(page.locator('.idea-grid .idea-card').first()).toBeVisible()
+  await page.reload()
+  await expect(page.getByLabel('How to start')).toHaveValue('sell')
+  await page.getByRole('button', { name: 'Clear all filters' }).click()
+  await expect(page).toHaveURL(/\/ideas$/)
+  await expect(page.getByLabel('How to start')).toHaveValue('')
+  await expect(page.getByLabel('Product type')).toHaveValue('')
 
   const searchResponse = page.waitForResponse(
     (item) =>
@@ -82,6 +112,9 @@ test('the public catalogue provides real pagination, filters and responsive evid
   expect((await searchResponse).ok()).toBe(true)
   await expect(page.locator('.idea-grid .idea-card').first()).toBeVisible()
   await expect(page.locator('body')).toContainText('solar', { ignoreCase: true })
+  await page.getByRole('button', { name: 'Clear all filters' }).click()
+  await expect(page.getByLabel('Search product ideas')).toHaveValue('')
+  await expect(page).toHaveURL(/\/ideas$/)
 
   for (const width of [320, 390, 768, 1280, 1920]) {
     await page.setViewportSize({ width, height: 900 })
@@ -119,16 +152,19 @@ test('an idea can be saved, shared, checked and downloaded with its evidence', a
 
   await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible()
   await expect(page).toHaveURL(/\/ideas\/[^/]+$/)
+  await expect(page.locator('.idea-build-section')).toContainText('Build the first version')
+  await expect(page.locator('.idea-build-section')).toContainText('What you may need')
+  await expect(page.locator('.idea-build-section')).toContainText('Costs to check')
   await expect(page.locator('.idea-evidence-value')).toHaveText(evidence)
   expect(detailResponse.ok()).toBe(true)
   const detailBody = (await detailResponse.json()) as { idea: { evidence: { value: number } } }
   const exactValue = String(detailBody.idea.evidence.value)
-  await expect(page.locator('.idea-evidence-panel')).toContainText('Exact figure from the source')
+  await expect(page.locator('.idea-evidence-panel')).toContainText('Exact value from the source')
   await expect(page.locator('.idea-evidence-panel dd').first()).toHaveText(exactValue)
-  await expect(page.locator('.idea-evidence-panel')).toContainText('Source last updated')
-  await expect(page.locator('.idea-evidence-panel')).toContainText('Year measured')
-  await expect(page.locator('.idea-evidence-panel')).toContainText('World Bank does not endorse it')
-  await expect(page.getByRole('link', { name: 'Check the World Bank source' })).toHaveAttribute(
+  await expect(page.locator('.idea-evidence-panel')).toContainText('Source updated')
+  await expect(page.locator('.idea-evidence-panel')).toContainText('Year')
+  await expect(page.locator('.idea-evidence-panel')).toContainText('does not recommend the idea')
+  await expect(page.getByRole('link', { name: 'See the World Bank figures' })).toHaveAttribute(
     'href',
     /^https:\/\/data\.worldbank\.org\//,
   )
@@ -155,11 +191,18 @@ test('an idea can be saved, shared, checked and downloaded with its evidence', a
   for await (const chunk of stream!) brief += String(chunk)
   expect(brief).toContain(title)
   expect(brief).toContain(evidence)
-  expect(brief).toContain(`EXACT FIGURE FROM SOURCE: ${exactValue}`)
-  expect(brief).toContain('SOURCE LAST UPDATED:')
-  expect(brief).toContain('UNIT:')
+  expect(brief).toContain(`EXACT VALUE FROM SOURCE: ${exactValue}`)
+  expect(brief).toContain('SOURCE UPDATED:')
+  expect(brief).toContain('MEASURED IN:')
+  expect(brief).toContain('HOW TO MAKE THE FIRST VERSION')
+  expect(brief).toContain('COSTS TO CHECK')
   expect(brief).toContain('SOURCE LINK: https://data.worldbank.org/')
   expect(brief).toContain('not proof that people will buy it')
+
+  await page.setViewportSize({ width: 320, height: 800 })
+  await expect(page.getByRole('heading', { name: 'Build the first version' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Costs to check' })).toBeVisible()
+  await expectNoOverflow(page)
 
   const accessibility = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])

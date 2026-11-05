@@ -67,8 +67,8 @@ describe('World Bank idea evidence refresh', () => {
       fetcher as typeof fetch,
       Date.parse('2026-11-05T06:00:00Z'),
     )
-    expect(snapshot.catalogTotal).toBe(110 * 144)
-    expect(snapshot.countryCounts?.NGA).toBe(144)
+    expect(snapshot.catalogTotal).toBe(110 * 180)
+    expect(snapshot.countryCounts?.NGA).toBe(180)
     expect(Object.keys(snapshot.countryCounts ?? {})).toHaveLength(110)
     expect(snapshot.sourceLastUpdated).toBe('2026-10-08')
     expect(snapshot.refreshedAt).toBe('2026-11-05T06:00:00.000Z')
@@ -77,16 +77,16 @@ describe('World Bank idea evidence refresh', () => {
         .unit,
     ).toBe('per_1000')
     expect(values.has(IDEA_EVIDENCE_KEY)).toBe(true)
-    expect(fetcher).toHaveBeenCalledTimes(13)
-    await expect(readIdeaEvidence(kv)).resolves.toMatchObject({ catalogTotal: 110 * 144 })
+    expect(fetcher).toHaveBeenCalledTimes(16)
+    await expect(readIdeaEvidence(kv)).resolves.toMatchObject({ catalogTotal: 110 * 180 })
   })
 
-  it('refuses to publish a catalogue that does not exceed 15,000 computed ideas', async () => {
+  it('refuses to publish a catalogue below the computed minimum', async () => {
     const { kv, values } = testKv()
     await expect(
       refreshIdeaEvidence(
         kv,
-        worldBankFetcher(104) as typeof fetch,
+        worldBankFetcher(100) as typeof fetch,
         Date.parse('2026-11-05T06:00:00Z'),
       ),
     ).rejects.toThrow('below the required')

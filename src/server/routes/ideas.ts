@@ -15,7 +15,7 @@ ideaRoutes.get('/ideas', async (c) => {
     return c.json(
       {
         error: 'idea_evidence_unavailable',
-        message: 'The official figures are being updated. Please try again shortly.',
+        message: 'The local figures are being updated. Please try again shortly.',
       },
       503,
     )
@@ -26,6 +26,10 @@ ideaRoutes.get('/ideas', async (c) => {
   const format = c.req.query('format') || ''
   if (format && !['physical', 'software', 'hybrid'].includes(format)) {
     return c.json({ error: 'invalid_format' }, 400)
+  }
+  const route = c.req.query('route') || ''
+  if (route && !['build', 'sell', 'both'].includes(route)) {
+    return c.json({ error: 'invalid_route' }, 400)
   }
   const number = (name: string, fallback: number) => {
     const raw = c.req.query(name)
@@ -39,6 +43,7 @@ ideaRoutes.get('/ideas', async (c) => {
       country,
       category: category.slice(0, 60),
       format,
+      route,
       q: (c.req.query('q') || '').slice(0, 100),
       limit: number('limit', 24),
       offset: number('offset', 0),
@@ -80,7 +85,7 @@ ideaRoutes.get('/idea-trends', async (c) => {
       {
         error: 'trends_unavailable',
         message:
-          'Trending searches are not available for this place right now. You can still look through product ideas and official figures.',
+          'Trending searches are not available for this place right now. You can still look through product ideas and local figures.',
       },
       503,
     )

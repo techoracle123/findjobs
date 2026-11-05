@@ -19,9 +19,9 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           yourself before you apply. Never pay to apply.
         </p>
         <p>
-          FJ also has a separate Problems and product ideas section. It uses official figures and
-          trending searches to suggest physical and software products for different places. The
-          figures help explain a problem, but they do not prove that people will buy an idea.
+          FJ also has a separate practical ideas section. It uses local figures and trending
+          searches to suggest physical products, websites and apps for different places. The figures
+          give background, but they do not prove that people will buy an idea.
         </p>
         <p>
           We help you find work and research ideas. You decide where to apply and what to build, and
@@ -46,7 +46,7 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           accounts. It does not show your name, email address or anything about your account.
         </p>
         <p>
-          <strong>Product ideas stay on your device.</strong> You can browse official figures and
+          <strong>Product ideas stay on your device.</strong> You can browse local figures and
           trending searches without an account. Saved ideas and checklists are stored only in your
           browser. FJ does not receive them. World Bank and Google process ordinary technical
           requests when their public data feeds are loaded, but FJ does not send them your profile,
@@ -198,12 +198,11 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           account and private work are still protected by sign-in and permission checks.
         </p>
         <p>
-          <strong>What are Problems and product ideas?</strong> This public section uses official
-          figures to suggest physical and software products for different places. It shows the exact
-          figure, the year it was measured and where it came from. Trending searches are shown
-          separately. Neither the figures nor the searches prove that people will buy an idea.
-          Browse <a href="/ideas">Problems and ideas</a> without an account and save your work on
-          your device.
+          <strong>What are practical ideas?</strong> This public section uses local figures to
+          suggest physical products, websites and apps for different places. It shows the exact
+          figure, the year and where it came from. Trending searches are shown separately. Neither
+          the figures nor the searches prove that people will buy an idea. Browse{' '}
+          <a href="/ideas">practical ideas</a> without an account and save your work on your device.
         </p>
         <p>
           <strong>Does FJ save my CV?</strong> Only if you choose the separate saved-CV action and

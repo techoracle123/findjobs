@@ -1,5 +1,5 @@
 import type { IdeaEvidenceSnapshot, IdeaObservation } from '../../src/shared/ideas'
-import { IDEA_CATEGORIES } from '../../src/server/ideas/concepts'
+import { IDEA_CATEGORIES, IDEA_CONCEPTS } from '../../src/server/ideas/concepts'
 
 function code(index: number): string {
   const first = String.fromCharCode(65 + Math.floor(index / 26))
@@ -45,6 +45,6 @@ export function makeIdeaSnapshot(countryCount = 110): IdeaEvidenceSnapshot {
     countries,
     // searchIdeas computes the public total from the actual eligible pairs;
     // this stored value is only a cache/deploy check and is replaced below.
-    catalogTotal: countries.length * 144,
+    catalogTotal: countries.length * IDEA_CONCEPTS.length,
   }
 }

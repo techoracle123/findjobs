@@ -233,20 +233,19 @@ export function HomePage() {
           <p className="eyebrow">Beyond finding work</p>
           <h2 id="home-ideas-heading">Find a product idea and check it with real people</h2>
           <p className="home-lead">
-            Look at official figures for Nigeria, another country or the whole world. Find physical
-            and software products you could build or sell, and see what people are searching for.
-            Every idea includes who it is for, a simple first version, possible risks and checks to
-            do before spending money.
+            Choose Nigeria, another country or the whole world. Find physical products, websites and
+            apps you could build or sell. Each idea includes simple build steps, costs to check and
+            questions to ask real people before you spend money.
           </p>
           {ideaTotal !== null ? (
             <p className="home-idea-count">
               <Lightbulb size={19} /> <strong>{number(ideaTotal)}</strong> product ideas for
-              different places, each linked to official figures
+              different places, each linked to a local figure
             </p>
           ) : null}
           <p className="field__hint">
-            The figures help explain a problem. They do not prove that people will buy the product
-            or that the business will succeed.
+            Local figures give background. They are not success scores and do not prove that people
+            will buy the product.
           </p>
           <a className="btn btn--primary" href="/ideas">
             Explore product ideas <ArrowRight size={17} />

@@ -23,8 +23,10 @@ import {
 import { Footer } from './Footer'
 import { SiteHeader } from './SiteHeader'
 import { fetchIdea, fetchIdeas, fetchIdeaTrends } from '../lib/ideas'
+import { getIdeaGuidance } from '../shared/idea-guidance'
 import {
   IDEA_FORMAT_LABELS,
+  IDEA_PLAIN_FIGURE_LABELS,
   IDEA_ROUTE_LABELS,
   IDEA_UNIT_LABELS,
   type IdeaListResponse,
@@ -110,14 +112,15 @@ function IdeaCard({
       <div className="idea-evidence-chip">
         <strong>{idea.evidence.displayValue}</strong>
         <span>
-          {idea.evidence.indicatorName}, {idea.evidence.year}
+          {IDEA_PLAIN_FIGURE_LABELS[idea.evidence.indicatorId] ?? idea.evidence.indicatorName},{' '}
+          {idea.evidence.year}
         </span>
       </div>
       <p className="idea-card__buyer">
         <Users size={14} /> For {idea.buyer}
       </p>
       <a className="idea-card__link" href={`/ideas/${encodeURIComponent(idea.id)}`}>
-        See the idea and how to test it <ArrowRight size={15} />
+        See how to start <ArrowRight size={15} />
       </a>
     </article>
   )
@@ -169,6 +172,7 @@ export function IdeasPage() {
   const [country, setCountry] = useState((initial.get('country') || 'NGA').toUpperCase())
   const [category, setCategory] = useState(initial.get('category') || '')
   const [format, setFormat] = useState(initial.get('format') || '')
+  const [route, setRoute] = useState(initial.get('route') || '')
   const [query, setQuery] = useState(initial.get('q') || '')
   const [searchInput, setSearchInput] = useState(initial.get('q') || '')
   const [sort, setSort] = useState(initial.get('sort') || 'evidence')
@@ -199,7 +203,7 @@ export function IdeasPage() {
   }
 
   useEffect(() => {
-    document.title = 'Problems and product ideas by location | FJ'
+    document.title = 'Practical ideas by place | FJ'
   }, [])
 
   useEffect(() => {
@@ -217,6 +221,7 @@ export function IdeasPage() {
     })
     if (category) params.set('category', category)
     if (format) params.set('format', format)
+    if (route) params.set('route', route)
     if (query.trim()) params.set('q', query.trim())
     setLoading(true)
     setError('')
@@ -236,12 +241,13 @@ export function IdeasPage() {
     if (country !== 'NGA') url.set('country', country)
     if (category) url.set('category', category)
     if (format) url.set('format', format)
+    if (route) url.set('route', route)
     if (query.trim()) url.set('q', query.trim())
     if (sort !== 'evidence') url.set('sort', sort)
     if (page > 1) url.set('page', String(page))
     window.history.replaceState(null, '', `/ideas${url.size ? `?${url}` : ''}`)
     return () => controller.abort()
-  }, [tab, country, category, format, query, sort, page])
+  }, [tab, country, category, format, route, query, sort, page])
 
   useEffect(() => {
     if (tab !== 'trends') return
@@ -269,8 +275,26 @@ export function IdeasPage() {
     setter(value)
     setPage(1)
   }
+  const clearFilters = () => {
+    setCountry('NGA')
+    setCategory('')
+    setFormat('')
+    setRoute('')
+    setQuery('')
+    setSearchInput('')
+    setSort('evidence')
+    setPage(1)
+  }
   const shownIdeas = tab === 'saved' ? saved : (data?.ideas ?? [])
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE))
+  const resultLabel =
+    route === 'build'
+      ? 'ideas to make yourself'
+      : route === 'sell'
+        ? 'ideas to buy and resell'
+        : route === 'both'
+          ? 'ideas to make or buy'
+          : 'ideas found'
 
   return (
     <div className="app ideas-app">
@@ -279,13 +303,12 @@ export function IdeasPage() {
         <section className="ideas-hero">
           <div>
             <p className="eyebrow">
-              <Lightbulb size={16} /> Problems and product ideas
+              <Lightbulb size={16} /> Ideas you can test
             </p>
             <h1>Find a practical idea to build or sell.</h1>
             <p>
-              Look at official figures for Nigeria, another country or the whole world. Use them to
-              find physical or software products you could build or sell. Talk to real people before
-              spending money.
+              Choose a place and find something people may need. Start small, talk to possible
+              customers and check the costs before you spend money.
             </p>
             <div className="ideas-hero__actions">
               <a className="btn btn--primary" href="#idea-results">
@@ -303,24 +326,24 @@ export function IdeasPage() {
           <div className="ideas-hero__stats" aria-label="Ideas summary">
             <div>
               <strong>{data ? number(data.catalogTotal) : '—'}</strong>
-              <span>product ideas for different places</span>
+              <span>ideas for different places</span>
             </div>
             <div>
               <strong>{data ? number(data.evidence.countryCount) : '—'}</strong>
               <span>countries covered</span>
             </div>
             <div>
-              <strong>{data?.evidence.indicatorCount ?? 12}</strong>
-              <span>types of official figures</span>
+              <strong>{data?.evidence.indicatorCount ?? 15}</strong>
+              <span>types of local figures</span>
             </div>
           </div>
         </section>
 
         <div className="ideas-trust-strip">
-          <strong>The figures are only a starting point.</strong>
+          <strong>No idea is guaranteed to make money.</strong>
           <span>
-            Each idea is linked to an official figure for that place. The figure helps explain the
-            problem, but it does not show whether people will want or pay for the product.
+            The local figures give background. They are not success scores and do not show whether
+            people will buy. Talk to people and test the idea before you spend money.
           </span>
         </div>
 
@@ -439,7 +462,7 @@ export function IdeasPage() {
                 </form>
                 <div className="idea-filter-row">
                   <label>
-                    <span>Location</span>
+                    <span>Place</span>
                     <select
                       value={country}
                       onChange={(event) => resetPage(setCountry, event.target.value)}
@@ -459,10 +482,22 @@ export function IdeasPage() {
                       value={format}
                       onChange={(event) => resetPage(setFormat, event.target.value)}
                     >
-                      <option value="">Physical and software</option>
+                      <option value="">All types</option>
                       <option value="physical">Physical products</option>
-                      <option value="software">Software products</option>
-                      <option value="hybrid">Physical product with software</option>
+                      <option value="software">Software or apps</option>
+                      <option value="hybrid">Products with software</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>How to start</span>
+                    <select
+                      value={route}
+                      onChange={(event) => resetPage(setRoute, event.target.value)}
+                    >
+                      <option value="">All ways</option>
+                      <option value="build">Make it myself</option>
+                      <option value="sell">Buy and resell</option>
+                      <option value="both">Make or buy</option>
                     </select>
                   </label>
                   <label>
@@ -471,18 +506,29 @@ export function IdeasPage() {
                       value={sort}
                       onChange={(event) => resetPage(setSort, event.target.value)}
                     >
-                      <option value="evidence">Official figures, strongest first</option>
-                      <option value="recent">Newest official figures</option>
+                      <option value="evidence">Largest gap in the local figure</option>
+                      <option value="recent">Newest local figures</option>
                     </select>
                   </label>
                 </div>
+                {country !== 'NGA' ||
+                category ||
+                format ||
+                route ||
+                query ||
+                sort !== 'evidence' ||
+                page > 1 ? (
+                  <button className="idea-clear-filters" type="button" onClick={clearFilters}>
+                    Clear all filters
+                  </button>
+                ) : null}
                 <div className="idea-category-scroll" aria-label="Idea fields">
                   <button
                     type="button"
                     className={!category ? 'active' : ''}
                     onClick={() => resetPage(setCategory, '')}
                   >
-                    All fields
+                    All topics
                   </button>
                   {data?.facets.categories.map((entry) => (
                     <button
@@ -507,18 +553,18 @@ export function IdeasPage() {
               <div className="idea-results__head">
                 <div>
                   <p className="eyebrow">
-                    {tab === 'saved' ? 'Your shortlist' : 'Ideas linked to official figures'}
+                    {tab === 'saved' ? 'Your shortlist' : 'Ideas linked to local figures'}
                   </p>
                   <h2>
                     {tab === 'saved'
                       ? `${number(saved.length)} saved`
-                      : `${number(data?.total ?? 0)} matching ideas`}
+                      : `${number(data?.total ?? 0)} ${resultLabel}`}
                   </h2>
                 </div>
                 {data && tab === 'ideas' ? (
                   <p>
-                    FJ checked the official figures on {date(data.evidence.refreshedAt)} · World
-                    Bank last updated them on {data.evidence.sourceLastUpdated}
+                    Figures checked {date(data.evidence.refreshedAt)} · Source updated{' '}
+                    {data.evidence.sourceLastUpdated}
                   </p>
                 ) : null}
               </div>
@@ -539,7 +585,7 @@ export function IdeasPage() {
                   <p>
                     {tab === 'saved'
                       ? 'Save an idea to build a private shortlist on this device.'
-                      : 'Try all locations, another field or a broader search.'}
+                      : 'Try all locations, another topic or a broader search.'}
                   </p>
                 </div>
               ) : null}
@@ -616,6 +662,7 @@ export function IdeaDetailPage({ id }: { id: string }) {
   }, [id])
 
   const idea = result?.idea
+  const guidance = idea ? getIdeaGuidance(idea.format) : null
   const isSaved = Boolean(idea && saved.some((entry) => entry.id === idea.id))
   const toggleSaved = () => {
     if (!idea) return
@@ -661,27 +708,39 @@ export function IdeaDetailPage({ id }: { id: string }) {
   }
   const download = () => {
     if (!idea) return
+    const guide = getIdeaGuidance(idea.format)
     const text = [
       idea.title,
       '',
-      `PRODUCT: ${idea.product}`,
-      `BUYER: ${idea.buyer}`,
-      `ROUTE: ${IDEA_ROUTE_LABELS[idea.route]}`,
-      `FIRST VERSION: ${idea.firstVersion}`,
-      `HOW IT COULD MAKE MONEY: ${idea.revenueModel}`,
+      `THE IDEA: ${idea.product}`,
+      `WHO IT IS FOR: ${idea.buyer}`,
+      `HOW TO START: ${IDEA_ROUTE_LABELS[idea.route]}`,
+      `SMALL FIRST VERSION: ${idea.firstVersion}`,
+      `HOW YOU COULD CHARGE: ${idea.revenueModel}`,
       '',
-      `OFFICIAL FIGURE: ${idea.evidence.indicatorName}: ${idea.evidence.displayValue} (${idea.evidence.year})`,
-      `EXACT FIGURE FROM SOURCE: ${idea.evidence.value}`,
-      `UNIT: ${IDEA_UNIT_LABELS[idea.evidence.unit]}`,
-      `SOURCE LAST UPDATED: ${idea.evidence.sourceLastUpdated}`,
+      'HOW TO MAKE THE FIRST VERSION',
+      guide.intro,
+      ...guide.steps.map((step, index) => `${index + 1}. ${step}`),
+      '',
+      'WHAT YOU MAY NEED',
+      ...guide.tools.map((item) => `- ${item}`),
+      '',
+      'COSTS TO CHECK',
+      ...guide.costs.map((item) => `- ${item}`),
+      'FJ does not estimate these costs because they vary by place and supplier.',
+      '',
+      `LOCAL BACKGROUND FIGURE: ${idea.evidence.indicatorName}: ${idea.evidence.displayValue} (${idea.evidence.year})`,
+      `EXACT VALUE FROM SOURCE: ${idea.evidence.value}`,
+      `MEASURED IN: ${IDEA_UNIT_LABELS[idea.evidence.unit]}`,
+      `SOURCE UPDATED: ${idea.evidence.sourceLastUpdated}`,
       `SOURCE: ${idea.evidence.sourceName}`,
       `SOURCE LINK: ${idea.evidence.sourceUrl}`,
-      `WHAT THE FIGURE DOES NOT SHOW: ${idea.evidence.interpretation}`,
+      `WHAT THE FIGURE CANNOT TELL YOU: ${idea.evidence.interpretation}`,
       '',
       'CHECKS BEFORE SPENDING MONEY',
       ...idea.validationSteps.map((step, index) => `${index + 1}. ${step}`),
       '',
-      'RISKS AND LIMITS',
+      'SAFETY AND LIMITS',
       ...idea.risks.map((risk) => `- ${risk}`),
       '',
       'This is an idea to test, not proof that people will buy it or that the business will succeed.',
@@ -713,7 +772,7 @@ export function IdeaDetailPage({ id }: { id: string }) {
         ) : null}
         {!idea && !error ? (
           <p className="ideas-loading" role="status">
-            Loading the idea and its official figures…
+            Loading the idea and its local figures…
           </p>
         ) : null}
         {idea ? (
@@ -746,7 +805,7 @@ export function IdeaDetailPage({ id }: { id: string }) {
             <div className="idea-detail-layout">
               <div className="idea-detail-content">
                 <section>
-                  <p className="eyebrow">The problem</p>
+                  <p className="eyebrow">Who this could help</p>
                   <h2>Why this idea may be useful</h2>
                   <p>{idea.problem}</p>
                   <p>
@@ -754,30 +813,66 @@ export function IdeaDetailPage({ id }: { id: string }) {
                   </p>
                 </section>
                 <section>
-                  <p className="eyebrow">A simple first version</p>
+                  <p className="eyebrow">A small first version</p>
                   <h2>Start small and learn what works</h2>
                   <p>{idea.firstVersion}</p>
                   <div className="idea-detail-facts">
                     <div>
-                      <span>How to provide it</span>
+                      <span>How to start</span>
                       <strong>{IDEA_ROUTE_LABELS[idea.route]}</strong>
                     </div>
                     <div>
-                      <span>Time for a first test</span>
+                      <span>Time for the first test</span>
                       <strong>{idea.testWindow}</strong>
                     </div>
                     <div>
-                      <span>How it could make money</span>
+                      <span>How you could charge</span>
                       <strong>{idea.revenueModel}</strong>
                     </div>
                   </div>
                 </section>
+                {guidance ? (
+                  <section className="idea-build-section">
+                    <p className="eyebrow">How to make it</p>
+                    <h2>Build the first version</h2>
+                    <p>{guidance.intro}</p>
+                    <ol className="idea-build-steps">
+                      {guidance.steps.map((step, index) => (
+                        <li key={step}>
+                          <strong>Step {index + 1}</strong>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                    <div className="idea-start-grid">
+                      <div>
+                        <h3>What you may need</h3>
+                        <ul>
+                          {guidance.tools.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <h3>Costs to check</h3>
+                        <ul>
+                          {guidance.costs.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                        <p>
+                          FJ does not estimate these costs because they vary by place and supplier.
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
                 <section className="validation-section">
                   <p className="eyebrow">Before you spend money</p>
-                  <h2>Talk to people and test the idea</h2>
+                  <h2>Check the idea with real people</h2>
                   <p>
-                    {checks.filter(Boolean).length} of {idea.validationSteps.length} checks ticked
-                    on this device. Ticking every box does not prove people will buy.
+                    {checks.filter(Boolean).length} of {idea.validationSteps.length} steps done on
+                    this device. This is your checklist, not proof that people will buy.
                   </p>
                   <div className="validation-list">
                     {idea.validationSteps.map((step, index) => (
@@ -799,8 +894,8 @@ export function IdeaDetailPage({ id }: { id: string }) {
                   </div>
                 </section>
                 <section>
-                  <p className="eyebrow">Risks and limits</p>
-                  <h2>Check these before spending money</h2>
+                  <p className="eyebrow">Safety and limits</p>
+                  <h2>Stay safe and check the rules</h2>
                   <ul className="idea-risk-list">
                     {idea.risks.map((risk) => (
                       <li key={risk}>{risk}</li>
@@ -812,45 +907,47 @@ export function IdeaDetailPage({ id }: { id: string }) {
                 </section>
               </div>
               <aside className="idea-evidence-panel">
-                <p className="eyebrow">Official figures for this place</p>
+                <p className="eyebrow">Local background figure</p>
                 <strong className="idea-evidence-value">{idea.evidence.displayValue}</strong>
-                <h2>{idea.evidence.indicatorName}</h2>
+                <h2>
+                  {IDEA_PLAIN_FIGURE_LABELS[idea.evidence.indicatorId] ??
+                    idea.evidence.indicatorName}
+                </h2>
                 <p>
                   {idea.location.name} · {idea.evidence.year}
                 </p>
                 <p>{idea.evidence.interpretation}</p>
                 <dl>
                   <div>
-                    <dt>Exact figure from the source</dt>
+                    <dt>Exact value from the source</dt>
                     <dd>{idea.evidence.value}</dd>
                   </div>
                   <div>
-                    <dt>Unit</dt>
+                    <dt>Measured in</dt>
                     <dd>{IDEA_UNIT_LABELS[idea.evidence.unit]}</dd>
                   </div>
                   <div>
-                    <dt>Source last updated</dt>
+                    <dt>Source updated</dt>
                     <dd>{idea.evidence.sourceLastUpdated}</dd>
                   </div>
                   <div>
-                    <dt>Year measured</dt>
+                    <dt>Year</dt>
                     <dd>{idea.evidence.year}</dd>
                   </div>
                 </dl>
                 <a href={idea.evidence.sourceUrl} target="_blank" rel="noopener noreferrer">
-                  Check the World Bank source <ExternalLink size={14} />
+                  See the World Bank figures <ExternalLink size={14} />
                 </a>
                 <small>
-                  {idea.evidence.sourceName}. FJ created this product idea for the location. The
-                  World Bank does not endorse it. The official figure helps explain the broader
-                  problem, not whether people will buy this product.
+                  {idea.evidence.sourceName}. FJ wrote this idea for the location. The World Bank
+                  supplies the figure but does not recommend the idea or say it will make money.
                 </small>
               </aside>
             </div>
             {result?.related.length ? (
               <section className="related-ideas">
-                <p className="eyebrow">Same field and location</p>
-                <h2>Other ideas to compare</h2>
+                <p className="eyebrow">Same topic and place</p>
+                <h2>More ideas to compare</h2>
                 <div className="idea-grid">
                   {result.related.map((entry) => (
                     <IdeaCard

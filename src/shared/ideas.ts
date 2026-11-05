@@ -132,18 +132,36 @@ export interface TrendResponse {
 
 export const IDEA_UNIT_LABELS: Record<IdeaObservation['unit'], string> = {
   percent: 'Percent',
-  per_1000: 'Per 1,000 people',
-  pm25: 'µg/m³ (PM2.5)',
+  per_1000: 'For every 1,000 people',
+  pm25: 'Micrograms in each cubic metre of air (µg/m³)',
+}
+
+export const IDEA_PLAIN_FIGURE_LABELS: Record<string, string> = {
+  'EG.ELC.ACCS.ZS': 'People with an electricity connection',
+  'SH.H2O.BASW.ZS': 'People with basic drinking water',
+  'SH.STA.BASS.ZS': 'People with basic sanitation',
+  'IT.NET.USER.ZS': 'People using the internet',
+  'SE.ADT.LITR.ZS': 'Adults who can read and write',
+  'SL.UEM.1524.ZS': 'Young people looking for work without a job',
+  'SN.ITK.DEFC.ZS': 'People who do not get enough food',
+  'SH.MED.PHYS.ZS': 'Doctors for every 1,000 people',
+  'EN.ATM.PM25.MC.M3': 'Tiny particles in the air',
+  'SP.URB.GROW': 'Growth in towns and cities',
+  'FP.CPI.TOTL.ZG': 'How fast everyday prices are rising',
+  'SP.RUR.TOTL.ZS': 'People living in rural areas',
+  'EG.CFT.ACCS.ZS': 'People with clean fuels and equipment for cooking',
+  'FX.OWN.TOTL.ZS': 'Adults with a financial account',
+  'SP.POP.65UP.TO.ZS': 'People aged 65 and over',
 }
 
 export const IDEA_FORMAT_LABELS: Record<IdeaFormat, string> = {
   physical: 'Physical product',
-  software: 'Software product',
-  hybrid: 'Physical product with software',
+  software: 'Software or app',
+  hybrid: 'Product and software',
 }
 
 export const IDEA_ROUTE_LABELS: Record<IdeaRoute, string> = {
   build: 'Make it yourself',
-  sell: 'Buy it from a supplier and sell it',
-  both: 'Make it or buy it to sell',
+  sell: 'Buy it and resell it',
+  both: 'Make it yourself or buy and resell it',
 }

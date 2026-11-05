@@ -364,8 +364,8 @@ describe('crawler bodies (3.1) and email (1)', () => {
     expect(pageBody('/privacy')).toContain('What we collect')
     expect(pageBody('/pricing')).toContain('Every current FJ tool is free for now')
     expect(pageBody('/pricing')).toContain('Payments are paused')
-    expect(pageBody('/ideas')).toContain('physical and software products to build or sell')
-    expect(pageBody('/ideas')).toContain('year measured')
+    expect(pageBody('/ideas')).toContain('physical products, websites and apps to build or sell')
+    expect(pageBody('/ideas')).toContain('build guide explains what to make first')
   })
 
   it('builds the branded OTP email with the code in the subject', () => {

@@ -73,7 +73,7 @@ export function ideaMeta(
   return {
     title: truncate(`${idea.title} | FJ Ideas`, 60),
     description: truncate(
-      `${idea.product} Official figures: ${idea.evidence.displayValue} for ${idea.evidence.indicatorName} in ${idea.location.name} (${idea.evidence.year}). Test the idea before building.`,
+      `${idea.product} Local background figure: ${idea.evidence.displayValue} for ${idea.evidence.indicatorName} in ${idea.location.name} (${idea.evidence.year}). Test the idea before building.`,
       155,
     ),
     canonical: `${origin}/ideas/${encodeURIComponent(idea.id)}`,
@@ -108,9 +108,9 @@ export function pageMeta(pathname: string): { title: string; description: string
         'Every current FJ tool is free for now. Payments are paused; no card or trial is needed.',
     },
     '/ideas': {
-      title: 'Problems and product ideas by location | FJ',
+      title: 'Practical ideas by place | FJ',
       description:
-        'Find physical and software products to build or sell, with official figures, trending searches and checks to do before spending money.',
+        'Find physical products, websites and apps to build or sell, with local figures, simple build steps and checks to do before spending money.',
     },
     '/about': {
       title: 'About FJ - Find Jobs',
@@ -178,12 +178,12 @@ export function pageBody(pathname: string): string {
 <p>Every listing links to the original posting, where applying is always free. FJ does not approve employers or listings; always check the employer's official website and confirm the vacancy there.</p>`,
     '/about': `<p>FJ Find Jobs helps people in Nigeria and around the world find real jobs, gigs and contracts. We collect public adverts from company career pages and job boards. We put them in one place and link to the original advert.</p>
 <p>FJ is not an employer, client or recruiter. We do not approve companies, clients or listings. Finding work and applying on the original website are free. Pro includes FJ Match Intelligence, which compares your CV with an advert, shows which requirements you meet, names missing skills and suggests other adverts that may fit you better. Check the company or client and the original advert yourself before you apply. Never pay to apply.</p>
-<p>FJ also has a separate Problems and product ideas section with official figures, trending searches and checks to do before spending money. The figures do not prove that people will buy an idea.</p>
+<p>FJ also has a separate practical ideas section with local figures, trending searches and checks to do before spending money. The figures do not prove that people will buy an idea.</p>
 <p>We help you find work and research ideas. You decide where to apply and what to build, and you do the checks yourself.</p>`,
     '/privacy': `<p><strong>What we collect.</strong> Your account email, the profile you build (skills, preferences), saved jobs, your confirmed application history, and job alerts. The homepage and information pages need no account. Seeing the jobs needs the free account, so your saved jobs and alerts follow you on any device.</p>
 <p><strong>Free CV import stays on your device.</strong> Basic CV import reads the file in your browser for skill suggestions and does not save it.</p>
 <p><strong>Saved CV with permission.</strong> Only if you choose the saved-CV action and tick the box does FJ save the readable text from your CV and its report in your account. FJ does not keep the PDF or DOCX file. You can see, download, change or delete the saved text. It is removed when you delete your account. We do not save an advert pasted into the advert checker.</p>
-<p><strong>Product ideas stay on your device.</strong> Browsing ideas, official figures and trending searches needs no account. Saved ideas and checklists are stored in your browser, not sent to FJ.</p>
+<p><strong>Product ideas stay on your device.</strong> Browsing ideas, local figures and trending searches needs no account. Saved ideas and checklists are stored in your browser, not sent to FJ.</p>
 <p><strong>Graduate-price check.</strong> FJ stores the status, answers, month and year, work history group, confirmation and result needed to offer the correct price. It does not ask for age, BVN or NIN.</p>
 <p><strong>Your password.</strong> You sign in with your email and password. We store only a scrambled form of your password that cannot be turned back into the password itself. If you forget it, we email you a one-time reset link through our email delivery partner, which uses your email address only to deliver that message.</p>
 <p><strong>Payments are paused.</strong> Every current FJ tool is free for now and there is no way to make a new payment. Existing payment records remain protected. FJ never sees or stores your full card number.</p>
@@ -201,7 +201,7 @@ export function pageBody(pathname: string): string {
 <p><strong>Why do I see fewer non-English jobs?</strong> FJ mainly shows English listings at first. To see listings in every language, turn on Worldwide under More.</p>
 <p><strong>Why do I need an account to see listings?</strong> So we can save your jobs, gigs, alerts and applications and show them to you on any device. The account is free, and applying on the original site is always free.</p>
 <p><strong>Are all tools free?</strong> Yes, for now. CV checks, FJ Match Intelligence, prepared applications, advert checks, best matches, smart alerts, application stages, skills to learn, interview practice and pay checks are available with a free account. Payments are paused and no trial is required.</p>
-<p><strong>What are Problems and product ideas?</strong> This public section uses official figures to suggest physical and software products for different places. It shows the exact figure, the year it was measured and where it came from. Trending searches are shown separately. Neither proves that people will buy an idea.</p>
+<p><strong>What are practical ideas?</strong> This public section uses local figures to suggest physical products, websites and apps for different places. It shows the exact figure, the year and where it came from. Trending searches are shown separately. Neither proves that people will buy an idea.</p>
 <p><strong>Does FJ save my CV?</strong> Only with separate permission for a full CV check. Basic import stays on your device; saved readable text can be downloaded or deleted.</p>
 <p><strong>How do I save jobs and track applications?</strong> Tap the bookmark on any job. When you apply through the original listing, mark the job as applied. Your Progress page counts what you confirm each month.</p>`,
     '/scams': `<p>Real employers do not charge you to apply or to get hired. Watch for these warning signs:</p>
@@ -219,9 +219,9 @@ export function pageBody(pathname: string): string {
     '/pricing': `<p>Every current FJ tool is free for now. Payments are paused, so there is no way to pay and no card is needed.</p>
 <p>Your free account includes job search, saved listings, alerts, CV checks, FJ Match Intelligence, prepared applications, advert checks, best matches, application stages, skills to learn, interview practice and pay checks. Privacy and safety rules still apply.</p>
 <p>Existing payment records remain protected. If paid plans return, FJ will explain the price and terms before you choose. FJ does not apply for you, approve employers or clients, or guarantee a job or gig.</p>`,
-    '/ideas': `<p>Find physical and software products to build or sell in Nigeria, other countries and a worldwide view. Each idea explains the problem, who it is for, a simple first version, how it could make money, useful skills, risks and checks to do before spending money.</p>
-<p>Official figures include the exact number, unit, year measured, when the data was last updated, who published it and a source link. Annual figures are not live measurements. They help explain a problem; they do not show how many people have it, the size of the market, or whether people will pay.</p>
-<p>Trending searches are shown separately. Google’s rough search estimates are not exact counts and do not prove that people will buy. Save ideas and checklists on your device for free.</p>`,
+    '/ideas': `<p>Find physical products, websites and apps to build or sell in Nigeria, other countries and a worldwide view. Each idea explains who it may help, a small first version, how you could charge, useful skills and checks to do before spending money.</p>
+<p>The build guide explains what to make first, what you may need and which costs to check. Software ideas start with a simple phone-friendly website where possible. An Android or iPhone app can wait until users need one.</p>
+<p>Local figures include the exact value, unit, year, update date, publisher and source link. They are not live measurements or success scores. They do not show market size or whether people will pay. Trending searches are shown separately and have the same limits. Save ideas and checklists on your device for free.</p>`,
     '/employers': `<p>FJ collects real vacancies from employer career pages and established job boards, cleans them up, and puts them in front of people who are actively looking across Nigeria and beyond.</p>
 <p>Employer accounts and direct job posting are paused. There is no employer price and no way to publish a job directly on FJ today.</p>
 <p>Today, automatic collection from your public listings is free: if your vacancies are on your public careers page or an established board, FJ may collect them and link applicants to your original posting. You can record employer interest on this page in case posting is opened carefully in future.</p>

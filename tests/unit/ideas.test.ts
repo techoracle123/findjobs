@@ -8,14 +8,18 @@ import { findIdea, searchIdeas } from '../../src/server/ideas/catalog'
 import { withIdeaCatalogSummary } from '../../src/server/ideas/evidence'
 import { makeIdeaSnapshot } from '../fixtures/ideas'
 import { parseGoogleTrends } from '../../src/server/ideas/trends'
+import { IDEA_PLAIN_FIGURE_LABELS } from '../../src/shared/ideas'
 
 describe('localized product idea catalogue', () => {
-  it('has twelve detailed concepts in each of twelve fields and all three formats', () => {
-    expect(IDEA_CATEGORIES).toHaveLength(12)
-    expect(IDEA_CONCEPTS).toHaveLength(144)
+  it('has twelve detailed concepts in each of fifteen fields and all three formats', () => {
+    expect(IDEA_CATEGORIES).toHaveLength(15)
+    expect(IDEA_CONCEPTS).toHaveLength(180)
     expect(new Set(IDEA_CONCEPTS.map((idea) => idea.format))).toEqual(
       new Set(['physical', 'software', 'hybrid']),
     )
+    for (const category of IDEA_CATEGORIES) {
+      expect(IDEA_PLAIN_FIGURE_LABELS[category.indicatorId]).toBeTruthy()
+    }
     for (const idea of IDEA_CONCEPTS) {
       expect(idea.buyer.length).toBeGreaterThan(10)
       expect(idea.product.length).toBeGreaterThan(40)
@@ -27,19 +31,19 @@ describe('localized product idea catalogue', () => {
   it('computes more than 15,000 ideas from eligible observations, without a hardcoded marketing total', () => {
     const snapshot = makeIdeaSnapshot()
     const response = searchIdeas(snapshot, { country: 'ALL', limit: 24 })
-    expect(response.catalogTotal).toBe(snapshot.countries.length * 144)
+    expect(response.catalogTotal).toBe(snapshot.countries.length * IDEA_CONCEPTS.length)
     expect(response.catalogTotal).toBeGreaterThanOrEqual(MIN_IDEA_CATALOG_TOTAL)
     expect(response.total).toBe(response.catalogTotal)
     expect(response.ideas).toHaveLength(24)
     expect(response.evidence.countryCount).toBe(snapshot.countries.length - 1)
-    expect(response.evidence.indicatorCount).toBe(12)
+    expect(response.evidence.indicatorCount).toBe(15)
   })
 
   it('reuses stored country counts without changing search results', () => {
     const snapshot = makeIdeaSnapshot(8)
     const expected = searchIdeas(snapshot, { country: 'ALL', limit: 48 })
     const stored = withIdeaCatalogSummary(snapshot)
-    expect(stored.countryCounts?.NGA).toBe(144)
+    expect(stored.countryCounts?.NGA).toBe(IDEA_CONCEPTS.length)
     expect(Object.keys(stored.countryCounts ?? {})).toHaveLength(8)
     expect(searchIdeas(stored, { country: 'ALL', limit: 48 })).toEqual(expected)
     expect(stored.refreshedAt).toBe(snapshot.refreshedAt)
@@ -49,11 +53,17 @@ describe('localized product idea catalogue', () => {
   it('filters by country, category, format and search, with stable pagination', () => {
     const snapshot = makeIdeaSnapshot()
     const nigeria = searchIdeas(snapshot, { country: 'NGA', limit: 12 })
-    expect(nigeria.total).toBe(144)
+    expect(nigeria.total).toBe(IDEA_CONCEPTS.length)
     expect(nigeria.ideas.every((idea) => idea.location.iso3 === 'NGA')).toBe(true)
     const software = searchIdeas(snapshot, { country: 'NGA', format: 'software', limit: 48 })
     expect(software.total).toBeGreaterThan(0)
     expect(software.ideas.every((idea) => idea.format === 'software')).toBe(true)
+    const make = searchIdeas(snapshot, { country: 'NGA', route: 'build', limit: 48 })
+    expect(make.total).toBeGreaterThan(0)
+    expect(make.ideas.every((idea) => idea.route !== 'sell')).toBe(true)
+    const resell = searchIdeas(snapshot, { country: 'NGA', route: 'sell', limit: 48 })
+    expect(resell.total).toBeGreaterThan(0)
+    expect(resell.ideas.every((idea) => idea.route !== 'build')).toBe(true)
     const energy = searchIdeas(snapshot, { country: 'NGA', category: 'energy-access', limit: 48 })
     expect(energy.total).toBe(12)
     const solar = searchIdeas(snapshot, { country: 'NGA', q: 'solar', limit: 48 })

@@ -20,7 +20,7 @@ describe('public Ideas API', () => {
       catalogTotal: number
       ideas: { id: string; evidence: { value: number; year: number; sourceUrl: string } }[]
     }
-    expect(body.total).toBe(144)
+    expect(body.total).toBe(180)
     expect(body.catalogTotal).toBeGreaterThan(15_000)
     expect(body.ideas).toHaveLength(2)
     expect(body.ideas[0].evidence.value).toBe(20)
@@ -52,6 +52,7 @@ describe('public Ideas API', () => {
   it('rejects invalid filters and unknown ideas honestly', async () => {
     expect((await SELF.fetch(`${BASE}/api/ideas?country=N`)).status).toBe(400)
     expect((await SELF.fetch(`${BASE}/api/ideas?format=paid`)).status).toBe(400)
+    expect((await SELF.fetch(`${BASE}/api/ideas?route=guaranteed`)).status).toBe(400)
     expect((await SELF.fetch(`${BASE}/api/ideas/not-real`)).status).toBe(404)
     expect((await SELF.fetch(`${BASE}/api/idea-trends?geo=bad`)).status).toBe(400)
   })

@@ -152,9 +152,9 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
         : { ...pageMeta(path), canonical: `${origin}${path}` }
     const bodyHtml = idea
       ? `<p>${escLite(idea.idea.product)}</p>
-<p><strong>Official figures:</strong> ${escLite(idea.idea.evidence.displayValue)} for ${escLite(idea.idea.evidence.indicatorName)} in ${escLite(idea.idea.location.name)} (${idea.idea.evidence.year}). Exact figure from the source: ${idea.idea.evidence.value}; unit: ${escLite(IDEA_UNIT_LABELS[idea.idea.evidence.unit])}. Source last updated: ${escLite(idea.idea.evidence.sourceLastUpdated)}.</p>
+<p><strong>Local background figure:</strong> ${escLite(idea.idea.evidence.displayValue)} for ${escLite(idea.idea.evidence.indicatorName)} in ${escLite(idea.idea.location.name)} (${idea.idea.evidence.year}). Exact value from the source: ${idea.idea.evidence.value}; measured in: ${escLite(IDEA_UNIT_LABELS[idea.idea.evidence.unit])}. Source updated: ${escLite(idea.idea.evidence.sourceLastUpdated)}.</p>
 <p>${escLite(idea.idea.evidence.interpretation)}</p>
-<p><a href="${escLite(idea.idea.evidence.sourceUrl)}">Read the official source</a>. This is an idea to test, not proof that people will buy it.</p>`
+<p><a href="${escLite(idea.idea.evidence.sourceUrl)}">See the source figures</a>. This is an idea to test, not proof that people will buy it.</p>`
       : job
         ? `<p>${escLite(job.company || 'Employer not stated')} · ${escLite(job.locationLabel || 'Location not stated')}</p>
 <p>${escLite((job.description || '').slice(0, 4000))}</p>
