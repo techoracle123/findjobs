@@ -11,10 +11,10 @@ async function runLiveChecks() {
   let sessionCookie = ''
   async function json(path) {
     // A cold isolate answering its first full-corpus search can be slow or
-    // briefly unavailable. Retry GET probes a few times; a persistent failure
-    // still fails the check.
+    // briefly unavailable. Allow up to 50 seconds of recovery across five GET
+    // probes; a persistent failure still fails the check.
     let lastError
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const response = await fetch(`${base}${path}`, {
           headers: {
@@ -35,7 +35,9 @@ async function runLiveChecks() {
         if (error === lastError) throw error
         lastError = error
       }
-      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 5000))
+      if (attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 5000 * (attempt + 1)))
+      }
     }
     const reason = lastError instanceof Error ? lastError.message : String(lastError)
     throw new Error(`Live request failed for ${path}: ${reason}`)
