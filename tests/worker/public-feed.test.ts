@@ -3,9 +3,11 @@ import {
   assemblePublicSnapshot,
   refreshPublicSource,
   publishPublicSnapshot,
+  readPublicationPointer,
   readPublicationShards,
   PUBLIC_SOURCES,
   type IndexedJob,
+  type PublicSnapshot,
   type SourceIndex,
 } from '../../src/server/public-feed'
 import { fetchPublicSource } from '../../src/server/live-public'
@@ -321,5 +323,41 @@ it('never returns a partial publication after a persistent shard miss', async ()
   await expect(readPublicationShards(kv, ['present', 'missing'])).rejects.toThrow(
     'temporarily unavailable',
   )
+  expect(attempts).toBe(3)
+})
+
+it('retries a cold publication pointer without retrying a genuinely absent one', async () => {
+  const pointer = { version: 1 } as PublicSnapshot
+  let attempts = 0
+  const kv = {
+    get: async () => {
+      attempts += 1
+      if (attempts < 3) throw new Error('transient pointer timeout')
+      return pointer
+    },
+  } as unknown as KVNamespace
+  expect(await readPublicationPointer(kv)).toBe(pointer)
+  expect(attempts).toBe(3)
+
+  let missingReads = 0
+  const missing = {
+    get: async () => {
+      missingReads += 1
+      return null
+    },
+  } as unknown as KVNamespace
+  expect(await readPublicationPointer(missing)).toBeNull()
+  expect(missingReads).toBe(1)
+})
+
+it('bounds repeated publication pointer failures', async () => {
+  let attempts = 0
+  const kv = {
+    get: async () => {
+      attempts += 1
+      throw new Error('pointer timeout')
+    },
+  } as unknown as KVNamespace
+  await expect(readPublicationPointer(kv)).rejects.toThrow('pointer timeout')
   expect(attempts).toBe(3)
 })

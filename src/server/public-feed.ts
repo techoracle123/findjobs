@@ -528,6 +528,25 @@ let pending: Promise<PublicSnapshot | null> | null = null
 const PUBLICATION_READ_BATCH = 5
 const PUBLICATION_READ_CONCURRENCY = 2
 
+export async function readPublicationPointer(kv: KVNamespace): Promise<PublicSnapshot | null> {
+  // The pointer carries every public ID, so a cold read can occasionally
+  // exceed three seconds even though it is much smaller than the corpus.
+  // Retry only transport failures; a genuinely absent publication stays absent.
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await withTimeout(
+        kv.get<PublicSnapshot>('published', { type: 'json', cacheTtl: 60 }),
+        5000,
+      )
+    } catch (error) {
+      lastError = error
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+  }
+  throw lastError
+}
+
 async function readPublicationBatch(
   kv: KVNamespace,
   keys: string[],
@@ -584,7 +603,7 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
     if (fallback) loadedAt = Date.now()
     return fallback
   }
-  pending = withTimeout(kv.get<PublicSnapshot>('published', { type: 'json', cacheTtl: 60 }))
+  pending = readPublicationPointer(kv)
     .then(async (snapshot) => {
       if (
         !snapshot ||
@@ -662,9 +681,7 @@ export async function publishedPublicSummary(kv?: KVNamespace): Promise<PublicFe
   if (!kv) return null
   if (cached && Date.now() - loadedAt < SNAPSHOT_CACHE_MS) return summaryFromSnapshot(cached)
   try {
-    const pointer = await withTimeout(
-      kv.get<PublicSnapshot>('published', { type: 'json', cacheTtl: 60 }),
-    )
+    const pointer = await readPublicationPointer(kv)
     const age = pointer ? Date.now() - Date.parse(pointer.refreshedAt) : Number.NaN
     if (
       pointer &&
