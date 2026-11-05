@@ -331,10 +331,12 @@ export function fetchJobs(
   if (!force && hit && Date.now() - hit.at < 5 * 60000) return Promise.resolve(hit.value)
   const active = jobsPending.get(key)
   if (active) return active
-  const work = requestJobs(
-    `/api/jobs?${params}`,
-    force ? { headers: { 'cache-control': 'no-cache' } } : undefined,
-  )
+  const work = requestJobs(`/api/jobs?${params}`, {
+    // Keep account-only responses and temporary edge errors out of the HTTP
+    // cache. Successful responses still use the short in-memory cache above.
+    cache: 'no-store',
+    headers: { 'cache-control': 'no-cache' },
+  })
     .then((value) => {
       if (jobsCache.size >= 20) jobsCache.delete(jobsCache.keys().next().value!)
       jobsCache.set(key, { value, at: Date.now() })

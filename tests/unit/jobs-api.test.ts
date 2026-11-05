@@ -26,4 +26,20 @@ describe('fetchJobs resilience', () => {
     await expect(fetchJobs(0, 'sign-in-check')).rejects.toMatchObject({ status: 401 })
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+
+  it('does not reuse a cached search error', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(Response.json({ jobs: [], total: 0, limit: 20, offset: 0 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchJobs(0, 'cache-check')).resolves.toMatchObject({ total: 0 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('q=cache-check'),
+      expect.objectContaining({
+        cache: 'no-store',
+        headers: expect.objectContaining({ 'cache-control': 'no-cache' }),
+      }),
+    )
+  })
 })

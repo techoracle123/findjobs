@@ -11,7 +11,10 @@ test('the public catalogue provides real pagination, filters and responsive evid
   page,
 }) => {
   const response = await page.request.get('/api/ideas?country=NGA&limit=24')
-  expect(response.ok()).toBe(true)
+  if (!response.ok()) {
+    const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 300)
+    throw new Error(`Ideas API returned ${response.status()}: ${detail}`)
+  }
   const body = await response.json()
   expect(body.catalogTotal).toBeGreaterThan(15000)
   expect(body.total).toBeGreaterThan(0)
