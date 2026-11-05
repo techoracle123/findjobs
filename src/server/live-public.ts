@@ -182,11 +182,11 @@ export async function livePublicJobs(origin: string): Promise<Job[]> {
   return (await pending).jobs
 }
 
-export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResult {
+export function paginatePublicJobs(matched: Job[], search: JobSearch): JobSearchResult {
   // Nigeria-first ordering for unfiltered browsing: in-market roles (NG or
   // remote) lead, newest first inside each group. Explicit country/search
   // filters already narrowed the set, so this only shapes the default feed.
-  const filtered = matchingPublicJobs(jobs, search).sort(
+  const filtered = matched.sort(
     (a, b) =>
       marketRank(b) - marketRank(a) ||
       b.postedAt.localeCompare(a.postedAt) ||
@@ -195,6 +195,10 @@ export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResul
   const limit = Math.min(200, Math.max(1, search.limit ?? 50)),
     offset = Math.max(0, search.offset ?? 0)
   return { jobs: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset }
+}
+
+export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResult {
+  return paginatePublicJobs(matchingPublicJobs(jobs, search), search)
 }
 
 const haystackCache = new WeakMap<Job, string>()
@@ -248,13 +252,32 @@ export interface PublicFacetMatch {
   gig: boolean
 }
 
-const NO_FACET_MATCH: PublicFacetMatch = {
-  matched: false,
-  withoutOpportunityType: false,
-  withoutCountry: false,
-  withoutRoleFamily: false,
-  gig: false,
+// There are only 32 possible answers. Sharing them avoids allocating a fresh
+// object for every listing in a full-corpus search and then immediately
+// throwing almost all of those objects away.
+const FACET_MATCHES: PublicFacetMatch[] = Array.from({ length: 32 }, (_, bits) => ({
+  matched: Boolean(bits & 1),
+  withoutOpportunityType: Boolean(bits & 2),
+  withoutCountry: Boolean(bits & 4),
+  withoutRoleFamily: Boolean(bits & 8),
+  gig: Boolean(bits & 16),
+}))
+function facetMatch(
+  matched: boolean,
+  withoutOpportunityType: boolean,
+  withoutCountry: boolean,
+  withoutRoleFamily: boolean,
+  gig: boolean,
+): PublicFacetMatch {
+  return FACET_MATCHES[
+    Number(matched) |
+      (Number(withoutOpportunityType) << 1) |
+      (Number(withoutCountry) << 2) |
+      (Number(withoutRoleFamily) << 3) |
+      (Number(gig) << 4)
+  ]
 }
+const NO_FACET_MATCH = FACET_MATCHES[0]
 
 /**
  * One-pass facet predicate. The jobs route needs the exact result plus three
@@ -292,18 +315,18 @@ export function publicFacetMatch(job: Job, search: JobSearch): PublicFacetMatch 
   // than two pass, building a search haystack for this job cannot change any
   // count.
   if (Number(country) + Number(roleFamily) + Number(opportunity) < 2)
-    return { ...NO_FACET_MATCH, gig }
+    return facetMatch(false, false, false, false, gig)
 
   const matcher = matcherFor(search)
-  if (matcher && !matcher(haystack(job))) return { ...NO_FACET_MATCH, gig }
+  if (matcher && !matcher(haystack(job))) return facetMatch(false, false, false, false, gig)
 
-  return {
-    matched: country && roleFamily && opportunity,
-    withoutOpportunityType: country && roleFamily,
-    withoutCountry: roleFamily && opportunity,
-    withoutRoleFamily: country && opportunity,
+  return facetMatch(
+    country && roleFamily && opportunity,
+    country && roleFamily,
+    roleFamily && opportunity,
+    country && opportunity,
     gig,
-  }
+  )
 }
 
 export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {

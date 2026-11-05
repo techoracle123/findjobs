@@ -27,7 +27,7 @@ import { authRoutes } from './routes/auth'
 import { employerRoutes } from './routes/employers'
 import { ideaRoutes } from './routes/ideas'
 import { trustRoutes } from './routes/trust'
-import { jobFacets } from './job-stats'
+import { jobFacets, searchPublicJobs } from './job-stats'
 import { withTimeout } from './timeouts'
 import { log } from './logging'
 import { publicDataCache } from './public-cache'
@@ -406,7 +406,7 @@ app.get('/api/jobs', async (c) => {
 
   const published = await publishedPublicJobs(env.PUBLIC_JOBS)
   if (published) {
-    const result = searchLivePublic(published.jobs, search)
+    const result = searchPublicJobs(published.jobs, search)
     return c.json({
       ...result,
       jobs: result.jobs.map((job) => ({
@@ -415,7 +415,6 @@ app.get('/api/jobs', async (c) => {
         descriptionPreview: true,
       })),
       dataSource: 'public-snapshot',
-      facets: jobFacets(published.jobs, search),
       updatedAt: published.refreshedAt,
       refreshHours: published.refreshHours,
       sourceCount: published.sourceCount,
