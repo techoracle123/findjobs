@@ -1,13 +1,14 @@
 /** Durable public discovery, independent of account/D1 storage. No credentials or
  * user data live in this namespace. Publish the pointer only after its data. */
 import { specialistRole } from '../shared/specialisms'
+import { opportunityOf, primeStoredOpportunity, withOpportunity } from '../shared/opportunities'
 import { buildQualitySnapshot, dedupeJobs, qualityPass } from './quality'
 import type { QualitySnapshot } from '../shared/quality'
 import { withTimeout } from './timeouts'
 import { logger } from './logging'
 import type { Job } from '../shared/types'
 import { SEED_SOURCES } from './sources/seed'
-import { fetchPublicSource } from './live-public'
+import { buildPublicSearchText, fetchPublicSource } from './live-public'
 
 export const REFRESH_HOURS = 12
 export const PUBLIC_SOURCES = SEED_SOURCES.filter(
@@ -25,12 +26,19 @@ export const PUBLIC_SOURCES = SEED_SOURCES.filter(
       'himalayas',
       'workingnomads',
       'jobicy',
+      'remotejobs',
       'hn-hiring',
       'themuse',
       'smartrecruiters',
       'teamtailor',
       'personio',
       'breezy',
+      'workday',
+      'oracle-recruiting',
+      'zoho-recruit',
+      'efcc-recruitment',
+      'fcsc-vacancies',
+      'nnpc-careers',
     ].includes(source.parser),
 )
 // Sources confirm aliveness by rewriting only when content changes (plus a
@@ -42,6 +50,8 @@ const MAX_AGE = 8 * 86_400_000
 const EXPIRY = 10 * 86400
 export interface IndexedJob extends Job {
   detailKey: string
+  /** Derived publication text; made non-enumerable when a snapshot is read. */
+  searchText?: string
 }
 export interface SourceIndex {
   sourceId: string
@@ -49,8 +59,24 @@ export interface SourceIndex {
   contentHash?: string
   jobs: IndexedJob[]
 }
+export const PRECLASSIFIED_SNAPSHOT_VERSION = 1
+export const SEARCH_TEXT_SNAPSHOT_VERSION = 1
+
+export interface PublicSnapshotStats {
+  total: number
+  gigs: number
+  nigeria: number
+  remote: number
+  countries: number
+  totalAllLanguages: number
+}
+
 export interface PublicSnapshot {
   version: 1
+  /** Rows in this publication already carry job/gig classifications. */
+  opportunityVersion?: number
+  /** Shards carry normalized text, so cold searches do not rebuild it. */
+  searchTextVersion?: number
   refreshedAt: string
   refreshHours: number
   sourceCount: number
@@ -62,6 +88,40 @@ export interface PublicSnapshot {
   parts?: string[]
   ids?: string[]
   duplicatesDropped?: number
+  stats?: PublicSnapshotStats
+}
+
+export interface PublicFeedSummary extends PublicSnapshotStats {
+  refreshedAt: string
+  refreshHours: number
+  sourceCount: number
+  attemptedSources: number
+  olderSources: number
+  added: number
+}
+
+function snapshotStats(jobs: IndexedJob[]): PublicSnapshotStats {
+  const visible = jobs.filter((job) => job.quality?.isEnglish !== false)
+  return {
+    total: visible.length,
+    gigs: visible.filter((job) => job.opportunityType === 'gig').length,
+    nigeria: visible.filter((job) => job.locationCountry === 'NG').length,
+    remote: visible.filter((job) => job.workMode === 'remote').length,
+    countries: new Set(visible.map((job) => job.locationCountry).filter(Boolean)).size,
+    totalAllLanguages: jobs.length,
+  }
+}
+
+function summaryFromSnapshot(snapshot: PublicSnapshot): PublicFeedSummary {
+  return {
+    ...snapshotStats(snapshot.jobs),
+    refreshedAt: snapshot.refreshedAt,
+    refreshHours: snapshot.refreshHours,
+    sourceCount: snapshot.sourceCount,
+    attemptedSources: snapshot.attemptedSources,
+    olderSources: snapshot.olderSources,
+    added: snapshot.added,
+  }
 }
 
 /**
@@ -324,9 +384,15 @@ export function assemblePublicSnapshot(
       requiredSkills: job.requiredSkills,
       usefulSkills: job.usefulSkills,
     })
-    return {
+    const opportunity = opportunityOf(job)
+    const normalized: IndexedJob = {
       ...job,
       ...patch,
+      opportunityType: opportunity.opportunityType,
+      engagementType: opportunity.engagementType,
+      engagementLabel: opportunity.engagementLabel,
+      engagementBasis: opportunity.engagementBasis,
+      ...(opportunity.projectDuration ? { projectDuration: opportunity.projectDuration } : {}),
       // List shards stay slim: per-skill evidence lives in the detail
       // payloads, not in every list response. Without this, each publish
       // regenerated evidence into the shards, the deploy bootstrap's
@@ -336,6 +402,7 @@ export function assemblePublicSnapshot(
       roleFamily: specialistRole(job.title) || job.roleFamily,
       locationCountry: patch.quality.location.country || job.locationCountry,
     }
+    return { ...normalized, searchText: buildPublicSearchText(normalized) }
   })
   const { unique, dropped } = dedupeJobs(normalised)
   const withheld = unique.filter(
@@ -352,6 +419,9 @@ export function assemblePublicSnapshot(
   if (!valid.length) throw new Error('No genuine public listings; keeping previous publication')
   return {
     version: 1,
+    opportunityVersion: PRECLASSIFIED_SNAPSHOT_VERSION,
+    searchTextVersion: SEARCH_TEXT_SNAPSHOT_VERSION,
+    stats: snapshotStats(jobs),
     refreshedAt: new Date(now).toISOString(),
     refreshHours: REFRESH_HOURS,
     sourceCount: valid.length,
@@ -461,39 +531,114 @@ export async function publishPublicSnapshot(
 let cached: PublicSnapshot | null = null
 let loadedAt = 0
 let pending: Promise<PublicSnapshot | null> | null = null
+
+const PUBLICATION_READ_CONCURRENCY = 3
+
+export async function readPublicationPointer(kv: KVNamespace): Promise<PublicSnapshot | null> {
+  // The pointer carries every public ID, so a cold read can occasionally
+  // exceed three seconds even though it is much smaller than the corpus.
+  // Retry only transport failures; a genuinely absent publication stays absent.
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await withTimeout(
+        kv.get<PublicSnapshot>('published', { type: 'json', cacheTtl: 60 }),
+        5000,
+      )
+    } catch (error) {
+      lastError = error
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+  }
+  throw lastError
+}
+
+async function readPublicationShard(kv: KVNamespace, key: string): Promise<IndexedJob[]> {
+  // A multi-shard response is several megabytes with the expanded corpus. One
+  // transient key then forces every healthy key in that batch to be downloaded
+  // again. Read the immutable 500-row shards independently instead: only the
+  // failed shard is retried, three readers bound memory, and no partial result
+  // is ever exposed. Edge reads remain reusable for five minutes.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const candidate = await withTimeout(
+        kv.get<IndexedJob[]>(key, { type: 'json', cacheTtl: 300 }),
+        8000,
+      )
+      if (candidate) return candidate
+    } catch {
+      // Retry below. A missing or failed shard is never treated as an empty one.
+    }
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  throw new Error('Public publication shards are temporarily unavailable')
+}
+
+export async function readPublicationShards(
+  kv: KVNamespace,
+  keys: string[],
+): Promise<IndexedJob[]> {
+  const jobs = new Map<string, IndexedJob>()
+  for (let index = 0; index < keys.length; index += PUBLICATION_READ_CONCURRENCY) {
+    const wave = keys.slice(index, index + PUBLICATION_READ_CONCURRENCY)
+    const loaded = await Promise.all(wave.map((key) => readPublicationShard(kv, key)))
+    for (const part of loaded) for (const job of part) if (!jobs.has(job.id)) jobs.set(job.id, job)
+  }
+  return [...jobs.values()]
+}
+
+const SNAPSHOT_CACHE_MS = 60 * 60000
 export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnapshot | null> {
   if (!kv) return null
-  if (cached && Date.now() - loadedAt < 15 * 60000) return cached
+  if (cached && Date.now() - loadedAt < SNAPSHOT_CACHE_MS) return cached
   if (pending) return pending
-  pending = withTimeout(kv.get<PublicSnapshot>('published', { type: 'json', cacheTtl: 60 }))
+  // A transient KV timeout during the hourly in-isolate refresh must not
+  // discard a complete snapshot that is still inside its freshness window
+  // and push the request into the much heavier database fallback.
+  const fallback = cached && Date.now() - Date.parse(cached.refreshedAt) < MAX_AGE ? cached : null
+  const returnFallback = () => {
+    if (fallback) loadedAt = Date.now()
+    return fallback
+  }
+  pending = readPublicationPointer(kv)
     .then(async (snapshot) => {
       if (
         !snapshot ||
         snapshot.version !== 1 ||
         Date.now() - Date.parse(snapshot.refreshedAt) > MAX_AGE
       )
-        return null
+        return returnFallback()
       if (snapshot.parts?.length) {
-        const jobs = new Map<string, IndexedJob>()
-        // KV's bulk API resolves the publication in one RPC, rather than
-        // serial cold-region round trips for each shard. Keep negative cache
-        // short during eventual-consistency propagation of a new publication.
-        for (let i = 0; i < snapshot.parts.length; i += 10) {
-          const keys = snapshot.parts.slice(i, i + 10)
-          const parts = await withTimeout(
-            kv.get<IndexedJob[]>(keys, { type: 'json', cacheTtl: 60 }),
-            5000,
-          )
-          if (keys.some((key) => !parts.get(key))) return null
-          for (const key of keys)
-            for (const job of parts.get(key)!) if (!jobs.has(job.id)) jobs.set(job.id, job)
-        }
-        snapshot.jobs = [...jobs.values()]
-        if (snapshot.ids && new Set(snapshot.ids).size !== snapshot.jobs.length) return null
+        snapshot.jobs = await readPublicationShards(kv, snapshot.parts)
+        if (snapshot.ids && new Set(snapshot.ids).size !== snapshot.jobs.length)
+          return returnFallback()
       }
       // Individual failed sources must not stay 'open' indefinitely just because
       // other sources continued refreshing the shared publication.
-      for (const job of snapshot.jobs) job.roleFamily = specialistRole(job.title) || job.roleFamily
+      const preclassified = snapshot.opportunityVersion === PRECLASSIFIED_SNAPSHOT_VERSION
+      for (const job of snapshot.jobs) {
+        if (!preclassified) job.roleFamily = specialistRole(job.title) || job.roleFamily
+        // Current publications carry their lanes already, including a stored
+        // `unknown` answer for ordinary postings. Trust that marker instead
+        // of rereading every description in every cold isolate. Legacy
+        // snapshots still get the one-time evidence-backed backfill.
+        const opportunity = preclassified ? primeStoredOpportunity(job) : opportunityOf(job)
+        job.opportunityType = opportunity.opportunityType
+        job.engagementType = opportunity.engagementType
+        job.engagementLabel = opportunity.engagementLabel
+        job.engagementBasis = opportunity.engagementBasis
+        if (opportunity.projectDuration) job.projectDuration = opportunity.projectDuration
+        if (typeof job.searchText === 'string') {
+          // Keep the derived index available to search without adding it to
+          // list responses, Best Matches or other objects built with spread.
+          Object.defineProperty(job, 'searchText', {
+            value: job.searchText,
+            writable: true,
+            configurable: true,
+            enumerable: false,
+          })
+        }
+      }
       // Held/rejected listings and report-hidden listings never reach users.
       const hidden = await kv
         .get<Record<string, number>>('moderation:hidden', { type: 'json', cacheTtl: 60 })
@@ -507,16 +652,72 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
           !(hidden && Object.hasOwn(hidden, job.id)) &&
           Date.now() - Date.parse(job.lastSeenAt || '') < MAX_AGE,
       )
-      if (!snapshot.jobs.length && snapshot.ids?.length !== 0) return null
+      if (!snapshot.jobs.length && snapshot.ids?.length !== 0) return returnFallback()
       cached = snapshot
       loadedAt = Date.now()
       return snapshot
     })
-    .catch(() => null)
+    .catch(() => returnFallback())
     .finally(() => {
       pending = null
     })
   return pending
+}
+
+function validSnapshotStats(value: PublicSnapshotStats | undefined): value is PublicSnapshotStats {
+  return Boolean(
+    value &&
+    [
+      value.total,
+      value.gigs,
+      value.nigeria,
+      value.remote,
+      value.countries,
+      value.totalAllLanguages,
+    ].every((count) => Number.isFinite(count) && count >= 0),
+  )
+}
+
+/**
+ * Public totals without loading every publication shard. Current pointers
+ * carry precomputed stats; the full snapshot is still used when a report has
+ * hidden a listing, because those rows must leave the public numbers as well
+ * as the board.
+ */
+export async function publishedPublicSummary(kv?: KVNamespace): Promise<PublicFeedSummary | null> {
+  if (!kv) return null
+  if (cached && Date.now() - loadedAt < SNAPSHOT_CACHE_MS) return summaryFromSnapshot(cached)
+  try {
+    const pointer = await readPublicationPointer(kv)
+    const age = pointer ? Date.now() - Date.parse(pointer.refreshedAt) : Number.NaN
+    if (
+      pointer &&
+      pointer.version === 1 &&
+      pointer.opportunityVersion === PRECLASSIFIED_SNAPSHOT_VERSION &&
+      validSnapshotStats(pointer.stats) &&
+      age >= 0 &&
+      age < 24 * 3600_000
+    ) {
+      const hidden = await kv
+        .get<Record<string, number>>('moderation:hidden', { type: 'json', cacheTtl: 60 })
+        .catch(() => null)
+      if (!hidden || Object.keys(hidden).length === 0) {
+        return {
+          ...pointer.stats,
+          refreshedAt: pointer.refreshedAt,
+          refreshHours: pointer.refreshHours,
+          sourceCount: pointer.sourceCount,
+          attemptedSources: pointer.attemptedSources,
+          olderSources: pointer.olderSources,
+          added: pointer.added,
+        }
+      }
+    }
+  } catch {
+    /* Fall through to the complete snapshot loader and its cached fallback. */
+  }
+  const snapshot = await publishedPublicJobs(kv)
+  return snapshot ? summaryFromSnapshot(snapshot) : null
 }
 
 export async function findPublishedJob(
@@ -531,5 +732,7 @@ export async function findPublishedJob(
     5000,
   ).catch(() => null)
   const job = details?.find((job) => job.id === id)
-  return job ? { ...job, roleFamily: specialistRole(job.title) || job.roleFamily } : null
+  return job
+    ? { ...withOpportunity(job), roleFamily: specialistRole(job.title) || job.roleFamily }
+    : null
 }

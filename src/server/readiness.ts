@@ -44,9 +44,14 @@ const REQUIRED_TABLES = [
   'source_postings',
   'ingestion_runs',
   'billing_events',
+  'billing_checkout_attempts',
+  'billing_founding_claims',
+  'billing_subscription_state',
   'ai_usage',
   'job_translations',
   'job_advice_cache',
+  'application_answers',
+  'prepared_applications',
   'service_cache',
 ]
 
@@ -128,20 +133,20 @@ export async function buildReadiness(env: Env): Promise<ReadinessReport> {
   if (emailConfigured(config)) {
     checks.push({
       id: 'identity',
-      name: 'Sign-in (FJ email codes)',
+      name: 'Sign-in email delivery',
       status: 'ok',
       required: production,
-      detail: 'Email sign-in codes can be sent.',
+      detail: 'Password reset emails can be sent.',
       action: null,
     })
   } else {
     checks.push({
       id: 'identity',
-      name: 'Sign-in (FJ email codes)',
+      name: 'Sign-in email delivery',
       status: production ? 'missing' : 'warn',
       required: production,
-      detail: 'No email provider is configured, so sign-in codes cannot be sent yet.',
-      action: 'Set RESEND_API_KEY (and EMAIL_FROM) so FJ can email sign-in codes.',
+      detail: 'No email provider is configured, so password reset emails cannot be sent yet.',
+      action: 'Configure an email sending key and a verified sender address.',
     })
   }
 
@@ -175,6 +180,17 @@ export async function buildReadiness(env: Env): Promise<ReadinessReport> {
         if (!billing.stripe.secretKey) missingKeys.push('STRIPE_SECRET_KEY')
         if (!billing.stripe.webhookSecret) missingKeys.push('STRIPE_WEBHOOK_SECRET')
         if (!billing.stripe.pricePro) missingKeys.push('STRIPE_PRICE_PRO')
+        break
+      case 'bachs':
+        if (!billing.bachs.secretKey) missingKeys.push('BACHS_SECRET_KEY')
+        else if (production && !billing.bachs.secretKey.startsWith('sk_live_'))
+          missingKeys.push('BACHS_SECRET_KEY (a live sk_live_ key)')
+        else if (
+          !billing.bachs.secretKey.startsWith('sk_live_') &&
+          !billing.bachs.secretKey.startsWith('sk_sandbox_')
+        )
+          missingKeys.push('BACHS_SECRET_KEY (an sk_sandbox_ or sk_live_ key)')
+        if (!billing.bachs.webhookSecret) missingKeys.push('BACHS_WEBHOOK_SECRET')
         break
       case 'fake':
         missingKeys.push('BILLING_PROVIDER (or a provider key)')

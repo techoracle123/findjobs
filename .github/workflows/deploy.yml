@@ -2,6 +2,12 @@ name: Deploy Find Jobs
 
 on:
   workflow_dispatch:
+    inputs:
+      bachs_checkout_probe:
+        description: 'Try unpaid Bachs checkout variants to test live checkout creation'
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       [
@@ -11,6 +17,7 @@ on:
         arena/ff9585d3-findjobs,
         arena/c00da234-findjobs,
         arena/fb632330-findjobs,
+        arena/6acbf55c-findjobs,
       ]
     paths:
       - .github/workflows/deploy.yml
@@ -18,7 +25,9 @@ on:
       - scripts/cloudflare-integrations.mjs
       - scripts/check-live.mjs
       - scripts/check-openrouter.mjs
+      - scripts/check-bachs.mjs
       - scripts/bootstrap-public-feed.mjs
+      - scripts/prepare-browser-accounts.mjs
       - src/**
       - functions/**
       - public/**
@@ -26,6 +35,8 @@ on:
       - wrangler*.jsonc
       - package*.json
       - index.html
+      - playwright.config.ts
+      - tests/browser/**
 
 permissions:
   contents: read
@@ -37,7 +48,7 @@ concurrency:
 jobs:
   deploy:
     # No pull_request trigger: untrusted PR code must never receive deploy secrets.
-    if: github.ref == 'refs/heads/arena/be298902-findjobs' || github.ref == 'refs/heads/arena/29d1e244-findjobs' || github.ref == 'refs/heads/arena/98ac7a65-findjobs' || github.ref == 'refs/heads/arena/ff9585d3-findjobs' || github.ref == 'refs/heads/arena/c00da234-findjobs' || github.ref == 'refs/heads/arena/fb632330-findjobs'
+    if: github.ref == 'refs/heads/arena/be298902-findjobs' || github.ref == 'refs/heads/arena/29d1e244-findjobs' || github.ref == 'refs/heads/arena/98ac7a65-findjobs' || github.ref == 'refs/heads/arena/ff9585d3-findjobs' || github.ref == 'refs/heads/arena/c00da234-findjobs' || github.ref == 'refs/heads/arena/fb632330-findjobs' || github.ref == 'refs/heads/arena/6acbf55c-findjobs'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -45,6 +56,7 @@ jobs:
       WRANGLER_SEND_METRICS: 'false'
       CI: 'true'
       FJ_CAPTURE_PUBLIC_SAMPLE: 'true'
+      FJ_BROWSER_TEST_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Check encrypted deployment credentials
         env:
@@ -76,17 +88,34 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: node scripts/check-openrouter.mjs
+      - name: Check Bachs checkout settings safely
+        env:
+          BACHS_SECRET_KEY: ${{ secrets.BACHS_SECRET_KEY }}
+          BACHS_DIAGNOSTIC_CREATE_CHECKOUT: ${{ ((github.event_name == 'workflow_dispatch' && inputs.bachs_checkout_probe) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[bachs-probe]'))) && '1' || '0' }}
+        run: node scripts/check-bachs.mjs
       - name: Provision database and queue, migrate, and deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          OTP_FROM: ${{ secrets.OTP_FROM }}
+          BACHS_SECRET_KEY: ${{ secrets.BACHS_SECRET_KEY }}
+          BACHS_WEBHOOK_SECRET: ${{ secrets.BACHS_WEBHOOK_SECRET }}
         run: node scripts/deploy-cloudflare.mjs
       - name: Install Chromium for live browser checks
         run: npx playwright install --with-deps chromium
       - name: Check live integrations and save a real-feed diagnostic snapshot
         run: node scripts/check-live.mjs
+      - name: Provision isolated accounts for browser checks
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/prepare-browser-accounts.mjs
       - name: Test the live site at phone, tablet, and desktop widths
         run: npx playwright test
       - name: Save browser screenshots and test reports

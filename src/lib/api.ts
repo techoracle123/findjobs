@@ -1,13 +1,26 @@
 import type {
   AlertPreference,
   ApiHealth,
+  AdvertCheckResult,
+  ApplicationAnswers,
+  BestMatch,
+  CvCheckResult,
   CvSuggestion,
+  GraduateEligibilityInput,
+  GraduateEligibilityState,
+  InterviewPrep,
   Job,
   JobAdvice,
   JobTranslation,
+  MasterCv,
+  MatchIntelligenceResult,
+  PreparedApplication,
+  ProTrialState,
   Profile,
   RatesPayload,
+  SalaryGuideResult,
   SavedApplication,
+  SkillPlanResult,
 } from '../shared/types'
 import { monthPeriod, type ApplicationActivity } from '../shared/activity'
 import type { JobFacets } from '../server/job-stats'
@@ -43,6 +56,188 @@ export class ApiError extends Error {
     super(message)
     this.name = 'ApiError'
   }
+}
+
+export type BillingErrorAction =
+  | 'sign_in'
+  | 'graduate_check'
+  | 'manage_plan'
+  | 'check_payment'
+  | 'retry_later'
+  | 'contact'
+  | 'none'
+
+export interface BillingErrorInfo {
+  message: string
+  code: string | null
+  failure: string | null
+  supportReference: string | null
+  action: BillingErrorAction
+}
+
+function parsedApiError(error: ApiError): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(error.body)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function safeErrorText(value: unknown, pattern: RegExp): string | null {
+  if (typeof value !== 'string') return null
+  const cleaned = value.trim()
+  return pattern.test(cleaned) ? cleaned : null
+}
+
+/**
+ * Turns a billing API failure into one plain message. It reads only FJ's own
+ * error code, failure category and attempt reference, never provider detail.
+ */
+export function describeBillingError(error: unknown): BillingErrorInfo {
+  if (!(error instanceof ApiError)) {
+    const network =
+      error instanceof TypeError || (error instanceof Error && error.name === 'AbortError')
+    return {
+      message: network
+        ? 'FJ could not reach the payment service. Check your connection and try again. No charge was made by this click.'
+        : 'That billing action could not be done. Please try again.',
+      code: network ? 'network_error' : null,
+      failure: network ? 'network' : null,
+      supportReference: null,
+      action: network ? 'retry_later' : 'none',
+    }
+  }
+
+  const body = parsedApiError(error)
+  const code = safeErrorText(body.error, /^[a-z0-9_]{1,80}$/)
+  const failure = safeErrorText(body.failure, /^[a-z0-9_]{1,80}$/)
+  const supportReference = safeErrorText(body.supportReference, /^att_[A-Za-z0-9-]{8,80}$/)
+  const referenceText = supportReference ? ` Please quote reference ${supportReference}.` : ''
+  const info = (message: string, action: BillingErrorAction): BillingErrorInfo => ({
+    message: `${message}${referenceText}`,
+    code,
+    failure,
+    supportReference,
+    action,
+  })
+
+  if (error.status === 401 || code === 'unauthorized') {
+    return info('Your sign-in has ended. Sign in again, then choose the plan.', 'sign_in')
+  }
+  if (code === 'graduate_eligibility_required') {
+    return info(
+      'Complete the graduate-price check first. Pro Monthly and Pro Yearly do not need that check.',
+      'graduate_check',
+    )
+  }
+  if (code === 'subscription_active') {
+    return info('This account already has an active auto-renewing plan.', 'manage_plan')
+  }
+  if (code === 'no_billing_history') {
+    return info('This account has no completed payment to manage yet.', 'none')
+  }
+  if (code === 'billing_record_not_manageable') {
+    return info(
+      'This plan does not have an online billing portal. Paid time ends on the date shown.',
+      'none',
+    )
+  }
+  if (error.status === 429 || code === 'rate_limited') {
+    return info(
+      'Too many billing tries were made in a short time. Wait a while, then try once.',
+      'retry_later',
+    )
+  }
+  if (code === 'billing_not_configured' || code === 'storage_unavailable') {
+    return info('Payments are not available at the moment. No charge was made.', 'retry_later')
+  }
+  if (code === 'plan_not_purchasable') {
+    return info(
+      'That plan cannot be bought. Choose Pro Monthly, Pro Yearly or Pro for Graduates.',
+      'none',
+    )
+  }
+  if (code === 'portal_failed') {
+    return info(
+      'The billing portal could not be opened. Please try again.',
+      failure === 'provider_account_attention' ? 'contact' : 'retry_later',
+    )
+  }
+  if (code === 'cancel_failed') {
+    return info(
+      'Your plan could not be cancelled. Please try again.',
+      failure === 'provider_account_attention' ? 'contact' : 'retry_later',
+    )
+  }
+
+  switch (failure) {
+    case 'provider_account_attention':
+      return info(
+        'Payments need attention on the FJ payment account before checkout can open. No charge was made. Please use Contact us.',
+        'contact',
+      )
+    case 'provider_validation':
+      return info(
+        'The payment page could not be opened with the checkout details. No charge was made. Please use Contact us if it happens again.',
+        'contact',
+      )
+    case 'provider_unavailable':
+      return info(
+        'Payments are temporarily unavailable. No charge was made. Wait a short time and try again.',
+        'retry_later',
+      )
+    case 'network':
+      return info(
+        'FJ could not reach the payment service. No charge was made. Check your connection and try again.',
+        'retry_later',
+      )
+    case 'outcome_unknown':
+      return info(
+        'FJ could not confirm whether a payment page was created. Do not pay again yet. Use Check payment first.',
+        'check_payment',
+      )
+    case 'provider_rejected':
+      return info(
+        'The payment service did not open checkout. No charge was made. Please try again.',
+        'contact',
+      )
+  }
+
+  if (code === 'payments_account_attention') {
+    return info(
+      'Payments need attention on the FJ payment account. No charge was made. Please use Contact us.',
+      'contact',
+    )
+  }
+  if (code === 'checkout_details_rejected') {
+    return info(
+      'The payment page could not be opened with the checkout details. No charge was made.',
+      'contact',
+    )
+  }
+  if (code === 'payments_temporarily_unavailable') {
+    return info(
+      'Payments are temporarily unavailable. No charge was made. Wait a short time and try again.',
+      'retry_later',
+    )
+  }
+  if (code === 'checkout_outcome_unknown') {
+    return info(
+      'FJ could not confirm whether a payment page was created. Do not pay again yet. Use Check payment first.',
+      'check_payment',
+    )
+  }
+  if (error.status === 400)
+    return info('That billing action could not be done. Check the plan and try again.', 'none')
+  if (error.status >= 500)
+    return info(
+      'Payments could not be opened. No charge was made by this click. Please try again.',
+      'retry_later',
+    )
+  return info('That billing action could not be done. Please try again.', 'none')
 }
 
 export interface JobsResponse {
@@ -82,6 +277,8 @@ export interface AccountSnapshot {
   alerts: AlertPreference[]
   subscription: Subscription | null
   entitlements: string[]
+  proTrial: ProTrialState
+  graduateEligibility: GraduateEligibilityState | null
 }
 
 export function fetchHealth(): Promise<ApiHealth> {
@@ -90,6 +287,24 @@ export function fetchHealth(): Promise<ApiHealth> {
 
 const jobsCache = new Map<string, { at: number; value: JobsResponse }>()
 const jobsPending = new Map<string, Promise<JobsResponse>>()
+
+function transientJobsFailure(error: unknown): boolean {
+  if (error instanceof ApiError) return [408, 425, 429, 500, 502, 503, 504].includes(error.status)
+  return error instanceof TypeError || (error instanceof Error && error.name === 'AbortError')
+}
+
+async function requestJobs(path: string, init?: RequestInit): Promise<JobsResponse> {
+  const delays = [250, 750]
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await request<JobsResponse>(path, init)
+    } catch (error) {
+      if (attempt >= delays.length || !transientJobsFailure(error)) throw error
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]))
+    }
+  }
+}
+
 export function fetchJobs(
   offset = 0,
   query = '',
@@ -104,6 +319,9 @@ export function fetchJobs(
   })
   if (query.trim()) params.set('q', query.trim())
   if (filters?.country) params.set('country', filters.country)
+  if (filters?.opportunityType && filters.opportunityType !== 'all') {
+    params.set('type', filters.opportunityType)
+  }
   if (filters?.location) params.set('loc', filters.location)
   if (filters?.roleFamilies.length) params.set('roles', filters.roleFamilies.join(','))
   if (filters?.workModes.length) params.set('modes', filters.workModes.join(','))
@@ -113,10 +331,12 @@ export function fetchJobs(
   if (!force && hit && Date.now() - hit.at < 5 * 60000) return Promise.resolve(hit.value)
   const active = jobsPending.get(key)
   if (active) return active
-  const work = request<JobsResponse>(
-    `/api/jobs?${params}`,
-    force ? { headers: { 'cache-control': 'no-cache' } } : undefined,
-  )
+  const work = requestJobs(`/api/jobs?${params}`, {
+    // Keep account-only responses and temporary edge errors out of the HTTP
+    // cache. Successful responses still use the short in-memory cache above.
+    cache: 'no-store',
+    headers: { 'cache-control': 'no-cache' },
+  })
     .then((value) => {
       if (jobsCache.size >= 20) jobsCache.delete(jobsCache.keys().next().value!)
       jobsCache.set(key, { value, at: Date.now() })
@@ -143,6 +363,203 @@ export function suggestFromCv(text: string): Promise<CvSuggestion> {
   })
 }
 
+/* ---------- Phase 2 Pro access ---------- */
+
+export interface ProAccess {
+  paid: boolean
+  trial: ProTrialState
+  graduate: GraduateEligibilityState | null
+  features: string[]
+}
+
+export function fetchProAccess(): Promise<ProAccess> {
+  return request<ProAccess>('/api/pro/access', { cache: 'no-store' })
+}
+
+export function startProTrial(): Promise<{
+  trial: ProTrialState
+  paid: boolean
+  alreadyUsed: boolean
+}> {
+  return request('/api/pro/trial/start', { method: 'POST' })
+}
+
+export function fetchGraduateEligibility(): Promise<{ graduate: GraduateEligibilityState | null }> {
+  return request('/api/pro/graduate-eligibility', { cache: 'no-store' })
+}
+
+export function submitGraduateEligibility(
+  graduate: GraduateEligibilityInput,
+  cvText = '',
+): Promise<{ graduate: GraduateEligibilityState }> {
+  return request('/api/pro/graduate-eligibility', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ graduate, cvText }),
+  })
+}
+
+export interface MasterCvResponse {
+  cv: MasterCv | null
+  /** Locked means a new full report needs trial or Pro. Saving readable CV
+   * text is free for signed-in users, and an old full report stays readable. */
+  locked: boolean
+  canSave?: boolean
+  canFullAnalysis?: boolean
+  fullAnalysisDeferred?: boolean
+  trial: ProTrialState
+  paid: boolean
+}
+
+export function fetchMasterCv(includeText = false): Promise<MasterCvResponse> {
+  return request(`/api/pro/cv${includeText ? '?includeText=1' : ''}`, { cache: 'no-store' })
+}
+
+export function saveMasterCv(input: {
+  fileName: string
+  fileType: string
+  text: string
+  consent: boolean
+}): Promise<MasterCvResponse & { cv: MasterCv }> {
+  return request('/api/pro/cv', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+}
+
+export function analyseSavedMasterCv(): Promise<MasterCvResponse & { cv: MasterCv }> {
+  return request('/api/pro/cv/analyze', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  })
+}
+
+export function deleteMasterCv(): Promise<{ ok: true }> {
+  return request('/api/pro/cv', { method: 'DELETE' })
+}
+
+export function runAdvertCheck(input: {
+  title?: string
+  company?: string
+  location?: string
+  url?: string
+  text: string
+}): Promise<{ check: AdvertCheckResult }> {
+  return request('/api/pro/advert-check', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+}
+
+export function runJobAdvertCheck(jobId: string): Promise<{ check: AdvertCheckResult }> {
+  return request(`/api/jobs/${encodeURIComponent(jobId)}/before-you-apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+}
+
+export function fetchBestMatches(limit = 12): Promise<{
+  available: boolean
+  message: string
+  totalJobs: number
+  updatedAt: string | null
+  matches: BestMatch[]
+}> {
+  return request(`/api/pro/best-matches?limit=${limit}`, { cache: 'no-store' })
+}
+
+export function fetchSkillPlan(): Promise<{ plan: SkillPlanResult }> {
+  return request('/api/pro/skill-plan', { cache: 'no-store' })
+}
+
+/* ---------- Pro tools ---------- */
+
+export function fetchApplicationAnswers(): Promise<{ answers: ApplicationAnswers }> {
+  return request<{ answers: ApplicationAnswers }>('/api/pro/application-answers')
+}
+
+export function saveApplicationAnswers(
+  answers: ApplicationAnswers,
+): Promise<{ answers: ApplicationAnswers }> {
+  return request<{ answers: ApplicationAnswers }>('/api/pro/application-answers', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ answers }),
+  })
+}
+
+export function fetchPreparedApplication(
+  jobId: string,
+): Promise<{ prepared: PreparedApplication | null }> {
+  return request<{ prepared: PreparedApplication | null }>(
+    `/api/jobs/${encodeURIComponent(jobId)}/prepared-application`,
+  )
+}
+
+export function createPreparedApplication(
+  jobId: string,
+  answers?: ApplicationAnswers,
+): Promise<{ prepared: PreparedApplication; trial?: ProTrialState; paid?: boolean }> {
+  return request<{ prepared: PreparedApplication; trial?: ProTrialState; paid?: boolean }>(
+    `/api/jobs/${encodeURIComponent(jobId)}/prepared-application`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(answers ? { answers } : {}),
+    },
+  )
+}
+
+export function checkCvForJob(
+  jobId: string,
+  cvText: string,
+): Promise<{ check: CvCheckResult; trial?: ProTrialState; paid?: boolean }> {
+  return request<{ check: CvCheckResult; trial?: ProTrialState; paid?: boolean }>(
+    `/api/jobs/${encodeURIComponent(jobId)}/cv-check`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cvText }),
+    },
+  )
+}
+
+export function fetchMatchIntelligence(
+  jobId: string,
+  cvText = '',
+): Promise<{ match: MatchIntelligenceResult; trial?: ProTrialState; paid?: boolean }> {
+  return request<{ match: MatchIntelligenceResult; trial?: ProTrialState; paid?: boolean }>(
+    `/api/jobs/${encodeURIComponent(jobId)}/match-intelligence`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cvText }),
+    },
+  )
+}
+
+export function fetchInterviewPrep(jobId: string): Promise<{ prep: InterviewPrep }> {
+  return request<{ prep: InterviewPrep }>(`/api/jobs/${encodeURIComponent(jobId)}/interview-prep`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+}
+
+export function fetchSalaryGuide(params: Record<string, string | undefined>): Promise<{
+  guide: SalaryGuideResult
+}> {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value) query.set(key, value)
+  }
+  return request<{ guide: SalaryGuideResult }>(`/api/salary-guide?${query}`)
+}
+
 /* ---------- account ---------- */
 
 export function fetchAccount(): Promise<AccountSnapshot> {
@@ -157,38 +574,6 @@ export function putProfile(profile: Profile): Promise<{ profile: Profile }> {
   })
 }
 
-export interface ApplyQuota {
-  unlimited: boolean
-  limit: number
-  used: number
-  remaining: number
-  resetsAt: string
-  weekLimit: number
-  weekUsed: number
-}
-
-export function fetchApplyQuota(): Promise<ApplyQuota> {
-  return request<ApplyQuota>('/api/apply/quota', { cache: 'no-store' })
-}
-
-export interface FastApplyResult {
-  ok: true
-  remaining: number | null
-  resetsAt: string
-}
-
-export function fastApply(
-  jobId: string,
-  coverNote?: string,
-  useProfile = true,
-): Promise<FastApplyResult> {
-  return request<FastApplyResult>(`/api/jobs/${encodeURIComponent(jobId)}/fast-apply`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ coverNote, useProfile }),
-  })
-}
-
 /** Fire-and-forget: the outbound link must never wait on this. */
 export function recordApplyClick(jobId: string): void {
   try {
@@ -200,11 +585,21 @@ export function recordApplyClick(jobId: string): void {
   }
 }
 
-export function postSaved(jobId: string, status: 'saved' | 'applied'): Promise<{ ok: true }> {
+export function postSaved(
+  jobId: string,
+  status: 'saved' | 'applied',
+  extra?: Partial<SavedApplication>,
+): Promise<{ ok: true; proRequired?: boolean }> {
   return request<{ ok: true }>('/api/account/saved', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jobId, status }),
+    body: JSON.stringify({
+      jobId,
+      status,
+      stage: extra?.stage,
+      followUpAt: extra?.followUpAt,
+      note: extra?.note,
+    }),
   })
 }
 
@@ -278,8 +673,15 @@ export interface PlanPrice {
 export interface PlanDefinition {
   id: string
   label: string
+  displayLabel?: string
   entitlements: string[]
   price: PlanPrice
+  interval?: 'free' | 'month' | 'year' | 'waitlist'
+  audience?: 'seeker' | 'employer'
+  monthlyEquivalent?: number
+  founding?: boolean
+  standardAmount?: number
+  trialDays?: number
 }
 
 export interface PlanCatalogue {
@@ -287,10 +689,12 @@ export interface PlanCatalogue {
   provider: string
   currency: string
   billingEnabled: boolean
+  paymentsPaused?: boolean
+  proFreeForAll?: boolean
 }
 
 export function fetchPlans(): Promise<PlanCatalogue> {
-  return request<PlanCatalogue>('/api/billing/plans')
+  return request<PlanCatalogue>('/api/billing/plans', { cache: 'no-store' })
 }
 
 export function fetchSubscription(): Promise<{
@@ -314,6 +718,16 @@ export function openBillingPortal(): Promise<{ session: { url: string } }> {
 
 export function cancelSubscription(): Promise<{ subscription: Subscription }> {
   return request('/api/billing/cancel', { method: 'POST' })
+}
+
+export function reconcileBilling(): Promise<{
+  subscription: Subscription | null
+  entitlements: string[]
+  checked: number
+  applied: boolean
+  failedChecks?: number
+}> {
+  return request('/api/billing/reconcile', { method: 'POST' })
 }
 
 export function exportAccount(): Promise<unknown> {

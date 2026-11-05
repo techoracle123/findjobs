@@ -6,7 +6,8 @@ import type {
   ScoreComponentKey,
   ScoredJob,
 } from './types'
-import { matchSkills } from './skills'
+import { canonicalSkillSet, countMatchingSkills, matchSkillsCanonical } from './skills'
+import { matchesOpportunityPreference, opportunityOf } from './opportunities'
 
 /**
  * Score weights, per the product spec. They are intentionally not a flat
@@ -14,11 +15,12 @@ import { matchSkills } from './skills'
  * "useful" one.
  */
 export const SCORE_WEIGHTS: Record<ScoreComponentKey, number> = {
-  requiredSkills: 48,
-  usefulSkills: 14,
-  roleFamily: 18,
-  seniority: 10,
-  workMode: 10,
+  requiredSkills: 44,
+  usefulSkills: 13,
+  roleFamily: 17,
+  seniority: 9,
+  workMode: 9,
+  opportunityType: 8,
 }
 
 export const ELIGIBILITY_ORDER: Record<EligibilityTier, number> = {
@@ -92,10 +94,98 @@ export function evaluateEligibility(
  * the omission.
  */
 export function scoreJob(job: Job, profile: Profile): ScoredJob {
+  return scoreJobWithSkills(job, profile, canonicalSkillSet(profile.skills))
+}
+
+/** Scores a batch with the profile's canonical skills prepared only once. */
+export function scoreJobs(jobs: Job[], profile: Profile): ScoredJob[] {
+  const skills = canonicalSkillSet(profile.skills)
+  return jobs.map((job) => scoreJobWithSkills(job, profile, skills))
+}
+
+/** The only values needed to order a match before explanations are built. */
+export interface JobRank {
+  job: Job
+  score: number
+  tier: EligibilityTier
+}
+
+/**
+ * Ranks a large board without allocating six explanation components per job.
+ * Full explanations are scored separately for only the returned shortlist.
+ */
+export function rankJobs(jobs: Job[], profile: Profile): JobRank[] {
+  const profileCanonical = canonicalSkillSet(profile.skills)
+  const hasProfileSkills = profile.skills.length > 0
+  const preferredOpportunities = (profile.opportunityTypes ?? []).filter(
+    (type) => type === 'job' || type === 'gig',
+  )
+
+  return jobs.map((job) => {
+    let applicableWeight = 0
+    let earned = 0
+
+    if (job.requiredSkills.length > 0 && hasProfileSkills) {
+      applicableWeight += SCORE_WEIGHTS.requiredSkills
+      earned +=
+        (countMatchingSkills(job.requiredSkills, profileCanonical) / job.requiredSkills.length) *
+        SCORE_WEIGHTS.requiredSkills
+    }
+    if (job.usefulSkills.length > 0 && hasProfileSkills) {
+      applicableWeight += SCORE_WEIGHTS.usefulSkills
+      earned +=
+        (countMatchingSkills(job.usefulSkills, profileCanonical) / job.usefulSkills.length) *
+        SCORE_WEIGHTS.usefulSkills
+    }
+
+    const roleApplicable =
+      Boolean(job.roleFamily) &&
+      job.roleFamily !== 'unknown' &&
+      profile.targetRoleFamilies.length > 0
+    if (roleApplicable) {
+      applicableWeight += SCORE_WEIGHTS.roleFamily
+      if (profile.targetRoleFamilies.includes(job.roleFamily)) earned += SCORE_WEIGHTS.roleFamily
+    }
+
+    const seniorityApplicable =
+      Boolean(job.seniority) && job.seniority !== 'unknown' && profile.targetSeniority.length > 0
+    if (seniorityApplicable) {
+      applicableWeight += SCORE_WEIGHTS.seniority
+      if (profile.targetSeniority.includes(job.seniority)) earned += SCORE_WEIGHTS.seniority
+    }
+
+    const modeApplicable =
+      Boolean(job.workMode) && job.workMode !== 'unknown' && profile.preferredWorkModes.length > 0
+    if (modeApplicable) {
+      applicableWeight += SCORE_WEIGHTS.workMode
+      if (profile.preferredWorkModes.includes(job.workMode)) earned += SCORE_WEIGHTS.workMode
+    }
+
+    if (preferredOpportunities.length === 1) {
+      applicableWeight += SCORE_WEIGHTS.opportunityType
+      if (matchesOpportunityPreference(job, preferredOpportunities)) {
+        earned += SCORE_WEIGHTS.opportunityType
+      }
+    }
+
+    const score = applicableWeight > 0 ? Math.round((earned / applicableWeight) * 100) : 0
+    return {
+      job,
+      score: Math.max(0, Math.min(100, score)),
+      tier: evaluateEligibility(job, profile.workCountry).tier,
+    }
+  })
+}
+
+function scoreJobWithSkills(
+  job: Job,
+  profile: Profile,
+  profileCanonical: ReadonlySet<string>,
+): ScoredJob {
   const components: ScoreComponent[] = []
   const hasProfileSkills = profile.skills.length > 0
 
-  const required = matchSkills(job.requiredSkills, profile.skills)
+  const required = matchSkillsCanonical(job.requiredSkills, profileCanonical)
   const requiredApplicable = job.requiredSkills.length > 0 && hasProfileSkills
   components.push({
     key: 'requiredSkills',
@@ -114,7 +204,7 @@ export function scoreJob(job: Job, profile: Profile): ScoredJob {
     missing: required.missing,
   })
 
-  const useful = matchSkills(job.usefulSkills, profile.skills)
+  const useful = matchSkillsCanonical(job.usefulSkills, profileCanonical)
   const usefulApplicable = job.usefulSkills.length > 0 && hasProfileSkills
   components.push({
     key: 'usefulSkills',
@@ -193,6 +283,35 @@ export function scoreJob(job: Job, profile: Profile): ScoredJob {
     missing: modeApplicable && !modeMatched ? [job.workMode] : [],
   })
 
+  const preferredOpportunities = (profile.opportunityTypes ?? []).filter(
+    (type) => type === 'job' || type === 'gig',
+  )
+  const opportunityApplicable = preferredOpportunities.length === 1
+  const opportunityMatched =
+    opportunityApplicable && matchesOpportunityPreference(job, preferredOpportunities)
+  const opportunity = opportunityOf(job)
+  components.push({
+    key: 'opportunityType',
+    label: 'Jobs or gigs',
+    weight: SCORE_WEIGHTS.opportunityType,
+    earned: opportunityMatched ? SCORE_WEIGHTS.opportunityType : 0,
+    applicable: opportunityApplicable,
+    detail: !opportunityApplicable
+      ? 'Choose jobs, gigs and contracts, or both in your profile'
+      : opportunityMatched
+        ? preferredOpportunities[0] === 'gig'
+          ? 'Matches your gigs and contracts choice'
+          : 'Matches your jobs choice'
+        : preferredOpportunities[0] === 'gig'
+          ? 'This is not classified as a gig or contract'
+          : 'This is classified as a gig or contract',
+    matched: opportunityMatched ? [opportunity.engagementLabel || opportunity.opportunityType] : [],
+    missing:
+      opportunityApplicable && !opportunityMatched
+        ? [opportunity.engagementLabel || opportunity.opportunityType]
+        : [],
+  })
+
   const applicableWeight = components
     .filter((component) => component.applicable)
     .reduce((sum, component) => sum + component.weight, 0)
@@ -233,7 +352,12 @@ export function marketRank(job: Job): number {
   return 0
 }
 
-export function compareScoredJobs(a: ScoredJob, b: ScoredJob): number {
+export function compareScoredJobs(
+  a: JobRank,
+  b: JobRank,
+  aPostedAt = Date.parse(a.job.postedAt),
+  bPostedAt = Date.parse(b.job.postedAt),
+): number {
   const tierDelta = ELIGIBILITY_ORDER[a.tier] - ELIGIBILITY_ORDER[b.tier]
   if (tierDelta !== 0) return tierDelta
 
@@ -246,5 +370,5 @@ export function compareScoredJobs(a: ScoredJob, b: ScoredJob): number {
   const marketDelta = marketRank(b.job) - marketRank(a.job)
   if (marketDelta !== 0) return marketDelta
 
-  return Date.parse(b.job.postedAt) - Date.parse(a.job.postedAt)
+  return bPostedAt - aPostedAt
 }

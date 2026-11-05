@@ -11,6 +11,8 @@ export interface SeedSource {
   company?: string
   /** The employer's display name, when the source does not carry one. */
   companyLabel?: string
+  /** Parser-specific settings that are safe to publish in this registry. */
+  options?: Record<string, unknown>
   country: string
   tags: string[]
   /** How often the source should be refreshed. */
@@ -351,56 +353,61 @@ export const SEED_SOURCES: SeedSource[] = [
   ...(
     [
       ['remoteok', 'RemoteOK', 'https://remoteok.com/api', 'remoteok'],
-      ['himalayas', 'Himalayas', 'https://himalayas.app/jobs/api', 'himalayas'],
       [
         'workingnomads',
         'Working Nomads',
         'https://www.workingnomads.com/api/exposed_jobs/',
         'workingnomads',
       ],
-      ['jobicy', 'Jobicy', 'https://jobicy.com/api/v2/remote-jobs?count=50', 'jobicy'],
+      ['jobicy', 'Jobicy', 'https://jobicy.com/api/v2/remote-jobs?count=100', 'jobicy'],
       // Jobicy geo slices: each returns a different regional slice of the board.
       [
         'jobicy-usa',
         'Jobicy USA',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=usa',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=usa',
         'jobicy',
       ],
-      ['jobicy-uk', 'Jobicy UK', 'https://jobicy.com/api/v2/remote-jobs?count=50&geo=uk', 'jobicy'],
+      [
+        'jobicy-uk',
+        'Jobicy UK',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=uk',
+        'jobicy',
+      ],
       [
         'jobicy-canada',
         'Jobicy Canada',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=canada',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=canada',
         'jobicy',
       ],
       [
         'jobicy-australia',
         'Jobicy Australia',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=australia',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=australia',
         'jobicy',
       ],
       [
         'jobicy-germany',
         'Jobicy Germany',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=germany',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=germany',
         'jobicy',
       ],
       [
         'jobicy-india',
         'Jobicy India',
+        // The India slice answers 400 at count=100; it was healthy at 50.
         'https://jobicy.com/api/v2/remote-jobs?count=50&geo=india',
         'jobicy',
       ],
       [
         'jobicy-latam',
         'Jobicy LatAm',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=latam',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=latam',
         'jobicy',
       ],
       [
         'jobicy-apac',
         'Jobicy APAC',
-        'https://jobicy.com/api/v2/remote-jobs?count=50&geo=apac',
+        'https://jobicy.com/api/v2/remote-jobs?count=100&geo=apac',
         'jobicy',
       ],
       ['themuse', 'The Muse', 'https://www.themuse.com/api/public/jobs', 'themuse'],
@@ -433,6 +440,311 @@ export const SEED_SOURCES: SeedSource[] = [
     kind: 'api' as const,
     enabled: true,
   },
+
+  // Himalayas' general feed is only the newest slice of a much larger
+  // documented API. Dedicated search sources give practical skills depth
+  // without asking one refresh to walk the whole catalogue.
+  ...(
+    [
+      {
+        id: 'himalayas',
+        name: 'Himalayas — public API',
+        listingUrl: 'https://himalayas.app/jobs/api',
+        // Live evidence: when every source ran back to back, Himalayas began
+        // returning 429 after roughly 170 requests. 45 pages still returns
+        // about 900 postings and leaves room for the category slices.
+        options: { maxPages: 45 },
+        tier: 'six_hourly',
+      },
+      {
+        id: 'himalayas-nigeria-skills',
+        name: 'Himalayas — Nigeria-eligible skilled work',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=WordPress&country=NG&sort=recent',
+        options: {
+          maxPages: 3,
+          searchSlices: [
+            { params: { q: 'cybersecurity', country: 'NG' }, pages: 4 },
+            { params: { q: 'penetration tester', country: 'NG' }, pages: 1 },
+            { params: { q: 'data analyst', country: 'NG' }, pages: 5 },
+            { params: { q: 'video editor', country: 'NG' }, pages: 2 },
+            { params: { q: 'frontend developer', country: 'NG' }, pages: 4 },
+            { params: { q: 'backend developer', country: 'NG' }, pages: 6 },
+            { params: { q: 'tutor', country: 'NG' }, pages: 2 },
+          ],
+        },
+        tier: 'six_hourly',
+      },
+      {
+        id: 'himalayas-wordpress',
+        name: 'Himalayas — WordPress',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=WordPress&sort=recent',
+        options: { maxPages: 12 },
+        tier: 'daily',
+      },
+      {
+        id: 'himalayas-security-data',
+        name: 'Himalayas — cybersecurity and data',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=cybersecurity&sort=recent',
+        options: {
+          maxPages: 10,
+          searchSlices: [
+            { params: { q: 'data analyst' }, pages: 10 },
+            { params: { q: 'data analytics' }, pages: 6 },
+            { params: { q: 'penetration tester' }, pages: 4 },
+          ],
+        },
+        tier: 'daily',
+      },
+      {
+        id: 'himalayas-development',
+        name: 'Himalayas — web and software development',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=frontend%20developer&sort=recent',
+        options: {
+          maxPages: 10,
+          searchSlices: [
+            { params: { q: 'backend developer' }, pages: 10 },
+            { params: { q: 'web developer' }, pages: 10 },
+            { params: { q: 'full stack developer' }, pages: 6 },
+          ],
+        },
+        tier: 'daily',
+      },
+      {
+        id: 'himalayas-creative-education',
+        name: 'Himalayas — creative work and teaching',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=video%20editor&sort=recent',
+        options: {
+          maxPages: 10,
+          searchSlices: [
+            { params: { q: 'tutor' }, pages: 8 },
+            { params: { q: 'teacher' }, pages: 6 },
+            { params: { q: 'graphic designer' }, pages: 6 },
+            { params: { q: 'photo editor' }, pages: 4 },
+          ],
+        },
+        tier: 'daily',
+      },
+      {
+        id: 'himalayas-business-support',
+        name: 'Himalayas — business and support',
+        listingUrl: 'https://himalayas.app/jobs/api/search?q=customer%20support&sort=recent',
+        options: {
+          maxPages: 8,
+          searchSlices: [
+            { params: { q: 'virtual assistant' }, pages: 6 },
+            { params: { q: 'marketing' }, pages: 8 },
+            { params: { q: 'sales' }, pages: 6 },
+            { params: { q: 'writer' }, pages: 6 },
+          ],
+        },
+        tier: 'daily',
+      },
+    ] as {
+      id: string
+      name: string
+      listingUrl: string
+      options: Record<string, unknown>
+      tier: 'six_hourly' | 'daily'
+    }[]
+  ).map((source) => ({
+    id: source.id,
+    parser: 'himalayas',
+    name: source.name,
+    listingUrl: source.listingUrl,
+    company: 'himalayas',
+    companyLabel: 'Himalayas',
+    options: source.options,
+    country: 'WW',
+    tags: ['api', 'public-board', 'remote'],
+    tier: source.tier,
+    rateLimitPerHour: 30,
+    kind: 'api' as const,
+    enabled: true,
+  })),
+
+  // The Muse's first general pages hide most remote category depth. These
+  // documented category and Flexible / Remote slices are bounded and, for
+  // the expanded slices, limited to the last year of publication dates.
+  ...(
+    [
+      [
+        'themuse-software-remote',
+        'Software Engineering',
+        'https://www.themuse.com/api/public/jobs?category=Software%20Engineering&location=Flexible%20%2F%20Remote',
+        37,
+      ],
+      [
+        'themuse-data-remote',
+        'Data and Analytics',
+        'https://www.themuse.com/api/public/jobs?category=Data%20and%20Analytics&location=Flexible%20%2F%20Remote',
+        32,
+      ],
+      [
+        'themuse-it-remote',
+        'Computer and IT',
+        'https://www.themuse.com/api/public/jobs?category=Computer%20and%20IT&location=Flexible%20%2F%20Remote',
+        10,
+      ],
+      [
+        'themuse-design-remote',
+        'Design and UX',
+        'https://www.themuse.com/api/public/jobs?category=Design%20and%20UX&location=Flexible%20%2F%20Remote',
+        10,
+      ],
+      [
+        'themuse-writing-remote',
+        'Writing and Editing',
+        'https://www.themuse.com/api/public/jobs?category=Writing%20and%20Editing&location=Flexible%20%2F%20Remote',
+        10,
+      ],
+      [
+        'themuse-education-remote',
+        'Education',
+        'https://www.themuse.com/api/public/jobs?category=Education&location=Flexible%20%2F%20Remote',
+        10,
+      ],
+    ] as const
+  ).map(([id, label, listingUrl, maxPages]) => ({
+    id,
+    parser: 'themuse',
+    name: `The Muse — ${label} remote`,
+    listingUrl,
+    company: 'themuse',
+    companyLabel: 'The Muse',
+    options: { maxPages, maxAgeDays: 365 },
+    country: 'WW',
+    tags: ['api', 'public-board', 'remote'],
+    tier: 'daily' as const,
+    rateLimitPerHour: 40,
+    kind: 'api' as const,
+    enabled: true,
+  })),
+
+  // RemoteJobs.org's documented public API. Page bounds keep the combined
+  // refresh below its stated 200 requests per hour per IP limit.
+  ...(
+    [
+      [
+        'remotejobs-latest',
+        'latest remote jobs',
+        'https://remotejobs.org/api/v1/jobs?limit=50',
+        28,
+        'six_hourly',
+      ],
+      [
+        'remotejobs-programming',
+        'programming',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=programming',
+        26,
+        'daily',
+      ],
+      [
+        'remotejobs-data',
+        'data science',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=data-science',
+        15,
+        'daily',
+      ],
+      [
+        'remotejobs-cybersecurity',
+        'cybersecurity',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=cyber-security',
+        8,
+        'daily',
+      ],
+      [
+        'remotejobs-contracts',
+        'contracts',
+        'https://remotejobs.org/api/v1/jobs?limit=50&type=contract',
+        19,
+        'daily',
+      ],
+      [
+        'remotejobs-freelance',
+        'freelance work',
+        'https://remotejobs.org/api/v1/jobs?limit=50&type=freelance',
+        10,
+        'daily',
+      ],
+      [
+        'remotejobs-wordpress',
+        'WordPress',
+        'https://remotejobs.org/api/v1/jobs?limit=50&q=WordPress&sort=relevance',
+        3,
+        'daily',
+      ],
+      [
+        'remotejobs-video',
+        'video editing',
+        'https://remotejobs.org/api/v1/jobs?limit=50&q=video%20editor&sort=relevance',
+        5,
+        'daily',
+      ],
+      [
+        'remotejobs-frontend',
+        'front-end development',
+        'https://remotejobs.org/api/v1/jobs?limit=50&q=frontend%20developer&sort=relevance',
+        9,
+        'daily',
+      ],
+      [
+        'remotejobs-backend',
+        'back-end development',
+        'https://remotejobs.org/api/v1/jobs?limit=50&q=backend%20developer&sort=relevance',
+        9,
+        'daily',
+      ],
+      [
+        'remotejobs-tutoring',
+        'tutoring and teaching',
+        'https://remotejobs.org/api/v1/jobs?limit=50&q=tutor&sort=relevance',
+        5,
+        'daily',
+      ],
+      [
+        'remotejobs-design',
+        'design',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=design',
+        8,
+        'daily',
+      ],
+      [
+        'remotejobs-customer-support',
+        'customer support',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=customer-support',
+        12,
+        'daily',
+      ],
+      [
+        'remotejobs-writing',
+        'writing',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=writing',
+        8,
+        'daily',
+      ],
+      [
+        'remotejobs-marketing',
+        'marketing',
+        'https://remotejobs.org/api/v1/jobs?limit=50&category=marketing',
+        12,
+        'daily',
+      ],
+    ] as const
+  ).map(([id, label, listingUrl, maxPages, tier]) => ({
+    id,
+    parser: 'remotejobs',
+    name: `RemoteJobs.org — ${label}`,
+    listingUrl,
+    company: 'remotejobs',
+    companyLabel: 'RemoteJobs.org',
+    options: { maxPages },
+    country: 'WW',
+    tags: ['api', 'public-board', 'remote'],
+    tier,
+    rateLimitPerHour: 30,
+    kind: 'api' as const,
+    enabled: true,
+  })),
 
   // --- Workable boards: apply.workable.com widget API -------------------
   ...([['blueground', 'Blueground', 'WW']] as const).map(([slug, label, country]) => ({
@@ -624,4 +936,99 @@ export const SEED_SOURCES: SeedSource[] = [
     kind: 'jsonld' as const,
     enabled: true,
   })),
+
+  // --- Direct Nigerian employer and public-sector sources -----------------
+  // These link back to the employer's or agency's own application route. The
+  // public-sector monitors publish nothing while an exercise is closed.
+  {
+    id: 'workday-shell-nigeria',
+    parser: 'workday',
+    name: 'Shell Nigeria — official Workday board',
+    listingUrl: 'https://shell.wd3.myworkdayjobs.com/wday/cxs/shell/ShellCareers/jobs',
+    company: 'shell',
+    companyLabel: 'Shell',
+    options: { searchText: 'Nigeria', countryCode: 'NG', maxPostings: 100, fetchDetails: true },
+    country: 'NG',
+    tags: ['nigeria', 'employer-board', 'energy'],
+    tier: 'six_hourly',
+    rateLimitPerHour: 6,
+    kind: 'ats',
+    enabled: true,
+  },
+  {
+    id: 'oracle-mtn-nigeria',
+    parser: 'oracle-recruiting',
+    name: 'MTN Nigeria — official careers site',
+    listingUrl: 'https://ehle.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs',
+    company: 'mtn-nigeria',
+    companyLabel: 'MTN Nigeria',
+    options: { siteNumber: 'CX_1', countryCode: 'NG', location: 'Nigeria', maxPostings: 100 },
+    country: 'NG',
+    tags: ['nigeria', 'employer-board', 'telecoms'],
+    tier: 'six_hourly',
+    rateLimitPerHour: 6,
+    kind: 'ats',
+    enabled: true,
+  },
+  {
+    id: 'zoho-gtbank',
+    parser: 'zoho-recruit',
+    name: 'GTBank — official Zoho Recruit careers',
+    listingUrl: 'https://gtbank.zohorecruit.com/jobs/Job-Portal',
+    company: 'gtbank',
+    companyLabel: 'Guaranty Trust Bank (GTBank)',
+    options: {
+      listingUrls: [
+        'https://gtbank.zohorecruit.com/jobs/Job-Portal',
+        'https://gtbank.zohorecruit.com/jobs/specialists',
+        'https://gtbank.zohorecruit.com/jobs/Careers',
+      ],
+      maxPostings: 50,
+    },
+    country: 'NG',
+    tags: ['nigeria', 'employer-board', 'banking'],
+    tier: 'six_hourly',
+    rateLimitPerHour: 4,
+    kind: 'html',
+    enabled: true,
+  },
+  {
+    id: 'efcc-recruitment-portal',
+    parser: 'efcc-recruitment',
+    name: 'EFCC — official recruitment portal',
+    listingUrl: 'https://recruitment.efcc.gov.ng/',
+    companyLabel: 'Economic and Financial Crimes Commission (EFCC)',
+    country: 'NG',
+    tags: ['nigeria', 'public-sector', 'federal-government'],
+    tier: 'six_hourly',
+    rateLimitPerHour: 4,
+    kind: 'html',
+    enabled: true,
+  },
+  {
+    id: 'fcsc-vacancies',
+    parser: 'fcsc-vacancies',
+    name: 'Federal Civil Service Commission — official vacancies',
+    listingUrl: 'https://recruitment.fedcivilservice.gov.ng/',
+    companyLabel: 'Federal Civil Service Commission',
+    country: 'NG',
+    tags: ['nigeria', 'public-sector', 'civil-service', 'federal-government'],
+    tier: 'daily',
+    rateLimitPerHour: 2,
+    kind: 'html',
+    enabled: true,
+  },
+  {
+    id: 'nnpc-careers',
+    parser: 'nnpc-careers',
+    name: 'NNPC Limited — official careers',
+    listingUrl: 'https://careers.nnpcgroup.com/',
+    companyLabel: 'NNPC Limited',
+    country: 'NG',
+    tags: ['nigeria', 'public-sector', 'energy'],
+    tier: 'daily',
+    rateLimitPerHour: 2,
+    kind: 'html',
+    enabled: true,
+  },
 ]

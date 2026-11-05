@@ -7,28 +7,37 @@ import { listOpenJobs, findJob, searchJobs } from './jobs'
 import { getRates } from './rates'
 import { suggest } from './cv'
 import { scoreJob } from '../shared/scoring'
+import { withOpportunity } from '../shared/opportunities'
 import type { Profile, ScoredJob } from '../shared/types'
 import { requestContext, requireUser, stringList, unauthorized, type AppContext } from './http'
 import { enforceRateLimit } from './ratelimit'
 import { takeAiBudget } from './aiquota'
 import { buildReadiness } from './readiness'
+import { countRegisteredUsers } from './auth/accounts'
 import { resolveIdentity } from './auth/identity'
 import { accountRoutes } from './routes/account'
 import { sourceRoutes } from './routes/sources'
 import { billingRoutes } from './routes/billing'
 import { telegramRoutes } from './routes/telegram'
 import { insightRoutes } from './routes/insights'
+import { proRoutes } from './routes/pro'
 import { applyRoutes } from './routes/apply'
 import { adminRoutes } from './routes/admin'
 import { authRoutes } from './routes/auth'
 import { employerRoutes } from './routes/employers'
+import { ideaRoutes } from './routes/ideas'
 import { trustRoutes } from './routes/trust'
-import { jobFacets } from './job-stats'
+import { jobFacets, searchPublicJobs } from './job-stats'
 import { withTimeout } from './timeouts'
 import { log } from './logging'
 import { publicDataCache } from './public-cache'
 import { livePublicEnabled, livePublicJobs, searchLivePublic } from './live-public'
-import { publishedPublicJobs, findPublishedJob, getSchedulerHeartbeat } from './public-feed'
+import {
+  publishedPublicJobs,
+  publishedPublicSummary,
+  findPublishedJob,
+  getSchedulerHeartbeat,
+} from './public-feed'
 import type { JobSearch } from './jobs'
 
 export const app = new Hono<AppEnv>()
@@ -105,6 +114,9 @@ function normaliseProfile(input: unknown): Profile {
     targetSeniority: stringList(raw.targetSeniority) as Profile['targetSeniority'],
     preferredWorkModes: stringList(raw.preferredWorkModes) as Profile['preferredWorkModes'],
     workCountry: typeof raw.workCountry === 'string' ? raw.workCountry.trim().toUpperCase() : '',
+    opportunityTypes: stringList(raw.opportunityTypes).filter(
+      (type): type is 'job' | 'gig' => type === 'job' || type === 'gig',
+    ),
   }
 }
 
@@ -123,35 +135,65 @@ app.get('/api/auth/status', async (c) => {
 // forwards to the sign-in page; no external sign-in service plays any part.
 app.get('/api/auth/login', async (c) => {
   const returnTo = c.req.query('returnTo') || '/jobs'
-  const safe = /^\/(?:dashboard|profile|jobs(?:\/[A-Za-z0-9_-]+)?)?$/.test(returnTo)
+  const safe = /^\/(?:dashboard|profile|pricing|jobs(?:\/[A-Za-z0-9_-]+)?)?$/.test(returnTo)
     ? returnTo
     : '/jobs'
   return c.redirect(`/auth/login?returnTo=${encodeURIComponent(safe)}`)
 })
 
 /**
- * The only job numbers a visitor without an account can see: plain totals
- * for the homepage. No titles, companies or links ever leave through here.
+ * The only aggregate numbers a visitor without an account can see: plain job
+ * totals and the exact registered-account total for the public homepage. No
+ * job titles, companies, links, names or email addresses leave through here.
  */
 app.get('/api/public-stats', async (c) => {
-  const limited = await enforceRateLimit(c, {
-    bucket: 'public-stats',
-    limit: 60,
-    windowSeconds: 60,
-  })
+  let limited: Response | null | undefined
+  try {
+    limited = await enforceRateLimit(c, {
+      bucket: 'public-stats',
+      limit: 60,
+      windowSeconds: 60,
+    })
+  } catch {
+    // This read-only public total is edge-cached. A rate-limit storage fault
+    // should not hide the homepage numbers from every visitor.
+    limited = undefined
+  }
   if (limited) return limited
-  const snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
-  if (!snapshot) return c.json({ available: false }, 503)
-  const visible = snapshot.jobs.filter((job) => job.quality?.isEnglish !== false)
-  const countries = new Set(visible.map((job) => job.locationCountry).filter(Boolean))
-  c.header('Cache-Control', 'public, max-age=300')
+
+  let registeredUsers: number | null = null
+  if (c.env?.DB) {
+    try {
+      registeredUsers = await countRegisteredUsers(c.env.DB)
+    } catch {
+      // A missing user total is better than a guessed one. Job totals can
+      // still be served from the public snapshot when the database is busy.
+      registeredUsers = null
+    }
+  }
+
+  let summary: Awaited<ReturnType<typeof publishedPublicSummary>> = null
+  try {
+    summary = await publishedPublicSummary(c.env?.PUBLIC_JOBS)
+  } catch {
+    summary = null
+  }
+  if (!summary) {
+    c.header('Cache-Control', 'no-store')
+    return c.json({ available: false, registeredUsers }, 503)
+  }
+  // Do not let a brief user-count database failure hide the counter for a
+  // full cache minute. Complete public totals can be shared for 60 seconds.
+  c.header('Cache-Control', registeredUsers === null ? 'no-store' : 'public, max-age=60')
   return c.json({
     available: true,
-    total: visible.length,
-    nigeria: visible.filter((job) => job.locationCountry === 'NG').length,
-    remote: visible.filter((job) => job.workMode === 'remote').length,
-    countries: countries.size,
-    updatedAt: snapshot.refreshedAt,
+    total: summary.total,
+    gigs: summary.gigs,
+    nigeria: summary.nigeria,
+    remote: summary.remote,
+    countries: summary.countries,
+    registeredUsers,
+    updatedAt: summary.refreshedAt,
   })
 })
 
@@ -313,22 +355,22 @@ app.get('/api/health', async (c) => {
 })
 
 app.get('/api/feed-status', async (c) => {
-  const snapshot = await publishedPublicJobs(c.env?.PUBLIC_JOBS)
-  if (!snapshot) return c.json({ available: false, refreshHours: 12 }, 503)
-  const visible = snapshot.jobs.filter((job) => job.quality?.isEnglish !== false)
+  const summary = await publishedPublicSummary(c.env?.PUBLIC_JOBS)
+  if (!summary) return c.json({ available: false, refreshHours: 12 }, 503)
   const heartbeat = c.env?.PUBLIC_JOBS ? await getSchedulerHeartbeat(c.env.PUBLIC_JOBS) : null
   const heartbeatAgeMs = heartbeat ? Date.now() - Date.parse(heartbeat.at) : null
   return c.json({
     available: true,
     // The default feed is English-first; the full corpus is reported alongside.
-    total: visible.length,
-    totalAllLanguages: snapshot.jobs.length,
-    sourceCount: snapshot.sourceCount,
-    attemptedSources: snapshot.attemptedSources,
-    olderSources: snapshot.olderSources,
-    updatedAt: snapshot.refreshedAt,
+    total: summary.total,
+    gigs: summary.gigs,
+    totalAllLanguages: summary.totalAllLanguages,
+    sourceCount: summary.sourceCount,
+    attemptedSources: summary.attemptedSources,
+    olderSources: summary.olderSources,
+    updatedAt: summary.refreshedAt,
     refreshHours: 12,
-    added: snapshot.added,
+    added: summary.added,
     schedulerHeartbeatAt: heartbeat?.at ?? null,
     // The producer ticks hourly; older than two ticks means it is stuck.
     schedulerStale: heartbeatAgeMs === null || heartbeatAgeMs > 2 * 3600_000,
@@ -351,6 +393,12 @@ app.get('/api/jobs', async (c) => {
     roleFamilies: (url.searchParams.get('roles') || '').split(',').filter(Boolean).slice(0, 30),
     workModes: (url.searchParams.get('modes') || '').split(',').filter(Boolean).slice(0, 3),
     seniorities: (url.searchParams.get('levels') || '').split(',').filter(Boolean).slice(0, 8),
+    opportunityType:
+      url.searchParams.get('type') === 'gig'
+        ? 'gig'
+        : url.searchParams.get('type') === 'job'
+          ? 'job'
+          : 'all',
     status: status === 'all' || status === 'closed' ? status : 'open',
     limit,
     offset,
@@ -358,12 +406,15 @@ app.get('/api/jobs', async (c) => {
 
   const published = await publishedPublicJobs(env.PUBLIC_JOBS)
   if (published) {
-    const result = searchLivePublic(published.jobs, search)
+    const result = searchPublicJobs(published.jobs, search)
     return c.json({
       ...result,
-      jobs: result.jobs.map((job) => ({ ...job, detailKey: undefined, descriptionPreview: true })),
+      jobs: result.jobs.map((job) => ({
+        ...withOpportunity(job),
+        detailKey: undefined,
+        descriptionPreview: true,
+      })),
       dataSource: 'public-snapshot',
-      facets: jobFacets(published.jobs, search),
       updatedAt: published.refreshedAt,
       refreshHours: published.refreshHours,
       sourceCount: published.sourceCount,
@@ -384,7 +435,7 @@ app.get('/api/jobs', async (c) => {
     !status &&
     limit === undefined &&
     offset === undefined &&
-    !['country', 'roles', 'modes', 'levels'].some((key) => url.searchParams.has(key))
+    !['country', 'roles', 'modes', 'levels', 'type'].some((key) => url.searchParams.has(key))
   ) {
     const { jobs, source, warning } = await withTimeout(listOpenJobs(env.DB), 3000)
     if (warning && livePublicEnabled(env.APP_MODE)) {
@@ -424,7 +475,7 @@ app.get('/api/jobs', async (c) => {
   }
 
   return c.json({
-    jobs: result.jobs,
+    jobs: result.jobs.map((job) => withOpportunity(job)),
     total: result.total,
     limit: result.limit,
     offset: result.offset,
@@ -591,12 +642,14 @@ app.get('/api/rates', async (c) => {
 })
 
 app.route('/api', insightRoutes)
+app.route('/api', proRoutes)
 app.route('/api', applyRoutes)
 app.route('/api', adminRoutes)
 app.route('/api', trustRoutes)
 app.route('/api', accountRoutes)
 app.route('/api', authRoutes)
 app.route('/api', employerRoutes)
+app.route('/api', ideaRoutes)
 app.route('/api', sourceRoutes)
 app.route('/api', billingRoutes)
 app.route('/api', telegramRoutes)

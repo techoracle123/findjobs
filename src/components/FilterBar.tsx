@@ -123,7 +123,9 @@ export function FilterBar({
           </div>
         )}
         {!showWorkMode && !showSeniority && (
-          <p className="field__hint">More filters are coming soon — we’re improving this data.</p>
+          <p className="field__hint">
+            More filters will come later. We are still improving this data.
+          </p>
         )}
       </div>
     </section>

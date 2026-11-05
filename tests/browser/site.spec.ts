@@ -1,25 +1,50 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { roleFamilyLabel } from '../../src/shared/taxonomy'
 
 let signupCounter = 0
 
 /**
- * Creates a fresh free account and signs this page in with it. The job
- * board sits behind a free account now, so board tests start here. Each
- * test gets its own account so saved jobs and progress never leak across.
+ * Creates a fresh local account, or signs into the isolated account that the
+ * deployment provisioned for this exact test and retry. This keeps production
+ * signup protection intact when the full authenticated suite runs repeatedly.
  */
-async function signUp(page: Page): Promise<string> {
+async function signUpRequest(request: APIRequestContext): Promise<string> {
   signupCounter += 1
-  const email = `fj-browser-${Date.now()}-${signupCounter}@example.com`
-  const response = await page.request.post('/api/auth/signup', {
+  const run = process.env.FJ_BROWSER_TEST_RUN?.trim() ?? ''
+  const digest = await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`site.spec.ts\0${test.info().title}`),
+  )
+  const key = [...new Uint8Array(digest)]
+    .slice(0, 8)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+  const email = run
+    ? `fj-browser-${run}-${key}-${test.info().retry}@example.com`
+    : `fj-browser-${Date.now()}-${signupCounter}@example.com`
+  const action = run ? 'login' : 'signup'
+  const response = await request.post(`/api/auth/${action}`, {
     data: { name: 'Browser Test', email, password: 'browser test password' },
   })
-  expect(response.ok()).toBe(true)
+  if (!response.ok()) {
+    const body = (await response.text()).slice(0, 400)
+    throw new Error(`Browser ${action} failed (${response.status()}): ${body}`)
+  }
   return email
 }
 
+async function signUp(page: Page): Promise<string> {
+  return signUpRequest(page.request)
+}
+
 /** Runs an action and waits until its account write has reached the server. */
+async function expectNoHorizontalOverflow(page: Page): Promise<void> {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+}
+
 async function writeAndWait(
   page: Page,
   pathPart: string,
@@ -50,6 +75,7 @@ for (const width of [320, 390, 414, 768, 1024, 1280, 1600, 1920]) {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
+    await expect(page.getByText(/left today|Fast Apply/)).toHaveCount(0)
     await expect(page.getByText('Preview dataset')).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^Plan$/ })).toHaveCount(0)
     await expect(page.locator('.site-footer')).toBeVisible()
@@ -60,11 +86,12 @@ for (const width of [320, 390, 414, 768, 1024, 1280, 1600, 1920]) {
     await expect(page.locator('.joblist')).toHaveCount(0)
     await expect(page.getByText('Unverified', { exact: true })).toHaveCount(0)
     await expect(page.getByText('Needs checking', { exact: true })).toHaveCount(0)
+    await expect(page.getByText(/left today|Fast Apply/)).toHaveCount(0)
     await expect(page.locator('.site-footer')).toBeVisible()
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
-    const apply = page.getByRole('link', { name: /Apply for this role|Open original listing/ })
+    const apply = page.getByRole('link', { name: /Apply for this (role|gig|contract)/ })
     await expect(apply).toHaveAttribute('href', /^https?:\/\//)
     await page.screenshot({ path: testInfo.outputPath(`find-jobs-${width}.png`), fullPage: false })
     expect(errors).toEqual([])
@@ -81,10 +108,26 @@ test('homepage explains the platform in plain words and sends people to sign up'
   await expect(page.locator('.joblist')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'How it works' })).toBeVisible()
   await expect(
-    page.getByRole('heading', { name: 'What decides if you get the job?' }),
+    page.getByRole('heading', { name: 'What decides if you get the work?' }),
   ).toBeVisible()
   await expect(page.locator('body')).toContainText('pay in dollars')
-  await expect(page.locator('body')).toContainText('never ask you to pay money to get a job')
+  await expect(page.locator('body')).toContainText('gigs and contracts')
+  await expect(page.locator('body')).toContainText('FJ Match Intelligence')
+  await expect(page.locator('body')).toContainText('will not ask you to pay to get a job')
+  await expect(
+    page.getByRole('heading', { name: 'Every job preparation tool is free for now' }),
+  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'No card or trial needed' })).toBeVisible()
+  await expect(page.locator('.home-pro')).toContainText('You do not need to start a trial')
+  await expect(page.locator('.home-ideas-teaser')).toContainText(
+    'product ideas for different places',
+  )
+  await expect(page.locator('.home-user-count')).toContainText(/registered on FJ/)
+  await expect(page.locator('.home-user-count strong')).toHaveText(/^\d[\d,]*$/)
+  await expect(page.locator('.home-stat').first()).toHaveClass(/home-stat--users/)
+  await expect(page.locator('.home-stat--users')).toContainText('registered users')
+  await expect(page.locator('.home-stat--users strong')).toHaveText(/^\d[\d,]*$/)
+  await expect(page.locator('body')).toContainText('See everything included')
   await page
     .getByRole('link', { name: /Create a free account/ })
     .first()
@@ -92,10 +135,104 @@ test('homepage explains the platform in plain words and sends people to sign up'
   await expect(page).toHaveURL(/\/auth\/signup/)
 })
 
+test('signed-in users can go home from Jobs and from a job page', async ({ page }) => {
+  await signUp(page)
+  await page.goto('/jobs')
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
+
+  await page.locator('.topbar').getByRole('link', { name: 'Home', exact: true }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(
+    'Thousands of job opportunities',
+  )
+  expect(new URL(page.url()).pathname).toBe('/')
+  await expect(page.locator('.home-user-count')).toBeVisible()
+
+  await page.goto('/jobs')
+  await page.locator('.joblist .jobrow').first().click()
+  await expect(page.locator('.detail__title')).toBeVisible()
+  await page.locator('.topbar .brand').click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(
+    'Thousands of job opportunities',
+  )
+  expect(new URL(page.url()).pathname).toBe('/')
+})
+
 test('jobs send a visitor without an account to sign in first', async ({ page }) => {
   await page.goto('/jobs')
   await expect(page).toHaveURL(/\/auth\/login\?returnTo=%2Fjobs/)
   await expect(page.getByRole('heading', { name: 'Welcome back. Sign in.' })).toBeVisible()
+})
+
+test('compact public navigation keeps every page reachable on phones and tablets', async ({
+  page,
+}) => {
+  for (const width of [320, 768]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/')
+    const toggle = page.getByRole('button', { name: 'Open navigation menu' })
+    await expect(toggle).toBeVisible()
+    const headerBox = await page.locator('header.topbar').boundingBox()
+    expect(headerBox).not.toBeNull()
+    expect(headerBox!.height).toBeLessThan(90)
+
+    await toggle.click()
+    const menu = page.getByRole('navigation', { name: 'Mobile primary' })
+    await expect(menu).toBeVisible()
+    for (const label of ['Home', 'Jobs', 'Ideas', 'Pricing', 'About']) {
+      await expect(menu.getByRole('link', { name: label, exact: true })).toBeVisible()
+    }
+    const menuBox = await menu.boundingBox()
+    expect(menuBox).not.toBeNull()
+    expect(menuBox!.x).toBeGreaterThanOrEqual(0)
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(width)
+
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(toggle).toBeFocused()
+
+    await toggle.click()
+    await page.mouse.click(width - 16, 850)
+    await expect(menu).toHaveCount(0)
+
+    await toggle.click()
+    await menu.getByRole('link', { name: 'Pricing', exact: true }).click()
+    await expect(page).toHaveURL(/\/pricing$/)
+  }
+})
+
+test('signed-in phone navigation and job actions have usable touch targets', async ({ page }) => {
+  await signUp(page)
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto('/jobs')
+  await expect(page.locator('.jobrow').first()).toBeVisible({ timeout: 20_000 })
+
+  const toggle = page.getByRole('button', { name: 'Open navigation menu' })
+  await toggle.click()
+  const menu = page.getByRole('navigation', { name: 'Mobile primary' })
+  await expect(menu.getByRole('link', { name: 'Jobs', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  await expect(menu.getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+
+  for (const locator of [
+    toggle,
+    page.getByRole('button', { name: 'Search', exact: true }),
+    page.getByRole('button', { name: /^Save / }).first(),
+  ]) {
+    const box = await locator.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+
+  await toggle.click()
+  await menu.getByRole('link', { name: 'Dashboard', exact: true }).click()
+  await expect(page).toHaveURL(/\/dashboard$/)
 })
 
 test('first job card lands within one screen on a phone and search is full width', async ({
@@ -108,7 +245,11 @@ test('first job card lands within one screen on a phone and search is full width
   const firstCardY = await page.evaluate(
     () => document.querySelector('.jobrow')!.getBoundingClientRect().top + window.scrollY,
   )
-  expect(firstCardY).toBeLessThanOrEqual(500) // measured 1146px before the revamp
+  // 1146px before the revamp pushed the first card below the fold. The
+  // Popular skills row adds one compact scrollable line (~46px), so the
+  // first card starts around 551px with the larger mobile controls, still
+  // well inside the first screen.
+  expect(firstCardY).toBeLessThanOrEqual(600)
   const searchWidth = await page.evaluate(
     () => document.querySelector('.searchbar')!.getBoundingClientRect().width,
   )
@@ -135,7 +276,7 @@ test('saving and preferences work with a free account', async ({ page }) => {
     .getByRole('button', { name: /^Saved/ })
     .click()
   await expect(page.getByRole('heading', { name: 'Saved & applied' })).toBeVisible()
-  await expect(page.locator('.content .jobrow')).toHaveCount(1)
+  await expect(page.locator('.saved-card')).toHaveCount(1)
   await page.goto('/profile')
   await page.getByLabel('Skills', { exact: true }).fill('Python')
   await writeAndWait(page, '/api/account/profile', 'PUT', () =>
@@ -144,12 +285,19 @@ test('saving and preferences work with a free account', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Remove Python' })).toBeVisible()
   await page.reload()
   await expect(page.getByRole('button', { name: 'Remove Python' })).toBeVisible()
+  const gigPreference = page.getByRole('button', { name: 'Gigs and contracts', exact: true })
+  await writeAndWait(page, '/api/account/profile', 'PUT', () => gigPreference.click())
+  await expect(gigPreference).toHaveAttribute('aria-pressed', 'true')
+  await page.reload()
+  await expect(
+    page.getByRole('button', { name: 'Gigs and contracts', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
   await page.goto('/dashboard')
   await page
     .locator('.tabs')
     .getByRole('button', { name: /^Saved/ })
     .click()
-  await expect(page.locator('.content .jobrow')).toHaveCount(1)
+  await expect(page.locator('.saved-card')).toHaveCount(1)
 })
 
 test('jobs API needs an account, serves real jobs to one, and rejects forged identity', async ({
@@ -175,14 +323,7 @@ test('jobs API needs an account, serves real jobs to one, and rejects forged ide
   let headers: Record<string, string> = {}
   if (devHeaderWorks) headers = { 'x-dev-user-email': 'local@example.com' }
   else {
-    const signup = await request.post('/api/auth/signup', {
-      data: {
-        name: 'API Test',
-        email: `fj-api-${Date.now()}@example.com`,
-        password: 'browser test password',
-      },
-    })
-    expect(signup.ok()).toBe(true)
+    await signUpRequest(request)
   }
   const response = await request.get('/api/jobs?status=open&limit=20', { headers })
   expect(response.ok()).toBe(true)
@@ -197,6 +338,15 @@ test('jobs API needs an account, serves real jobs to one, and rejects forged ide
     expect(job.applyUrl || job.sourceUrl).toMatch(/^https?:\/\//)
     expect(job.lastSeenAt).toBeTruthy()
   }
+  const gigResponse = await request.get('/api/jobs?status=open&type=gig&limit=20', { headers })
+  expect(gigResponse.ok()).toBe(true)
+  const gigFeed = await gigResponse.json()
+  expect(gigFeed.total).toBeGreaterThan(0)
+  expect(gigFeed.jobs.length).toBeGreaterThan(0)
+  expect(gigFeed.facets.opportunities.gig).toBe(gigFeed.total)
+  expect(
+    gigFeed.jobs.every((job: { opportunityType?: string }) => job.opportunityType === 'gig'),
+  ).toBe(true)
   expect([401, 404]).toContain(
     (await request.post('/api/billing/confirm', { data: { plan: 'pro' } })).status(),
   ) // never a usable anonymous purchase
@@ -218,31 +368,353 @@ test('job deep links, browser history and scroll return to the results', async (
   await expect(page).not.toHaveURL(jobUrl)
 })
 
-test('pricing is linked in the header and the page loads', async ({ page }) => {
+test('pricing stays findable and honestly explains free access with payments paused', async ({
+  page,
+}) => {
   await page.goto('/')
   await page.locator('.topnav').getByRole('link', { name: 'Pricing' }).click()
   await expect(page).toHaveURL(/\/pricing$/)
-  await expect(page.getByRole('heading', { name: 'Simple pricing' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Everything on FJ is free for now', level: 1 }),
+  ).toBeVisible()
+  const pricingNav = page.locator('.site-header .topnav')
+  await expect(pricingNav.getByRole('link', { name: 'Home' })).toBeVisible()
+  await expect(pricingNav.getByRole('link', { name: 'Jobs' })).toBeVisible()
+  await expect(pricingNav.getByRole('link', { name: 'Pricing' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  await expect(pricingNav.getByRole('link', { name: 'About' })).toBeVisible()
+  const included = page.locator('.free-access-grid')
+  await expect(included).toContainText('Prepare your application or pitch')
+  await expect(included).toContainText('FJ Match Intelligence')
+  await expect(included).toContainText('Check an advert before you apply')
+  await expect(included).toContainText('which requirements you meet')
+  await expect(included).toContainText('other adverts that may fit you better')
+  await expect(
+    page.getByRole('heading', { name: 'You do not need a card or a trial' }),
+  ).toBeVisible()
+  await expect(page.locator('body')).toContainText('Payments are paused')
+  await expect(page.getByRole('button', { name: /Buy|Start.*trial|Check payment/ })).toHaveCount(0)
+  await expect(page.getByText(/Desk\+/)).toHaveCount(0)
 })
 
-test('work type filter is visible and employers link is gone', async ({ page }) => {
+test('homepage and pricing explain Phase 2 cleanly at phone, tablet and desktop widths', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(180_000)
+  for (const width of [320, 360, 390, 768, 1024, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await page.goto('/')
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(
+      'Thousands of job opportunities',
+    )
+    await expect(page.locator('.home-pro')).toContainText(
+      'Every job preparation tool is free for now',
+    )
+    await expect(page.locator('.home-ideas-teaser')).toContainText('product idea')
+    await expectNoHorizontalOverflow(page)
+    await page.screenshot({ path: testInfo.outputPath(`phase2-home-${width}.png`) })
+
+    await page.goto('/pricing')
+    await expect(
+      page.getByRole('heading', { name: 'Everything on FJ is free for now', level: 1 }),
+    ).toBeVisible()
+    if (width <= 900) {
+      await page.getByRole('button', { name: 'Open navigation menu' }).click()
+      await expect(
+        page
+          .getByRole('navigation', { name: 'Mobile primary' })
+          .getByRole('link', { name: 'Pricing', exact: true }),
+      ).toBeVisible()
+      await page.keyboard.press('Escape')
+    } else {
+      await expect(
+        page.locator('.site-header .topnav').getByRole('link', { name: 'Pricing' }),
+      ).toBeVisible()
+    }
+    await expect(
+      page.getByRole('heading', { name: 'You do not need a card or a trial' }),
+    ).toBeVisible()
+    await expect(page.locator('.free-access-grid')).toContainText('Save and check your CV')
+    await expect(page.locator('.free-access-grid')).toContainText(
+      'Telegram alerts with more filters',
+    )
+    await expectNoHorizontalOverflow(page)
+    await page.screenshot({ path: testInfo.outputPath(`phase2-pricing-${width}.png`) })
+  }
+})
+
+test('employers page records interest only and offers no job posting', async ({ page }) => {
+  await page.goto('/employers')
+  await expect(page.getByRole('heading', { name: 'Employer posting is not open' })).toBeVisible()
+  await expect(page.getByText('No direct job posting.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Record my interest' })).toBeVisible()
+  await expect(page.getByText(/publish a vacancy in minutes|founding pricing/)).toHaveCount(0)
+})
+
+test('work setting and gig filters are visible and employers link is gone', async ({ page }) => {
   await signUp(page)
   await page.goto('/jobs')
-  await page.getByRole('button', { name: /Work type/ }).click()
+  const gigs = page.getByRole('button', { name: /Gigs and contracts/ })
+  await gigs.click()
+  await expect(page).toHaveURL(/type=gig/)
+  await expect(gigs).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.resultcount')).toContainText(/gigs and contracts|gig or contract/)
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'All gigs' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'WordPress and websites' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tutoring and teaching' })).toBeVisible()
+  await page.getByRole('button', { name: 'More types' }).click()
+  await expect(page.getByRole('button', { name: 'Video editing' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Penetration testing' })).toBeVisible()
+  await page.getByRole('button', { name: 'Fewer types' }).click()
+  await expect(page.getByText('We couldn’t load jobs. Please try again.')).toHaveCount(0)
+  await page.getByRole('button', { name: /All work/ }).click()
+  await expect(page).not.toHaveURL(/type=gig/)
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('Popular skills', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'WordPress', exact: true }).click()
+  await expect(page).toHaveURL(/q=WordPress/)
+  await expect(page.getByPlaceholder('Role, skill or company')).toHaveValue('WordPress')
+  await page.getByRole('button', { name: 'More skills' }).click()
+  await expect(page.getByRole('button', { name: 'Penetration testing' })).toBeVisible()
+  await page.getByRole('button', { name: 'WordPress', exact: true }).click()
+  await expect(page).not.toHaveURL(/q=WordPress/)
+  await page.getByRole('button', { name: /Work setting/ }).click()
   await page.getByRole('button', { name: 'Remote', exact: true }).click()
   await expect(page).toHaveURL(/mode=remote/)
   await expect(page.getByText('What does the green circle mean?')).toHaveCount(0)
   await expect(page.locator('.topnav').getByText('For employers')).toHaveCount(0)
 })
 
-test('job detail shows a plain before-you-apply checklist and no AI panels', async ({ page }) => {
+test('job detail keeps the before-you-apply checklist and original-source safety copy', async ({
+  page,
+}) => {
   await signUp(page)
   await page.goto('/jobs')
   await page.locator('.joblist .jobrow').first().click()
-  await expect(page.getByRole('heading', { name: 'Before you apply' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Before you apply', exact: true })).toBeVisible()
   await expect(page.locator('.detail')).toContainText(/Never pay anyone/)
-  await expect(page.getByText(/Original listing ·/)).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Original listing' })).toBeVisible()
+  await expect(page.locator('.original-listing')).toContainText('FJ does not verify or endorse')
   await expect(page.getByText(/AI-generated|Get application tips/)).toHaveCount(0)
+})
+
+test('free Pro tools prepare help on a job and open the salary guide without checkout', async ({
+  page,
+}) => {
+  test.setTimeout(180_000)
+  await signUp(page)
+  await page.goto('/jobs')
+  await page.locator('.joblist .jobrow').first().click()
+  await expect(page.getByRole('heading', { name: 'Pro tools for this job' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Trial or buy Pro/ })).toHaveCount(0)
+  await page.getByText('Your saved application answers').click()
+  await page.getByLabel('Full name').fill('Browser Test User')
+  await page
+    .getByLabel('Short summary of your experience')
+    .fill('Relevant experience for this role.')
+  await page.getByRole('button', { name: 'Save answers' }).click()
+  await expect(page.getByText('Your application answers are saved.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Prepare application' }).click()
+  await expect(page.getByText('Your prepared application is ready below.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Copy cover letter' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Compare my CV with this job' }).click()
+  await expect(page.getByText(/Advert wording match|No percentage is available/)).toBeVisible()
+
+  await page.getByRole('button', { name: 'Prepare me for interview' }).click()
+  await expect(page.getByRole('heading', { name: 'Questions to practise' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Show salary guide' }).first().click()
+  await expect(
+    page.getByText(/From [0-9]+ adverts|not enough real data|No matching live adverts/),
+  ).toBeVisible()
+
+  await page.goto('/dashboard?tab=salary')
+  await expect(page.getByRole('heading', { name: 'Salary guide' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Show salary guide' })).toBeVisible()
+})
+
+test('free early access unlocks the saved CV, job tools and dashboard tools without a card or trial', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(240_000)
+  const sampleCv = `Ada Lovelace
+ada@example.com | +234 801 234 5678 | Lagos, Nigeria
+https://example.com/ada
+
+Professional Summary
+Frontend engineer who builds accessible health dashboards with TypeScript, React, CSS and GraphQL.
+
+Skills
+TypeScript, React, CSS, GraphQL, accessibility, testing
+
+Experience
+Frontend Engineer, Example Health, Jan 2024 - Present
+Built a GraphQL dashboard used by 25 clinic staff every week.
+Reduced repeated form errors by 18% with clearer validation messages.
+Responsible for fixing dashboards and helping the team.
+
+Projects
+Built a public appointment checker with React forms and clear error messages.
+
+Education
+BSc Computer Science, Example University, 2023
+NYSC completed in 2024.`
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await signUp(page)
+  await page.goto('/dashboard?tab=plan')
+  await expect(page.getByRole('heading', { name: 'Free for now' })).toBeVisible()
+  await expect(page.locator('body')).toContainText('Payments are paused')
+  await expect(page.locator('body')).toContainText('nothing on FJ asks for card details')
+  await expect(page.getByRole('button', { name: /Buy|Start.*trial|Check payment/ })).toHaveCount(0)
+  await page.goto('/profile')
+  const freeSavedCv = page.locator('.master-cv-panel')
+  await expect(freeSavedCv.getByRole('heading', { name: 'Your saved CV' })).toBeVisible()
+  await freeSavedCv.getByText('Paste CV text instead').click()
+  await freeSavedCv.getByLabel('CV text').fill(sampleCv)
+  await freeSavedCv.getByLabel(/I agree that FJ can save/).check()
+  await expect(freeSavedCv).toContainText('Full CV check included')
+  await writeAndWait(page, '/api/pro/cv', 'PUT', () =>
+    freeSavedCv.getByRole('button', { name: 'Check my CV' }).click(),
+  )
+  await expect(freeSavedCv).toContainText('Your full CV check is ready')
+  await expect(freeSavedCv.getByRole('heading', { name: 'Fix these first' })).toBeVisible()
+  await expect(freeSavedCv).not.toContainText('trial or Pro')
+
+  await page.goto('/dashboard?tab=plan')
+  await expect(page.getByRole('heading', { name: 'Free for now' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Start my 3-day free trial' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Buy Pro/ })).toHaveCount(0)
+  await expectNoHorizontalOverflow(page)
+  await page.screenshot({ path: testInfo.outputPath('phase2-plan-390.png') })
+
+  await page.goto('/profile')
+  const masterCv = page.locator('.master-cv-panel')
+  await expect(masterCv.getByRole('heading', { name: 'Your saved CV' })).toBeVisible()
+  await expect(masterCv.getByRole('heading', { name: 'Fix these first' })).toBeVisible()
+  await expect(masterCv.getByRole('button', { name: 'View saved text' })).toBeVisible()
+  await expect(masterCv.getByRole('button', { name: 'Download report' })).toBeVisible()
+  await expect(masterCv.getByRole('button', { name: 'Delete saved CV' })).toBeVisible()
+  await expectNoHorizontalOverflow(page)
+  await page.screenshot({ path: testInfo.outputPath('phase2-master-cv-390.png') })
+
+  await page.setViewportSize({ width: 1280, height: 1000 })
+  await page.goto('/jobs')
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 30_000 })
+  await page.locator('.joblist .jobrow').first().click()
+  await expect(page.getByText(/left today|Fast Apply/)).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /Apply for this (role|gig|contract)/ })).toBeVisible()
+  const proTools = page.locator('.pro-tools')
+  await proTools.getByRole('button', { name: 'Check this advert' }).click()
+  await expect(proTools).toContainText('does not prove the employer is genuine', {
+    timeout: 30_000,
+  })
+  await proTools.getByRole('button', { name: 'Run Match Intelligence' }).click()
+  await expect(proTools.locator('.match-result')).toBeVisible({ timeout: 30_000 })
+  await expect(proTools).toContainText('Your matching qualifications')
+  await expect(proTools).toContainText('Missing skills and gaps')
+  await expect(proTools).toContainText('What to do next')
+  await proTools.getByRole('button', { name: 'Prepare application' }).click()
+  await expect(proTools.getByRole('button', { name: 'Copy cover letter' })).toBeVisible({
+    timeout: 30_000,
+  })
+  await proTools.getByRole('button', { name: 'Compare my CV with this job' }).click()
+  await expect(proTools).toContainText(/Advert wording match|No percentage is available/, {
+    timeout: 30_000,
+  })
+  await expectNoHorizontalOverflow(page)
+  await page.screenshot({ path: testInfo.outputPath('phase2-job-tools-1280.png') })
+
+  await writeAndWait(page, '/api/account/saved', 'POST', () =>
+    page.getByRole('button', { name: 'Save', exact: true }).click(),
+  )
+  await page.goto('/dashboard?tab=saved')
+  const savedCard = page.locator('.saved-card').first()
+  await expect(savedCard).toBeVisible()
+  await writeAndWait(page, '/api/account/saved', 'POST', async () => {
+    await savedCard.getByLabel('Stage').selectOption('interview')
+  })
+  const followUpDate = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+  await writeAndWait(page, '/api/account/saved', 'POST', () =>
+    savedCard.getByLabel('Follow-up date').fill(followUpDate),
+  )
+  await page.reload()
+  await expect(page.locator('.saved-card').first().getByLabel('Stage')).toHaveValue('interview')
+  await expect(page.locator('.saved-card').first().getByLabel('Follow-up date')).toHaveValue(
+    followUpDate,
+  )
+  await expectNoHorizontalOverflow(page)
+  await page.screenshot({ path: testInfo.outputPath('phase2-saved-pipeline-1280.png') })
+
+  await page.goto('/dashboard?tab=alerts')
+  await page.getByLabel('Alert name').fill('Smart frontend')
+  await page.getByLabel('Keywords').fill('frontend')
+  await page
+    .getByLabel(/Work to watch/)
+    .first()
+    .selectOption('gig')
+  await page.getByLabel(/Pro alert with filters/).check()
+  await page.getByLabel('Minimum fit score').selectOption('55')
+  await page.getByLabel('Countries (two-letter codes)').fill('NG')
+  await page.getByLabel('Remote', { exact: true }).check()
+  await page.getByLabel('Only jobs that state pay').check()
+  await writeAndWait(page, '/api/account/alerts', 'POST', () =>
+    page.getByRole('button', { name: 'Create alert' }).click(),
+  )
+  const smartAlert = page.locator('.alert-card', { hasText: 'Smart frontend' })
+  await expect(smartAlert).toContainText('55+ fit score')
+  await expect(smartAlert).toContainText('NG')
+  await expect(smartAlert).toContainText('pay stated')
+  await expect(smartAlert).toContainText('Gigs and contracts')
+  await page.reload()
+  await expect(page.locator('.alert-card', { hasText: 'Smart frontend' })).toContainText(
+    'Alert with filters',
+  )
+  await expectNoHorizontalOverflow(page)
+  await page.screenshot({ path: testInfo.outputPath('phase2-smart-alert-1280.png') })
+
+  await page.goto('/dashboard?tab=tools')
+  await expect(
+    page.getByRole('heading', { name: 'Best matches and skills to learn' }),
+  ).toBeVisible()
+  const bestMatchesResponse = await page.request.get('/api/pro/best-matches')
+  if (!bestMatchesResponse.ok()) {
+    const body = (await bestMatchesResponse.text()).slice(0, 400)
+    throw new Error(`Best Matches failed (${bestMatchesResponse.status()}): ${body}`)
+  }
+  const bestMatchesBody = await bestMatchesResponse.json()
+  if (bestMatchesBody.matches.length) {
+    await expect(page.locator('.best-match-card').first()).toBeVisible({ timeout: 30_000 })
+  } else {
+    await expect(page.getByText('No current advert is a strong match yet.')).toBeVisible()
+  }
+  await page.getByRole('button', { name: 'Show skills to learn' }).click()
+  await expect(page.getByRole('heading', { name: 'Skills to learn' })).toBeVisible()
+  await page
+    .getByLabel('Full advert text')
+    .fill(
+      'Urgent guaranteed job. No interview needed. WhatsApp us now, pay a registration fee and send your BVN and bank account number today to start earning daily. This role has no official website application.',
+    )
+  await page.getByRole('button', { name: 'Check this advert' }).click()
+  await expect(page.locator('body')).toContainText('Warning signs found')
+  await expect(page.locator('body')).toContainText(
+    'does not clearly state whether someone in Nigeria',
+  )
+  await expectNoHorizontalOverflow(page)
+  await page.screenshot({ path: testInfo.outputPath('phase2-dashboard-tools-1280.png') })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload()
+  await expect(
+    page.getByRole('heading', { name: 'Best matches and skills to learn' }),
+  ).toBeVisible()
+  await expectNoHorizontalOverflow(page)
+  await page.screenshot({ path: testInfo.outputPath('phase2-dashboard-tools-390.png') })
 })
 
 test('Nigeria and general professions are selectable without repetitive badges', async ({
@@ -277,10 +749,13 @@ test('homepage is public, jobs are not, and sign-in is our own page', async ({ r
   const status = await (await request.get('/api/auth/status')).json()
   expect((await request.get('/')).ok()).toBe(true)
   expect(status.authenticated).toBe(false)
-  // Plain totals stay public for the homepage; job data does not.
-  expect([200, 503]).toContain(
-    (await request.get('/api/public-stats', { timeout: 60_000 })).status(),
-  )
+  // Plain totals stay public for the homepage; job and account details do not.
+  const publicStats = await request.get('/api/public-stats', { timeout: 60_000 })
+  expect([200, 503]).toContain(publicStats.status())
+  const publicStatsBody = (await publicStats.json()) as Record<string, unknown>
+  expect(typeof publicStatsBody.registeredUsers).toBe('number')
+  expect(publicStatsBody.users).toBeUndefined()
+  expect(publicStatsBody.email).toBeUndefined()
   expect((await request.get('/api/jobs')).status()).toBe(401)
   // Sign-in is FJ's own page. No Cloudflare Access screen anywhere.
   const login = await request.get('/api/auth/login', { maxRedirects: 0 })
@@ -345,8 +820,19 @@ test('match rings are visible on phones and never show a numeric grade', async (
   await writeAndWait(page, '/api/account/profile', 'PUT', async () => {
     await page.getByLabel('preferred profession', { exact: false }).selectOption('administration')
   })
+  const feedResponsePromise = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/jobs',
+  )
   await page.goto('/jobs')
-  await expect(page.locator('.scorebadge').first()).toBeVisible()
+  const feedResponse = await feedResponsePromise
+  expect(
+    feedResponse.status(),
+    'The job board API should return the complete public snapshot',
+  ).toBe(200)
+  // A cold live isolate may need longer than Playwright's 5 second default to
+  // assemble the first public snapshot page.
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('.scorebadge').first()).toBeVisible({ timeout: 30_000 })
   const ringText = await page.locator('.joblist').first().innerText()
   expect(ringText).not.toMatch(/\b\d{1,3}%\b/)
   // The green-circle explainer was removed by product decision.
@@ -368,23 +854,21 @@ test('expanded live corpus is paginated, regularly refreshed and opens complete 
   expect(status.ok()).toBe(true)
   const metadata = await status.json()
   expect(metadata.total).toBeGreaterThanOrEqual(2000)
+  expect(typeof metadata.gigs).toBe('number')
+  expect(metadata.gigs).toBeGreaterThanOrEqual(0)
   expect(metadata.refreshHours).toBe(12)
   expect(metadata.sourceCount).toBeGreaterThan(10)
   expect(Date.now() - Date.parse(metadata.updatedAt)).toBeLessThan(36 * 3600000)
   // Job data needs an account now; sign this request context in.
-  const signup = await request.post('/api/auth/signup', {
-    data: {
-      name: 'Corpus Test',
-      email: `fj-corpus-${Date.now()}@example.com`,
-      password: 'browser test password',
-    },
-  })
-  expect(signup.ok()).toBe(true)
+  await signUpRequest(request)
   const offset = Math.min(5000, Math.floor(metadata.total / 2))
   const response = await request.get(`/api/jobs?status=open&offset=${offset}&limit=2`, {
     timeout: 45000,
   })
-  expect(response.ok()).toBe(true)
+  if (!response.ok()) {
+    const body = (await response.text()).slice(0, 400)
+    throw new Error(`Paginated corpus request failed (${response.status()}): ${body}`)
+  }
   const feed = await response.json()
   expect(feed.dataSource).toBe('public-snapshot')
   expect(feed.total).toBe(metadata.total)
@@ -412,7 +896,9 @@ test('personal monthly progress counts confirmations, not link clicks', async ({
   await expect(
     page.locator('.progress-panel .stat-grid > div').first().locator('strong'),
   ).toHaveText('1')
-  await expect(page.locator('.progress-panel')).toContainText('no number guarantees')
+  await expect(page.locator('.progress-panel')).toContainText(
+    'no number can promise an interview or a job',
+  )
   await page.reload()
   await expect(
     page.locator('.progress-panel .stat-grid > div').first().locator('strong'),
@@ -422,18 +908,24 @@ test('personal monthly progress counts confirmations, not link clicks', async ({
 test('changing filters does not refetch account, health or exchange rates', async ({ page }) => {
   await signUp(page)
   await page.goto('/jobs')
-  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 30_000 })
   const metadata: string[] = []
   page.on('request', (request) => {
     if (/\/api\/(health|rates|account)(?:[?]|$)/.test(request.url())) metadata.push(request.url())
   })
-  await page.getByRole('button', { name: /^Profession/ }).click()
+  // Scope to the filter chip bar: the Popular skills row uses some of the
+  // same skill names, and this test is about the Profession chip.
+  await page
+    .locator('.chipbar')
+    .getByRole('button', { name: /^Profession/ })
+    .click()
   await page
     .locator('.chip-popover')
     .getByRole('button', { name: /Cybersecurity/ })
     .click()
   await page.waitForTimeout(700)
   await page
+    .locator('.chipbar')
     .getByRole('button', { name: /Cybersecurity|Profession/ })
     .first()
     .click()
@@ -444,7 +936,12 @@ test('changing filters does not refetch account, health or exchange rates', asyn
   await page.waitForTimeout(700)
   expect(metadata).toEqual([])
   // The chip reflects the specialist category chosen from the popover.
-  await expect(page.getByRole('button', { name: /Data analytics/ }).first()).toBeVisible()
+  await expect(
+    page
+      .locator('.chipbar')
+      .getByRole('button', { name: /Data analytics/ })
+      .first(),
+  ).toBeVisible()
 })
 
 test('switching accounts never reuses another person’s browser profile', async ({ page }) => {
@@ -561,10 +1058,12 @@ test('filter combinations are shareable and survive reload', async ({ page }) =>
   expect(profession).toBeTruthy()
   await page.goto('/jobs')
   await page.getByRole('button', { name: /^Profession/ }).click()
-  await page
+  const professionLabel = roleFamilyLabel(profession!).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const professionOption = page
     .locator('.chip-popover')
-    .getByRole('button', { name: roleFamilyLabel(profession!), exact: true })
-    .click()
+    .getByRole('button', { name: new RegExp(`^${professionLabel}(?:,|\\s|$)`) })
+  await expect(professionOption).toBeVisible({ timeout: 20_000 })
+  await professionOption.click()
   await expect(page).toHaveURL(/role=/)
   const url = page.url()
   await expect(page.locator('.jobrow__title').first()).toBeVisible({ timeout: 20_000 })
@@ -579,17 +1078,50 @@ test('filter combinations are shareable and survive reload', async ({ page }) =>
 test('pagination moves through 20-result pages and keeps the page in the URL', async ({ page }) => {
   await signUp(page)
   await page.goto('/jobs')
-  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 30_000 })
   await page.locator('.pagination').getByRole('button', { name: '2', exact: true }).click()
   await expect(page).toHaveURL(/page=2/)
-  await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
+  await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 30_000 })
   await page.reload()
   await expect(page).toHaveURL(/page=2/)
 })
 
+test('job caution note sits above the card instead of beside it', async ({ page }) => {
+  await signUp(page)
+  await page.goto('/jobs')
+  const wrap = page.locator('.jobrow-wrap').first()
+  await expect(wrap).toBeVisible({ timeout: 30_000 })
+
+  const boxes = await wrap.evaluate((element: HTMLElement) => {
+    const caution = document.createElement('p')
+    caution.className = 'jobrow__caution'
+    caution.textContent =
+      'We can’t confirm this employer yet. Never pay to apply. Report anything that asks you for money.'
+    element.insertBefore(caution, element.firstChild)
+
+    const row = element.querySelector('.jobrow')
+    if (!row) throw new Error('Job row not found')
+    const wrapBox = element.getBoundingClientRect()
+    const cautionBox = caution.getBoundingClientRect()
+    const rowBox = row.getBoundingClientRect()
+    return {
+      wrapWidth: wrapBox.width,
+      cautionWidth: cautionBox.width,
+      cautionLeft: cautionBox.left,
+      cautionBottom: cautionBox.bottom,
+      rowLeft: rowBox.left,
+      rowTop: rowBox.top,
+    }
+  })
+
+  expect(boxes.cautionWidth).toBeGreaterThan(boxes.wrapWidth * 0.98)
+  expect(Math.abs(boxes.rowLeft - boxes.cautionLeft)).toBeLessThanOrEqual(1)
+  expect(boxes.rowTop).toBeGreaterThanOrEqual(boxes.cautionBottom - 1)
+})
+
 test('footer is present on every route with the safety links', async ({ page }) => {
   await signUp(page)
-  for (const path of ['/', '/jobs', '/dashboard', '/profile', '/about', '/auth/login']) {
+  for (const path of ['/', '/jobs', '/ideas', '/dashboard', '/profile', '/about', '/auth/login']) {
     await page.goto(path)
     const footer = page.locator('.site-footer')
     await expect(footer).toBeVisible()
@@ -599,7 +1131,17 @@ test('footer is present on every route with the safety links', async ({ page }) 
 
 test('no serious accessibility violations on the main routes', async ({ page }) => {
   await signUp(page)
-  for (const path of ['/', '/auth/login', '/jobs', '/dashboard']) {
+  for (const path of [
+    '/',
+    '/auth/login',
+    '/pricing',
+    '/ideas',
+    '/jobs',
+    '/profile',
+    '/dashboard',
+    '/dashboard?tab=tools',
+    '/dashboard?tab=plan',
+  ]) {
     await page.goto(path)
     await expect(page.locator('h1')).toBeVisible()
     const results = await new AxeBuilder({ page })
@@ -608,7 +1150,14 @@ test('no serious accessibility violations on the main routes', async ({ page }) 
     const serious = results.violations.filter((violation) =>
       ['serious', 'critical'].includes(violation.impact ?? ''),
     )
-    expect(serious.map((violation) => `${path}: ${violation.id} — ${violation.help}`)).toEqual([])
+    expect(
+      serious.flatMap((violation) =>
+        violation.nodes.map(
+          (node) =>
+            `${path}: ${violation.id} — ${violation.help} — ${node.target.join(' ')} — ${node.failureSummary}`,
+        ),
+      ),
+    ).toEqual([])
   }
 })
 
@@ -628,9 +1177,9 @@ test('UI controls with no backing data stay hidden unless admin override', async
   const facets = (await (await feedResponse).json()).facets
   expect(facets?.coverage).toBeTruthy()
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible()
-  // Work type is always visible by product decision, whatever the coverage.
+  // Work setting is always visible by product decision, whatever the coverage.
   // Chips may exist in both the filter bar and the mobile drawer (>= 1).
-  expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
+  expect(await page.getByRole('button', { name: /Work setting/ }).count()).toBeGreaterThanOrEqual(1)
   const experienceCount = await page.getByRole('button', { name: /Experience/ }).count()
   if (facets.coverage.seniority < 0.6) expect(experienceCount).toBe(0)
   else expect(experienceCount).toBeGreaterThanOrEqual(1)
@@ -638,7 +1187,7 @@ test('UI controls with no backing data stay hidden unless admin override', async
   // The admin override always exposes every control for testing.
   await page.goto('/jobs?adminControls=1')
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 20_000 })
-  expect(await page.getByRole('button', { name: /Work type/ }).count()).toBeGreaterThanOrEqual(1)
+  expect(await page.getByRole('button', { name: /Work setting/ }).count()).toBeGreaterThanOrEqual(1)
   expect(await page.getByRole('button', { name: /Verified only/ }).count()).toBeGreaterThanOrEqual(
     1,
   )

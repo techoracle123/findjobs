@@ -3,11 +3,14 @@ import {
   assemblePublicSnapshot,
   refreshPublicSource,
   publishPublicSnapshot,
+  readPublicationPointer,
+  readPublicationShards,
   PUBLIC_SOURCES,
   type IndexedJob,
+  type PublicSnapshot,
   type SourceIndex,
 } from '../../src/server/public-feed'
-import { fetchPublicSource } from '../../src/server/live-public'
+import { buildPublicSearchText, fetchPublicSource } from '../../src/server/live-public'
 import { SEED_SOURCES } from '../../src/server/sources/seed'
 import { resetHostCache } from '../../src/server/sources/polite'
 import { enqueuePublicRefresh } from '../../src/server/public-schedule'
@@ -71,6 +74,8 @@ describe('durable broad public feed', () => {
     // List shards never carry per-skill evidence (it lives in detail
     // payloads); carrying it once made every deploy republish the corpus.
     expect(snapshot.jobs[0].quality?.skillEvidence ?? []).toHaveLength(0)
+    expect(snapshot.searchTextVersion).toBe(1)
+    expect(snapshot.jobs[0].searchText).toBe(buildPublicSearchText(snapshot.jobs[0]))
     expect(snapshot.jobs[0].id).toBe(original.id)
   })
   it('drops publishers that have not confirmed content within the freshness window', async () => {
@@ -147,12 +152,50 @@ it('serves the broad index without D1 and returns full descriptions on individua
   const { kv, data } = storage(),
     source = await index()
   const snapshot = assemblePublicSnapshot([source], new Set())
-  const complete = source.jobs.map((job) => ({
+  expect(snapshot.opportunityVersion).toBe(1)
+  expect(snapshot.stats?.totalAllLanguages).toBe(snapshot.jobs.length)
+  expect(snapshot.stats?.total).toBeLessThanOrEqual(snapshot.jobs.length)
+  // Simulate the snapshot production served before gig fields existed. Its
+  // rows must gain an evidence-backed lane when loaded, not wait for the
+  // next scheduled publication.
+  const legacyJobs = snapshot.jobs.map((job, position) => ({
     ...job,
-    description: job.description + ' Full listing detail only.',
+    ...(position === 0
+      ? {
+          title: 'Contract React Developer',
+          description: 'This is a 6 month contract role building a client portal.',
+        }
+      : {}),
+    opportunityType: undefined,
+    engagementType: undefined,
+    engagementLabel: undefined,
+    engagementBasis: undefined,
+    projectDuration: undefined,
   }))
+  const legacyById = new Map(legacyJobs.map((job) => [job.id, job]))
+  const complete = source.jobs.map((job) => {
+    const legacy = legacyById.get(job.id)
+    return {
+      ...job,
+      ...(legacy ? { title: legacy.title, description: legacy.description } : {}),
+      description: `${legacy?.description ?? job.description} Full listing detail only.`,
+      opportunityType: undefined,
+      engagementType: undefined,
+      engagementLabel: undefined,
+      engagementBasis: undefined,
+      projectDuration: undefined,
+    }
+  })
   data.set('details:test', JSON.stringify(complete))
-  data.set('published', JSON.stringify(snapshot))
+  data.set(
+    'published',
+    JSON.stringify({
+      ...snapshot,
+      jobs: legacyJobs,
+      opportunityVersion: undefined,
+      stats: undefined,
+    }),
+  )
   const { default: app } = await import('../../src/server/app')
   // Test mode + dev identity: jobs need an account now, and the point of
   // this test is that job data itself comes from the snapshot, never D1.
@@ -181,6 +224,17 @@ it('serves the broad index without D1 and returns full descriptions on individua
   expect(body.dataSource).toBe('public-snapshot')
   expect(body.jobs[0].descriptionPreview).toBe(true)
   expect(body.jobs[0].detailKey).toBeUndefined()
+  expect(body.jobs[0].searchText).toBeUndefined()
+  expect(body.jobs.every((job) => typeof job.opportunityType === 'string')).toBe(true)
+  const gigFeed = await app.request(
+    'https://public-feed-tests.example/api/jobs?status=open&limit=20&ww=1&type=gig',
+    auth,
+    env,
+  )
+  expect(gigFeed.status).toBe(200)
+  const gigBody = (await gigFeed.json()) as { jobs: IndexedJob[]; total: number }
+  expect(gigBody.total).toBeGreaterThan(0)
+  expect(gigBody.jobs.every((job) => job.opportunityType === 'gig')).toBe(true)
   // The default feed is English-first: confirmed non-English listings stay out
   // unless Worldwide is requested.
   const englishOnly = await app.request(
@@ -200,9 +254,9 @@ it('serves the broad index without D1 and returns full descriptions on individua
     env,
   )
   expect(detail.status).toBe(200)
-  expect(((await detail.json()) as { job: IndexedJob }).job.description).toContain(
-    'Full listing detail only.',
-  )
+  const detailBody = (await detail.json()) as { job: IndexedJob }
+  expect(detailBody.job.description).toContain('Full listing detail only.')
+  expect(typeof detailBody.job.opportunityType).toBe('string')
   const denied = await app.request('https://public-feed-tests.example/api/account', {}, env)
   expect(denied.status).toBe(401)
 })
@@ -226,4 +280,82 @@ it('publishes more than 500 records exactly once, with no overlapping index shar
   expect(published.parts).toHaveLength(3)
   expect(rows).toHaveLength(1105)
   expect(new Set(rows.map((job) => job.id)).size).toBe(1105)
+})
+
+it('keeps cold shard reads bounded, ordered and complete across a transient miss', async () => {
+  const keys = Array.from({ length: 12 }, (_, index) => `part:${index}`)
+  const rows = new Map(keys.map((key, index) => [key, [{ id: `job-${index}` } as IndexedJob]]))
+  rows.set('part:1', [{ id: 'job-0' } as IndexedJob, { id: 'job-1' } as IndexedJob])
+  let attempts = 0
+  let active = 0
+  let maxActive = 0
+  const kv = {
+    get: async (key: string) => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 2))
+        if (key === 'part:2' && ++attempts < 3) throw new Error('transient KV timeout')
+        return rows.get(key) ?? null
+      } finally {
+        active -= 1
+      }
+    },
+  } as unknown as KVNamespace
+  const jobs = await readPublicationShards(kv, keys)
+  expect(jobs.map((job) => job.id)).toEqual(
+    Array.from({ length: 12 }, (_, index) => `job-${index}`),
+  )
+  expect(attempts).toBe(3)
+  expect(maxActive).toBe(3)
+})
+
+it('never returns a partial publication after a persistent shard miss', async () => {
+  let attempts = 0
+  const kv = {
+    get: async (key: string) => {
+      if (key === 'missing') attempts += 1
+      return key === 'missing' ? null : [{ id: key }]
+    },
+  } as unknown as KVNamespace
+  await expect(readPublicationShards(kv, ['present', 'missing'])).rejects.toThrow(
+    'temporarily unavailable',
+  )
+  expect(attempts).toBe(3)
+})
+
+it('retries a cold publication pointer without retrying a genuinely absent one', async () => {
+  const pointer = { version: 1 } as PublicSnapshot
+  let attempts = 0
+  const kv = {
+    get: async () => {
+      attempts += 1
+      if (attempts < 3) throw new Error('transient pointer timeout')
+      return pointer
+    },
+  } as unknown as KVNamespace
+  expect(await readPublicationPointer(kv)).toBe(pointer)
+  expect(attempts).toBe(3)
+
+  let missingReads = 0
+  const missing = {
+    get: async () => {
+      missingReads += 1
+      return null
+    },
+  } as unknown as KVNamespace
+  expect(await readPublicationPointer(missing)).toBeNull()
+  expect(missingReads).toBe(1)
+})
+
+it('bounds repeated publication pointer failures', async () => {
+  let attempts = 0
+  const kv = {
+    get: async () => {
+      attempts += 1
+      throw new Error('pointer timeout')
+    },
+  } as unknown as KVNamespace
+  await expect(readPublicationPointer(kv)).rejects.toThrow('pointer timeout')
+  expect(attempts).toBe(3)
 })

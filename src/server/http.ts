@@ -45,7 +45,9 @@ export async function requireUser(c: AppContext): Promise<AccountUser | null> {
   const identity = await resolveIdentity(c.req.raw, config, Date.now(), c.env?.DB)
   if (!identity || !c.env?.DB) return null
 
-  const user = await upsertUser(c.env.DB, identity.email, identity.subject)
+  // Identity subjects are internal ids, not display names. Passing one here
+  // would overwrite the person's real name and send an internal id to billing.
+  const user = await upsertUser(c.env.DB, identity.email)
   c.set('userId', user.id)
   return user
 }

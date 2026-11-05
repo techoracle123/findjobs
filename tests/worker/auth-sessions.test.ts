@@ -99,14 +99,27 @@ describe('pricing page plumbing (Prompt 17)', () => {
     const response = await get('/api/billing/plans')
     expect(response.status).toBe(200)
     const body = (await response.json()) as {
-      plans: Array<{ id: string; price: { amount: number } }>
+      plans: Array<{
+        id: string
+        price: { amount: number }
+        displayLabel: string
+        standardAmount: number
+        trialDays: number
+      }>
       billingEnabled: boolean
     }
     // free, graduate, pro monthly, pro annual, employer waitlist.
     expect(body.plans.length).toBe(5)
     expect(body.plans[0].price.amount).toBe(0)
-    expect(body.plans.find((plan) => plan.id === 'pro')?.price.amount).toBe(10000)
-    expect(typeof body.billingEnabled).toBe('boolean')
+    const monthly = body.plans.find((plan) => plan.id === 'pro')
+    const yearly = body.plans.find((plan) => plan.id === 'pro_annual')
+    expect(monthly?.price.amount).toBe(5000)
+    expect(monthly?.standardAmount).toBe(10000)
+    expect(monthly?.displayLabel).toBe('Pro Monthly')
+    expect(monthly?.trialDays).toBe(3)
+    expect(yearly?.price.amount).toBe(40000)
+    expect(yearly?.standardAmount).toBe(60000)
+    expect(body.billingEnabled).toBe(false)
   })
 
   it('accepts waitlist signups without storing anything else', async () => {

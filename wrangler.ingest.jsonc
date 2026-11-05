@@ -23,7 +23,7 @@
     ],
   },
   "triggers": {
-    // Public discovery refresh is independent of D1 and runs twice daily.
+    // The hourly trigger checks source tiers and queues daily idea evidence.
     "crons": ["0 * * * *"],
   },
   "vars": {

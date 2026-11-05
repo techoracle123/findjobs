@@ -3,7 +3,9 @@ import {
   compareScoredJobs,
   ELIGIBILITY_ORDER,
   SCORE_WEIGHTS,
+  rankJobs,
   scoreJob,
+  scoreJobs,
 } from '../../src/shared/scoring'
 import type { Job, Profile } from '../../src/shared/types'
 
@@ -146,6 +148,41 @@ describe('scoreJob', () => {
       workCountry: 'DE',
     })
     expect(perfect.score).toBe(100)
+  })
+
+  it('uses the same score and eligibility for lightweight ranking', () => {
+    const jobs = [
+      makeJob(),
+      makeJob({
+        id: 'job-2',
+        requiredSkills: [],
+        usefulSkills: [],
+        roleFamily: 'unknown',
+        seniority: 'unknown',
+        workMode: 'unknown',
+        eligibleCountries: [],
+        sponsorship: 'unknown',
+        opportunityType: 'gig',
+      }),
+      makeJob({ id: 'job-3', eligibleCountries: ['US'], sponsorship: 'unavailable' }),
+    ]
+    const profiles: Profile[] = [
+      profile,
+      { ...profile, opportunityTypes: ['gig'] },
+      {
+        skills: [],
+        targetRoleFamilies: [],
+        targetSeniority: [],
+        preferredWorkModes: [],
+        workCountry: '',
+      },
+    ]
+
+    for (const candidate of profiles) {
+      expect(rankJobs(jobs, candidate).map(({ score, tier }) => ({ score, tier }))).toEqual(
+        scoreJobs(jobs, candidate).map(({ score, tier }) => ({ score, tier })),
+      )
+    }
   })
 })
 

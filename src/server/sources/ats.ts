@@ -398,6 +398,9 @@ export const smartrecruiters: SourceParser = {
   },
 }
 
+type WorkdayValue =
+  string | { title?: string; text?: string; value?: string; descriptor?: string; name?: string }
+
 interface WorkdayPosting {
   title?: string
   externalPath?: string
@@ -405,7 +408,94 @@ interface WorkdayPosting {
   locationsText?: string
   postedOn?: string
   jobDescription?: string
-  bulletFields?: { title?: string; text?: string }[]
+  remoteType?: string
+  timeType?: string
+  bulletFields?: WorkdayValue[]
+}
+
+interface WorkdayDetail {
+  id?: string
+  title?: string
+  jobDescription?: string
+  jobReqId?: string
+  jobPostingId?: string
+  location?: string
+  additionalLocations?: string[]
+  postedOn?: string
+  startDate?: string
+  endDate?: string
+  jobPostingEndDate?: string
+  applicationCloseDate?: string
+  timeType?: string
+  workerType?: string
+  remoteType?: string
+  externalUrl?: string
+  canApply?: boolean
+  country?: { descriptor?: string; alpha2Code?: string }
+  jobRequisitionLocation?: {
+    descriptor?: string
+    country?: { descriptor?: string; alpha2Code?: string }
+  }
+  [key: string]: unknown
+}
+
+function workdayText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number') return String(value)
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    for (const key of ['descriptor', 'name', 'value', 'text', 'title']) {
+      if (typeof record[key] === 'string' && record[key].trim()) return record[key].trim()
+    }
+  }
+  return ''
+}
+
+function workdayBulletText(field: WorkdayValue): string {
+  if (typeof field === 'string') return stripHtml(field)
+  const text = stripHtml(field.text ?? field.value ?? field.descriptor ?? field.name ?? '')
+  return field.title && text ? `${field.title}: ${text}` : text
+}
+
+function workdayPostedDate(value: string | undefined): string | null {
+  if (!value) return null
+  if (Number.isFinite(Date.parse(value))) return value
+  const today = new Date()
+  const dateOnly = (daysAgo: number) => {
+    const date = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
+    date.setUTCDate(date.getUTCDate() - daysAgo)
+    return date.toISOString().slice(0, 10)
+  }
+  if (/posted\s+today/i.test(value)) return dateOnly(0)
+  if (/posted\s+yesterday/i.test(value)) return dateOnly(1)
+  const days = value.match(/posted\s+(\d{1,3})\s+days?\s+ago/i)
+  if (days && !value.includes('+')) return dateOnly(Number(days[1]))
+  return null
+}
+
+function workdayEndpoints(listingUrl: string, sourceId: string) {
+  let parsed: URL
+  try {
+    parsed = new URL(listingUrl)
+  } catch {
+    throw new SourceError('The Workday listing URL is not valid', sourceId)
+  }
+  const parts = parsed.pathname.split('/').filter(Boolean)
+  let tenant = parsed.hostname.split('.')[0] ?? ''
+  let site = ''
+  if (parts[0] === 'wday' && parts[1] === 'cxs') {
+    tenant = parts[2] ?? tenant
+    site = parts[3] ?? ''
+  } else {
+    site = [...parts].reverse().find((part) => !/^[a-z]{2}(?:-[a-z]{2})?$/i.test(part)) ?? ''
+  }
+  if (!tenant || !site) throw new SourceError('The Workday board is not configured', sourceId)
+  const apiBase = `${parsed.origin}/wday/cxs/${encodeURIComponent(tenant)}/${encodeURIComponent(site)}`
+  return {
+    jobsUrl: `${apiBase}/jobs`,
+    apiBase,
+    publicBase: `${parsed.origin}/${encodeURIComponent(site)}`,
+  }
 }
 
 export const workday: SourceParser = {
@@ -414,64 +504,182 @@ export const workday: SourceParser = {
   kind: 'ats',
   platform: 'workday',
   homepage: 'https://www.workday.com',
-  attribution: "Jobs via the employer's own Workday board.",
-  verification: 'verified',
-  verificationReason: "the employer's own Workday board",
+  attribution: 'Jobs via a public Workday careers board.',
+  verification: 'unverified',
+  verificationReason: 'Read from a public Workday careers board; check it there before applying.',
 
   async fetchPostings(source, fetchImpl = fetch) {
-    const url = source.listingUrl
-    let response: Response
-    try {
-      response = await fetchImpl(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ appliedFacets: {}, limit: 20, offset: 0, searchText: '' }),
-      })
-    } catch (error) {
-      throw new SourceError(
-        `Could not reach ${url}: ${error instanceof Error ? error.message : String(error)}`,
-        source.id,
-      )
+    const { jobsUrl, apiBase, publicBase } = workdayEndpoints(source.listingUrl, source.id)
+    const searchText =
+      typeof source.options.searchText === 'string' ? source.options.searchText : ''
+    const appliedFacets =
+      source.options.appliedFacets && typeof source.options.appliedFacets === 'object'
+        ? source.options.appliedFacets
+        : {}
+    const requestedMax = Number(source.options.maxPostings ?? 100)
+    const maxPostings = Number.isFinite(requestedMax)
+      ? Math.min(200, Math.max(1, Math.floor(requestedMax)))
+      : 100
+    const countryCode =
+      typeof source.options.countryCode === 'string'
+        ? source.options.countryCode.trim().toUpperCase()
+        : ''
+    const fetchDetails = source.options.fetchDetails !== false
+    const listings: WorkdayPosting[] = []
+    const seenPaths = new Set<string>()
+
+    for (let offset = 0; offset < maxPostings; offset += 20) {
+      let response: Response
+      try {
+        response = await fetchImpl(jobsUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ appliedFacets, limit: 20, offset, searchText }),
+        })
+      } catch (error) {
+        throw new SourceError(
+          `Could not reach the Workday board: ${error instanceof Error ? error.message : String(error)}`,
+          source.id,
+        )
+      }
+      if (!response.ok) {
+        throw new SourceError(`The Workday board responded with ${response.status}`, source.id)
+      }
+      let payload: { jobPostings?: WorkdayPosting[]; total?: number }
+      try {
+        payload = (await response.json()) as { jobPostings?: WorkdayPosting[]; total?: number }
+      } catch {
+        throw new SourceError('The Workday board did not return JSON', source.id)
+      }
+      if (!Array.isArray(payload.jobPostings)) {
+        throw new SourceError('The Workday board did not return a jobs list', source.id)
+      }
+      for (const posting of payload.jobPostings) {
+        if (!posting.title || !posting.externalPath || seenPaths.has(posting.externalPath)) continue
+        seenPaths.add(posting.externalPath)
+        listings.push(posting)
+        if (listings.length >= maxPostings) break
+      }
+      const total = typeof payload.total === 'number' ? payload.total : listings.length
+      if (
+        payload.jobPostings.length < 20 ||
+        listings.length >= Math.min(total, maxPostings) ||
+        listings.length >= maxPostings
+      ) {
+        break
+      }
     }
-    if (!response.ok) {
-      throw new SourceError(`${url} responded with ${response.status}`, source.id)
-    }
 
-    const payload = (await response.json()) as { jobPostings?: WorkdayPosting[] }
-    const postings = payload.jobPostings ?? []
+    const company = source.options.companyLabel
+      ? String(source.options.companyLabel)
+      : slugOf(source)
 
-    return postings
-      .filter((posting) => posting.title && posting.externalPath)
-      .map((posting) => {
-        const location = posting.locationsText ?? ''
-        const description = [
-          stripHtml(posting.jobDescription ?? ''),
-          ...(posting.bulletFields ?? [])
-            .filter((field) => field.title)
-            .map((field) => `${field.title}: ${stripHtml(field.text ?? '')}`),
-        ]
-          .filter(Boolean)
-          .join('\n\n')
-
-        return {
-          externalId: posting.externalReqId ?? posting.externalPath ?? '',
-          title: String(posting.title ?? '').trim(),
-          company: source.options.companyLabel
-            ? String(source.options.companyLabel)
-            : slugOf(source),
-          description,
-          url: `${url.split('/wday/cxs/')[0]}${posting.externalPath ?? ''}`,
-          applyUrl: '',
-          location,
-          remote: /remote/i.test(location),
-          tags: [],
-          jobType: '',
-          publishedAt: posting.postedOn ?? null,
-          validThrough: null,
-          closed: false,
-          salary: null,
+    const toPosting = async (posting: WorkdayPosting): Promise<RawPosting | null> => {
+      let detail: WorkdayDetail | null = null
+      if (fetchDetails && posting.externalPath) {
+        try {
+          const detailUrl = `${apiBase}${posting.externalPath.startsWith('/') ? '' : '/'}${posting.externalPath}`
+          const response = await fetchImpl(detailUrl, {
+            headers: { accept: 'application/json' },
+          })
+          if (response.ok) {
+            const payload = (await response.json()) as {
+              jobPostingInfo?: WorkdayDetail
+            } & WorkdayDetail
+            detail = payload.jobPostingInfo ?? payload
+          }
+        } catch {
+          // The listing still carries a title, location text and a working
+          // public link. A failed detail call must not lose the whole board.
+          detail = null
         }
-      })
+      }
+
+      const detailCountryCode = (
+        detail?.jobRequisitionLocation?.country?.alpha2Code ??
+        detail?.country?.alpha2Code ??
+        workdayText(detail?.countryCode) ??
+        ''
+      ).toUpperCase()
+      const countryLabel =
+        detail?.country?.descriptor ??
+        detail?.jobRequisitionLocation?.country?.descriptor ??
+        (detailCountryCode ? countryName(detailCountryCode) : '')
+      const locationParts = [
+        detail?.location,
+        ...(((detail?.additionalLocations as string[] | undefined) ?? []).filter(
+          Boolean,
+        ) as string[]),
+      ].filter(Boolean) as string[]
+      let location = locationParts.join('; ') || posting.locationsText || countryLabel || ''
+      if (
+        countryLabel &&
+        location &&
+        !location.toLowerCase().includes(countryLabel.toLowerCase())
+      ) {
+        location = `${location}, ${countryLabel}`
+      }
+      if (countryCode) {
+        const wantedName = countryName(countryCode)
+        const matches =
+          detailCountryCode === countryCode ||
+          location.toLowerCase().includes(wantedName.toLowerCase())
+        if (!matches) return null
+      }
+
+      const bulletText = (posting.bulletFields ?? []).map(workdayBulletText).filter(Boolean)
+      const description = [
+        stripHtml(detail?.jobDescription ?? posting.jobDescription ?? ''),
+        ...bulletText,
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+      const externalPath = posting.externalPath ?? ''
+      const publicUrl =
+        detail?.externalUrl && /^https?:\/\//i.test(detail.externalUrl)
+          ? detail.externalUrl
+          : `${publicBase}${externalPath.startsWith('/') ? '' : '/'}${externalPath}`
+      const remoteType = detail?.remoteType ?? posting.remoteType ?? ''
+      const validThrough =
+        detail?.endDate ?? detail?.jobPostingEndDate ?? detail?.applicationCloseDate ?? null
+      const tags = [
+        workdayText(detail?.jobFamilyGroup),
+        workdayText(detail?.jobFamily),
+        workdayText(detail?.jobProfile),
+        remoteType,
+      ].filter(Boolean)
+
+      return {
+        externalId:
+          detail?.jobReqId ?? detail?.jobPostingId ?? posting.externalReqId ?? externalPath,
+        title: String(detail?.title ?? posting.title ?? '').trim(),
+        company,
+        description,
+        url: publicUrl,
+        applyUrl: publicUrl,
+        location,
+        remote: /remote/i.test(`${location} ${remoteType} ${detail?.title ?? posting.title ?? ''}`),
+        tags,
+        jobType: [detail?.timeType ?? posting.timeType, detail?.workerType]
+          .filter(Boolean)
+          .join(' · '),
+        publishedAt:
+          workdayPostedDate(detail?.startDate) ??
+          workdayPostedDate(detail?.postedOn) ??
+          workdayPostedDate(posting.postedOn),
+        validThrough:
+          validThrough && Number.isFinite(Date.parse(validThrough)) ? validThrough : null,
+        closed: detail?.canApply === false,
+        salary: null,
+      }
+    }
+
+    const postings: RawPosting[] = []
+    for (let index = 0; index < listings.length; index += 5) {
+      const batch = await Promise.all(listings.slice(index, index + 5).map(toPosting))
+      postings.push(...batch.filter((posting): posting is RawPosting => posting !== null))
+    }
+    return postings
   },
 }
 

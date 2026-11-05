@@ -36,16 +36,26 @@ describe('encrypted deployment integrations', () => {
       allowed_updates: ['message'],
     })
   })
+  it('retries a transient Telegram network failure before checking the bot', async () => {
+    const fetcher = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockResolvedValueOnce(Response.json({ ok: true, result: { username: 'my_jobs_bot' } }))
+    const bot = await telegramSetup('secret-token', 'find-jobs', fetcher, undefined, [0])
+    expect(bot.username).toBe('my_jobs_bot')
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
   it('does not expose Telegram credentials on a network failure', async () => {
     const fetcher = vi
       .fn()
       .mockRejectedValue(new Error('https://api.telegram.org/botsecret-token/getMe'))
-    await expect(telegramSetup('secret-token', 'find-jobs', fetcher)).rejects.toThrow(
-      'could not be reached',
-    )
-    await expect(telegramSetup('secret-token', 'find-jobs', fetcher)).rejects.not.toThrow(
-      'secret-token',
-    )
+    await expect(
+      telegramSetup('secret-token', 'find-jobs', fetcher, undefined, [0, 0]),
+    ).rejects.toThrow('could not be reached')
+    await expect(
+      telegramSetup('secret-token', 'find-jobs', fetcher, undefined, [0, 0]),
+    ).rejects.not.toThrow('secret-token')
+    expect(fetcher).toHaveBeenCalledTimes(6)
   })
   it('deletes the legacy Access application that intercepted sign-in', async () => {
     const api = vi

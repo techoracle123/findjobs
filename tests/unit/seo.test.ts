@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ideaMeta,
   jobMeta,
   jobPostingJsonLd,
   pageMeta,
+  renderPagesSitemap,
   render404,
   renderJobSitemap,
   renderSitemapIndex,
   sitemapEligible,
 } from '../../src/server/seo'
 import type { Job } from '../../src/shared/types'
+import { searchIdeas } from '../../src/server/ideas/catalog'
+import { makeIdeaSnapshot } from '../fixtures/ideas'
 
 const now = Date.now()
 const job = (over: Partial<Job> = {}): Job => ({
@@ -92,6 +96,7 @@ describe('metadata and sitemaps', () => {
     const routes = [
       '/',
       '/jobs',
+      '/ideas',
       '/pricing',
       '/about',
       '/privacy',
@@ -115,6 +120,17 @@ describe('metadata and sitemaps', () => {
     )
     expect(meta.title.length).toBeLessThanOrEqual(61)
     expect(meta.canonical).toBe(`${ORIGIN}/jobs/job_1`)
+  })
+
+  it('gives localized idea details a useful canonical result and sitemap entry', () => {
+    const idea = searchIdeas(makeIdeaSnapshot(2), { limit: 1, offset: 0 }).ideas[0]
+    const meta = ideaMeta(idea, ORIGIN)
+    expect(meta.title).toContain(idea.location.name)
+    expect(meta.description).toContain(idea.evidence.displayValue)
+    expect(meta.canonical).toBe(`${ORIGIN}/ideas/${encodeURIComponent(idea.id)}`)
+    const xml = renderPagesSitemap(ORIGIN)
+    expect(xml).toContain(`${ORIGIN}/ideas</loc>`)
+    expect(xml).toContain(`${ORIGIN}/pricing</loc>`)
   })
 
   it('chunks sitemaps and only lists fresh, published, English jobs', () => {

@@ -1,6 +1,8 @@
 import { Bookmark, BookmarkCheck, Flag } from 'lucide-react'
 import type { ScoredJob } from '../shared/types'
-import { formatRange, formatRelativeTime } from '../shared/format'
+import { formatRange, formatRelativeTime, PERIOD_LABELS } from '../shared/format'
+import { opportunityBadge, opportunityOf } from '../shared/opportunities'
+import { gigCategoryFor } from '../shared/gig-categories'
 import { roleFamilyLabel, workModeLabel } from '../shared/taxonomy'
 import type { SalaryView } from '../lib/ranking'
 import { MatchRing } from './MatchRing'
@@ -30,7 +32,7 @@ function monogram(company: string): string {
 /**
  * One job card. Title, company and meta read top-to-bottom on the left;
  * salary sits under the meta; save/report live in one compact action
- * column on the right — everything in normal flow, nothing floating.
+ * column on the right, everything in normal flow, nothing floating.
  */
 export function JobRow({
   scored,
@@ -43,6 +45,9 @@ export function JobRow({
   cautionBannerEnabled = false,
 }: JobRowProps) {
   const { job, score } = scored
+  const opportunity = opportunityOf(job)
+  const gigBadge = opportunity.opportunityType === 'gig' ? opportunityBadge(job) : ''
+  const gigCategory = opportunity.opportunityType === 'gig' ? gigCategoryFor(job) : null
   const hasProfile = scored.components.some((component) => component.applicable)
   const hasPay = salary.max > 0 || salary.min > 0
   return (
@@ -78,24 +83,26 @@ export function JobRow({
             {job.verification === 'verified' && (
               <span className="chip chip--ok jobrow__badge">Verified</span>
             )}
+            {gigBadge && <span className="chip chip--gig jobrow__badge">{gigBadge}</span>}
             {job.locationLabel ? ` · ${job.locationLabel}` : ''}
           </span>
           <span className="jobrow__meta">
-            {job.roleFamily !== 'unknown' && <span>{roleFamilyLabel(job.roleFamily)}</span>}
+            {gigCategory ? (
+              <span>{gigCategory.label}</span>
+            ) : job.roleFamily !== 'unknown' ? (
+              <span>{roleFamilyLabel(job.roleFamily)}</span>
+            ) : null}
+            {opportunity.projectDuration && <span>{opportunity.projectDuration}</span>}
             {job.workMode !== 'unknown' && <span>{workModeLabel(job.workMode)}</span>}
             {job.postedAt && <span>{formatRelativeTime(job.postedAt)}</span>}
+            {job.sourceName && <span>Source: {job.sourceName}</span>}
             {job.jobStatus === 'closed' && <span>Closed</span>}
           </span>
           {hasPay && (
             <span className="jobrow__salary">
               {salary.converted ? '≈ ' : ''}
               {formatRange(salary.min, salary.max, salary.currency)}
-              <span>
-                {' '}
-                {salary.period === 'unknown'
-                  ? '(period not stated)'
-                  : `/${salary.period === 'year' ? 'yr' : salary.period === 'month' ? 'mo' : 'hr'}`}
-              </span>
+              <span> {PERIOD_LABELS[salary.period]}</span>
             </span>
           )}
         </span>

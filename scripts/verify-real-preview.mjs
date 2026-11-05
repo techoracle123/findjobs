@@ -71,6 +71,10 @@ try {
     'wrangler.local.jsonc',
     '--local',
   ])
+  // The Jobs fixtures remain real freshly fetched listings. Ideas use a
+  // separate, explicitly synthetic local-only evidence fixture so browser
+  // tests do not depend on a third-party data refresh during CI.
+  run([join(root, 'scripts/seed-local-ideas.mjs')])
   // Local-only bootstrap port: this is NOT the production database or an auth
   // bypass in the app under test. The second worker uses hosted/staging rules.
   worker(8789, 'local-preview', 9230)

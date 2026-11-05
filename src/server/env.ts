@@ -21,7 +21,10 @@ export interface Env {
   TELEGRAM_BOT_USERNAME?: string
   /** Comma-separated verified Access emails allowed on /api/admin/*. */
   ADMIN_EMAILS?: string
-  /** Sign-in codes are sent through Resend REST when set; console otherwise. */
+  /** Password reset emails are sent through Brevo or Resend REST when set. */
+  BREVO_API_KEY?: string
+  /** Optional Brevo-only sender; EMAIL_FROM is the usual shared secret. */
+  BREVO_SENDER_EMAIL?: string
   RESEND_API_KEY?: string
   EMAIL_FROM?: string
   /** Alias for EMAIL_FROM, accepted so either secret name works. */
@@ -36,9 +39,9 @@ export interface Env {
   TELEGRAM_WEBHOOK_SECRET?: string
 
   // Payments
-  /** fake | stripe | paystack | flutterwave. Inferred from the keys when unset. */
+  /** fake | stripe | paystack | flutterwave | bachs. Inferred from the keys when unset. */
   BILLING_PROVIDER?: string
-  /** Bachs gateway (Prompts 4/7). Secret stays server-side; never in the bundle. */
+  /** Bachs gateway. Secret stays server-side; never in the bundle. */
   BACHS_SECRET_KEY?: string
   BACHS_WEBHOOK_SECRET?: string
   /** Global affiliate payout kill switch: '1' (or unset with no approvals) blocks payouts. */

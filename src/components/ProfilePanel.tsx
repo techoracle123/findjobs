@@ -19,6 +19,7 @@ export const EMPTY_PROFILE: Profile = {
   targetSeniority: [],
   preferredWorkModes: [],
   workCountry: '',
+  opportunityTypes: [],
 }
 
 interface ProfilePanelProps {
@@ -138,6 +139,41 @@ export function ProfilePanel({
         </div>
 
         <div className="field">
+          <span className="field__label">Work to put first</span>
+          <div className="chiprow" role="group" aria-label="Jobs or gigs">
+            {(
+              [
+                ['job', 'Jobs'],
+                ['gig', 'Gigs and contracts'],
+              ] as const
+            ).map(([value, label]) => {
+              const selectedTypes = (profile.opportunityTypes ?? []).filter(
+                (type): type is 'job' | 'gig' => type === 'job' || type === 'gig',
+              )
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  className="chipbtn"
+                  aria-pressed={selectedTypes.includes(value)}
+                  onClick={() =>
+                    onChange({
+                      ...profile,
+                      opportunityTypes: toggle(selectedTypes, value),
+                    })
+                  }
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          <span className="field__hint">
+            Choose one or both. Leave both off if you want FJ to treat jobs and gigs the same.
+          </span>
+        </div>
+
+        <div className="field">
           <span className="field__label">Experience level</span>
           <div className="chiprow">
             {SENIORITIES.map((level) => (
@@ -157,7 +193,7 @@ export function ProfilePanel({
         </div>
 
         <div className="field">
-          <span className="field__label">Preferred work mode</span>
+          <span className="field__label">Preferred work setting</span>
           <div className="chiprow">
             {WORK_MODES.map((mode) => (
               <button

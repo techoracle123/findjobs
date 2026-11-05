@@ -76,6 +76,40 @@ export async function bootstrapPublicFeed(api, auth) {
     },
   }
   await mkdir('diagnostics', { recursive: true })
+  // Ideas have their own evidence lifecycle. Run this before any fresh-feed
+  // early return so retaining jobs never skips the official-data refresh.
+  const evidenceOutfile = resolve('diagnostics/idea-evidence-runtime.mjs')
+  await build({
+    entryPoints: ['src/server/ideas/evidence.ts'],
+    outfile: evidenceOutfile,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    logLevel: 'silent',
+  })
+  const { IDEA_EVIDENCE_KEY, MIN_IDEA_CATALOG_TOTAL, refreshIdeaEvidence, withIdeaCatalogSummary } =
+    await import(pathToFileURL(evidenceOutfile).href)
+  const previousEvidence = await kv.get(IDEA_EVIDENCE_KEY)
+  try {
+    const evidence = await refreshIdeaEvidence(kv)
+    console.log(
+      `::notice title=Idea evidence refreshed::${evidence.catalogTotal} computed localized ideas from ${evidence.countries.length} locations; official source release ${evidence.sourceLastUpdated}.`,
+    )
+  } catch (error) {
+    if (!previousEvidence || previousEvidence.catalogTotal < MIN_IDEA_CATALOG_TOTAL) {
+      throw new Error(
+        `Idea evidence is not ready and no sufficient previous snapshot exists: ${error instanceof Error ? error.message : 'unknown error'}`,
+      )
+    }
+    if (!previousEvidence.countryCounts) {
+      // Upgrade the retained snapshot without another official-data request.
+      // Evidence values and all original timestamps remain untouched.
+      await kv.put(IDEA_EVIDENCE_KEY, JSON.stringify(withIdeaCatalogSummary(previousEvidence)))
+    }
+    console.log(
+      `::warning title=Previous idea evidence retained::${error instanceof Error ? error.message : 'refresh failed'} The last snapshot with ${previousEvidence.catalogTotal} ideas remains available with its original timestamps.`,
+    )
+  }
   const outfile = resolve('diagnostics/public-feed-runtime.mjs')
   await build({
     entryPoints: ['src/server/public-feed.ts'],
@@ -85,9 +119,13 @@ export async function bootstrapPublicFeed(api, auth) {
     format: 'esm',
     logLevel: 'silent',
   })
-  const { PUBLIC_SOURCES, refreshPublicSource, publishPublicSnapshot } = await import(
-    pathToFileURL(outfile).href
-  )
+  const {
+    PRECLASSIFIED_SNAPSHOT_VERSION,
+    SEARCH_TEXT_SNAPSHOT_VERSION,
+    PUBLIC_SOURCES,
+    refreshPublicSource,
+    publishPublicSnapshot,
+  } = await import(pathToFileURL(outfile).href)
   const current = await kv.get('published')
   console.log(
     `::notice title=Bootstrap path::attempted=${current?.attemptedSources ?? '?'}/${PUBLIC_SOURCES.length} ids=${current?.ids?.length ?? '?'} parts=${current?.parts?.length ?? '?'} ageMin=${current?.refreshedAt ? Math.round((Date.now() - Date.parse(current.refreshedAt)) / 60000) : '?'} forced=${process.env.FJ_FORCE_PUBLIC_REFRESH === 'true'}`,
@@ -105,6 +143,17 @@ export async function bootstrapPublicFeed(api, auth) {
         `::notice title=Publication index repaired::${repaired.jobs.length} unique listings republished in non-overlapping shards; no publisher recrawl.`,
       )
       return { id: ns.id, count: repaired.jobs.length }
+    }
+    if (
+      current.opportunityVersion !== PRECLASSIFIED_SNAPSHOT_VERSION ||
+      current.searchTextVersion !== SEARCH_TEXT_SNAPSHOT_VERSION ||
+      !current.stats
+    ) {
+      const upgraded = await publishPublicSnapshot(kv)
+      console.log(
+        `::notice title=Publication index upgraded::${upgraded.jobs.length} listings republished with stored search text, job and gig lanes, and public totals; no publisher recrawl.`,
+      )
+      return { id: ns.id, count: upgraded.jobs.length }
     }
     // Legacy fat shards (debug evidence inline) blow the free request budget.
     // Rebuild the publication from the stored source indexes — no recrawl.

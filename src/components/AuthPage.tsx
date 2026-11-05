@@ -17,7 +17,7 @@ function modeFromPath(): Mode {
 /** Only plain in-app destinations may be returned to after sign-in. */
 function safeReturnTo(): string {
   const raw = new URLSearchParams(window.location.search).get('returnTo') || '/jobs'
-  return /^\/(?:dashboard|profile|jobs(?:\/[A-Za-z0-9_-]+)?)?$/.test(raw) ? raw : '/jobs'
+  return /^\/(?:dashboard|profile|pricing|jobs(?:\/[A-Za-z0-9_-]+)?)?$/.test(raw) ? raw : '/jobs'
 }
 
 async function postJson(

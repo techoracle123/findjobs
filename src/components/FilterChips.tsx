@@ -21,6 +21,9 @@ import {
 } from '../shared/taxonomy'
 import { controlEnabled } from '../shared/quality'
 import type { FieldCoverage } from '../shared/quality'
+import { OPPORTUNITY_FILTER_OPTIONS } from '../shared/opportunities'
+import { GIG_CATEGORIES } from '../shared/gig-categories'
+import { POPULAR_SKILL_SEARCHES } from '../shared/search-shortcuts'
 import { CountryPicker } from './CountryPicker'
 
 interface FilterChipsProps {
@@ -28,7 +31,11 @@ interface FilterChipsProps {
   coverage?: FieldCoverage
   adminControls: boolean
   worldwide: boolean
-  counts?: { countries: Record<string, number>; professions: Record<string, number> }
+  counts?: {
+    countries: Record<string, number>
+    professions: Record<string, number>
+    opportunities?: { all: number; job: number; gig: number }
+  }
   onChange: (filters: Filters) => void
   onWorldwide: (worldwide: boolean) => void
   onReset: () => void
@@ -48,6 +55,8 @@ export function FilterChips({
   onReset,
 }: FilterChipsProps) {
   const [open, setOpen] = useState<ChipId | null>(null)
+  const [showAllGigCategories, setShowAllGigCategories] = useState(false)
+  const [showAllSkillSearches, setShowAllSkillSearches] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -68,6 +77,7 @@ export function FilterChips({
 
   const toggle = (chip: ChipId) => setOpen((current) => (current === chip ? null : chip))
   const active = Boolean(
+    (filters.opportunityType && filters.opportunityType !== 'all') ||
     filters.country ||
     filters.roleFamilies.length ||
     filters.seniorities.length ||
@@ -75,9 +85,140 @@ export function FilterChips({
     filters.verification.length ||
     worldwide,
   )
+  const normalizedGigQuery = filters.query.trim().toLowerCase()
+  const activeGigCategory = GIG_CATEGORIES.find(
+    (category) =>
+      normalizedGigQuery === category.search.toLowerCase() ||
+      normalizedGigQuery === category.label.toLowerCase(),
+  )
+  const visibleGigCategories = showAllGigCategories
+    ? GIG_CATEGORIES
+    : [
+        ...GIG_CATEGORIES.slice(0, 8),
+        ...(activeGigCategory && !GIG_CATEGORIES.slice(0, 8).includes(activeGigCategory)
+          ? [activeGigCategory]
+          : []),
+      ]
+  const activeSkillSearch = POPULAR_SKILL_SEARCHES.find(
+    (shortcut) =>
+      normalizedGigQuery === shortcut.search.toLowerCase() ||
+      normalizedGigQuery === shortcut.label.toLowerCase(),
+  )
+  const visibleSkillSearches = showAllSkillSearches
+    ? POPULAR_SKILL_SEARCHES
+    : [
+        ...POPULAR_SKILL_SEARCHES.slice(0, 8),
+        ...(activeSkillSearch && !POPULAR_SKILL_SEARCHES.slice(0, 8).includes(activeSkillSearch)
+          ? [activeSkillSearch]
+          : []),
+      ]
 
   return (
     <div className="chipbar-wrap" ref={wrapRef}>
+      <div className="opportunity-switch" role="group" aria-label="Choose the type of work">
+        {OPPORTUNITY_FILTER_OPTIONS.map((option) => {
+          const selected = (filters.opportunityType ?? 'all') === option.id
+          const count = counts?.opportunities?.[option.id]
+          return (
+            <button
+              key={option.id}
+              type="button"
+              className="opportunity-switch__button"
+              aria-pressed={selected}
+              aria-label={
+                count === undefined
+                  ? option.label
+                  : `${option.label} ${count.toLocaleString()} listings`
+              }
+              onClick={() => onChange({ ...filters, opportunityType: option.id })}
+            >
+              <span>{option.label}</span>{' '}
+              {count !== undefined && (
+                <span className="opportunity-switch__count">{count.toLocaleString()}</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+      {filters.opportunityType === 'gig' && (
+        <div className="gig-categories" aria-label="Browse gigs by type of work">
+          <span className="gig-categories__label">Gig types</span>
+          <button
+            type="button"
+            className="chipbtn gig-category-btn"
+            aria-pressed={!activeGigCategory && !normalizedGigQuery}
+            onClick={() =>
+              onChange({ ...filters, query: '', opportunityType: 'gig', roleFamilies: [] })
+            }
+          >
+            All gigs
+          </button>
+          {visibleGigCategories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              className="chipbtn gig-category-btn"
+              aria-pressed={activeGigCategory?.id === category.id}
+              onClick={() =>
+                onChange({
+                  ...filters,
+                  query: category.search,
+                  opportunityType: 'gig',
+                  roleFamilies: [],
+                })
+              }
+            >
+              {category.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="chipbtn gig-category-btn gig-category-btn--more"
+            aria-expanded={showAllGigCategories}
+            onClick={() => setShowAllGigCategories((current) => !current)}
+          >
+            {showAllGigCategories ? 'Fewer types' : 'More types'}
+          </button>
+        </div>
+      )}
+      {filters.opportunityType !== 'gig' && (
+        <div className="gig-categories skill-searches" aria-label="Browse by popular skill">
+          <span className="gig-categories__label">Popular skills</span>
+          <button
+            type="button"
+            className="chipbtn gig-category-btn"
+            aria-pressed={!activeSkillSearch && !normalizedGigQuery}
+            onClick={() => onChange({ ...filters, query: '', roleFamilies: [] })}
+          >
+            All skills
+          </button>
+          {visibleSkillSearches.map((shortcut) => (
+            <button
+              key={shortcut.id}
+              type="button"
+              className="chipbtn gig-category-btn"
+              aria-pressed={activeSkillSearch?.id === shortcut.id}
+              onClick={() =>
+                onChange({
+                  ...filters,
+                  query: activeSkillSearch?.id === shortcut.id ? '' : shortcut.search,
+                  roleFamilies: [],
+                })
+              }
+            >
+              {shortcut.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="chipbtn gig-category-btn gig-category-btn--more"
+            aria-expanded={showAllSkillSearches}
+            onClick={() => setShowAllSkillSearches((current) => !current)}
+          >
+            {showAllSkillSearches ? 'Fewer skills' : 'More skills'}
+          </button>
+        </div>
+      )}
       <div className="chipbar">
         <button
           type="button"
@@ -121,7 +262,7 @@ export function FilterChips({
             <Clock size={13} />{' '}
             {filters.workModes.length
               ? filters.workModes.map((mode) => WORK_MODE_LABELS[mode as 'remote']).join(', ')
-              : 'Work type'}{' '}
+              : 'Work setting'}{' '}
             <ChevronDown size={12} />
           </button>
         )}
@@ -193,6 +334,11 @@ export function FilterChips({
                 key={family}
                 type="button"
                 className="combolist__item"
+                aria-label={
+                  counts
+                    ? `${ROLE_FAMILY_LABELS[family]}, ${(counts.professions[family] || 0).toLocaleString()} jobs`
+                    : ROLE_FAMILY_LABELS[family]
+                }
                 onClick={() => {
                   onChange({ ...filters, roleFamilies: [family] })
                   setOpen(null)

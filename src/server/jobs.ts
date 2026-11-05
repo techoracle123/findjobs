@@ -1,12 +1,17 @@
 import type {
+  EngagementBasis,
+  EngagementType,
   Job,
   JobStatus,
+  OpportunityFilter,
+  OpportunityType,
   SalaryPeriod,
   Seniority,
   Sponsorship,
   VerificationLevel,
   WorkMode,
 } from '../shared/types'
+import { matchesOpportunityFilter, opportunityOf } from '../shared/opportunities'
 import { cleanJobText, stripHtml } from './sources/html'
 
 interface JobRow {
@@ -22,6 +27,11 @@ interface JobRow {
   salary_max: number | null
   salary_currency: string | null
   salary_period: string
+  opportunity_type: string | null
+  engagement_type: string | null
+  engagement_label: string | null
+  engagement_basis: string | null
+  project_duration: string | null
   description: string
   required_skills: string
   useful_skills: string
@@ -80,7 +90,7 @@ function mapRow(row: JobRow, now: number): Job {
     if (now - lastSeen > STALE_AFTER_MS) verification = 'stale'
   }
 
-  return {
+  const job: Job = {
     id: row.id,
     title: stripHtml(row.title),
     company: stripHtml(row.company),
@@ -93,6 +103,11 @@ function mapRow(row: JobRow, now: number): Job {
     salaryMax: row.salary_max ?? 0,
     salaryCurrency: row.salary_currency ?? 'USD',
     salaryPeriod: (row.salary_period || 'year') as SalaryPeriod,
+    opportunityType: (row.opportunity_type || 'unknown') as OpportunityType,
+    engagementType: (row.engagement_type || 'unknown') as EngagementType,
+    engagementLabel: row.engagement_label ?? '',
+    engagementBasis: (row.engagement_basis || undefined) as EngagementBasis | undefined,
+    projectDuration: row.project_duration ?? undefined,
     description: cleanJobText(row.description ?? ''),
     requiredSkills: parseList(row.required_skills),
     usefulSkills: parseList(row.useful_skills),
@@ -119,6 +134,15 @@ function mapRow(row: JobRow, now: number): Job {
     normalizerVersion: row.normalizer_version ?? undefined,
     quality: parseQuality(row.quality),
   }
+  const opportunity = opportunityOf(job)
+  return {
+    ...job,
+    opportunityType: opportunity.opportunityType,
+    engagementType: opportunity.engagementType,
+    engagementLabel: opportunity.engagementLabel,
+    engagementBasis: opportunity.engagementBasis,
+    ...(opportunity.projectDuration ? { projectDuration: opportunity.projectDuration } : {}),
+  }
 }
 
 function parseQuality(raw: string | null): Job['quality'] {
@@ -132,7 +156,8 @@ function parseQuality(raw: string | null): Job['quality'] {
 
 const COLUMNS = `j.id, j.title, j.company, j.role_family, j.seniority, j.work_mode,
   j.location_country, j.location_label, j.salary_min, j.salary_max, j.salary_currency,
-  j.salary_period, j.description, j.required_skills, j.useful_skills, j.eligible_countries,
+  j.salary_period, j.opportunity_type, j.engagement_type, j.engagement_label,
+  j.engagement_basis, j.project_duration, j.description, j.required_skills, j.useful_skills, j.eligible_countries,
   j.sponsorship, j.source_name, j.source_url, j.posted_days_ago, j.posted_at, j.is_demo,
   j.verification, j.verification_reason, j.verified_at, j.job_status, j.closed_at,
   j.closed_reason, j.first_seen_at, j.last_seen_at, j.apply_url, j.company_url, j.source_kind,
@@ -166,7 +191,7 @@ export async function listJobs(
     return {
       jobs: [],
       source: 'd1',
-      warning: 'We could not load jobs just now. Please try again shortly.',
+      warning: 'We could not load jobs. Please try again.',
     }
   }
 }
@@ -211,6 +236,7 @@ export interface JobSearch {
   roleFamilies?: string[]
   workModes?: string[]
   seniorities?: string[]
+  opportunityType?: OpportunityFilter
   /** Which roles to include. */
   status?: 'all' | 'open' | 'closed'
   /** Which verification levels to include. */
@@ -294,6 +320,45 @@ export async function searchJobs(
   }
 
   const where = conditions.join(' AND ')
+
+  if (search.opportunityType === 'gig' || search.opportunityType === 'job') {
+    // Older D1 rows can have empty opportunity columns. Their lane is derived
+    // in mapRow from the advert, so a SQL-only filter would miss real gigs
+    // until the next source refresh. Scan in bounded batches and apply the
+    // same classifier used by the public snapshot before paging.
+    const pageJobs: Job[] = []
+    const facetJobs: Job[] = []
+    let total = 0
+    let batchOffset = 0
+    const batchSize = 1000
+    for (;;) {
+      const rows = await db
+        .prepare(
+          `SELECT ${COLUMNS} FROM jobs j WHERE ${where}
+             ORDER BY j.posted_at DESC, j.id
+             LIMIT ? OFFSET ?`,
+        )
+        .bind(...binds, batchSize, batchOffset)
+        .all<JobRow>()
+      const batch = rows.results ?? []
+      for (const row of batch) {
+        const job = mapRow(row, now)
+        if (!matchesOpportunityFilter(job, search.opportunityType)) continue
+        if (total >= offset && pageJobs.length < limit) pageJobs.push(job)
+        if (search.withFacets && facetJobs.length < 5000) facetJobs.push(job)
+        total += 1
+      }
+      if (batch.length < batchSize) break
+      batchOffset += batch.length
+    }
+    return {
+      jobs: pageJobs,
+      ...(search.withFacets ? { facetJobs } : {}),
+      total,
+      limit,
+      offset,
+    }
+  }
 
   const countRow = await db
     .prepare(`SELECT COUNT(*) AS n FROM jobs j WHERE ${where}`)

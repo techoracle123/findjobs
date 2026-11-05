@@ -1,15 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, BarChart3, Bell, Bookmark, CreditCard, RotateCw, UserRound } from 'lucide-react'
-import type { ApiHealth, CvSuggestion, Job, Profile, RatesPayload } from './shared/types'
-import type { ApplyQuota, PlanCatalogue, PlanDefinition } from './lib/api'
+import {
+  ArrowLeft,
+  Banknote,
+  BarChart3,
+  Bell,
+  Bookmark,
+  CreditCard,
+  RotateCw,
+  Briefcase,
+  UserRound,
+} from 'lucide-react'
+import type {
+  ApiHealth,
+  CvSuggestion,
+  Job,
+  Profile,
+  RatesPayload,
+  SavedApplication,
+} from './shared/types'
+import type { PlanCatalogue, PlanDefinition } from './lib/api'
 import { PlanPanel } from './components/PlanPanel'
 import {
+  ApiError,
   fetchHealth,
   fetchJobs,
   fetchJob,
   fetchRates,
-  fetchApplyQuota,
-  fastApply,
   fetchPlans,
   createTelegramLink,
   fetchTelegramStatus,
@@ -18,25 +34,31 @@ import { readLocal, writeLocal } from './lib/storage'
 import { DEFAULT_FILTERS, filterJobs, salaryView, sortJobs } from './lib/ranking'
 import type { Filters, SortKey } from './lib/ranking'
 import { ROLE_FAMILIES, ROLE_FAMILY_LABELS } from './shared/taxonomy'
+import { POPULAR_SKILL_SEARCHES } from './shared/search-shortcuts'
 import { scoreJob } from './shared/scoring'
 import { ProfilePanel, EMPTY_PROFILE } from './components/ProfilePanel'
-import { CvImport } from './components/CvImport'
+import { CvImport, type ImportedCv } from './components/CvImport'
+import { MasterCvPanel } from './components/MasterCvPanel'
+import { AdvertCheckPanel } from './components/AdvertCheckPanel'
+import { ProInsightsPanel } from './components/ProInsightsPanel'
 import { FilterChips } from './components/FilterChips'
 import { SearchBar, type SearchValues } from './components/SearchBar'
 import { Pagination } from './components/Pagination'
 import { Footer } from './components/Footer'
+import { MobileMenu } from './components/MobileMenu'
 import { JobRow } from './components/JobRow'
 import { JobDetail } from './components/JobDetail'
 import { SavedPanel } from './components/SavedPanel'
 import { AlertsPanel } from './components/AlertsPanel'
 import { useAccount, type AccountMode } from './hooks/useAccount'
 import { ProgressPanel } from './components/ProgressPanel'
+import { SalaryGuidePanel } from './components/SalaryGuidePanel'
 import { ReportDialog } from './components/ReportDialog'
 import { deviceActivity } from './shared/activity'
 import { controlEnabled } from './shared/quality'
 import type { JobFacets } from './server/job-stats'
 
-type Tab = 'saved' | 'alerts' | 'progress' | 'plan'
+type Tab = 'saved' | 'alerts' | 'progress' | 'plan' | 'salary' | 'tools'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -44,6 +66,8 @@ const DASHBOARD_TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'progress', label: 'Progress', icon: BarChart3 },
   { id: 'saved', label: 'Saved', icon: Bookmark },
   { id: 'alerts', label: 'Alerts', icon: Bell },
+  { id: 'tools', label: 'Pro tools', icon: Briefcase },
+  { id: 'salary', label: 'Salary guide', icon: Banknote },
   { id: 'plan', label: 'Plan', icon: CreditCard },
 ]
 
@@ -76,6 +100,7 @@ function routeJobId(): string | null {
 }
 
 import { copy } from './shared/copy'
+import { PRO_FREE_FOR_ALL } from './shared/access'
 import { track } from './lib/analytics'
 
 export default function App() {
@@ -100,7 +125,9 @@ export default function App() {
   const initialQuery = new URLSearchParams(window.location.search)
   const [tab, setTab] = useState<Tab>(() => {
     const requested = initialQuery.get('tab') as Tab | null
-    return requested && ['saved', 'alerts', 'plan'].includes(requested) ? requested : 'progress'
+    return requested && ['saved', 'alerts', 'plan', 'salary', 'tools'].includes(requested)
+      ? requested
+      : 'progress'
   })
   const [worldwide, setWorldwide] = useState(initialQuery.get('ww') === '1')
   const [page, setPage] = useState(Math.max(1, Number(initialQuery.get('page')) || 1))
@@ -116,6 +143,7 @@ export default function App() {
     if (f.query.trim()) params.set('q', f.query.trim())
     if (f.location?.trim()) params.set('loc', f.location.trim())
     if (f.country) params.set('country', f.country)
+    if (f.opportunityType && f.opportunityType !== 'all') params.set('type', f.opportunityType)
     if (f.roleFamilies[0]) params.set('role', f.roleFamilies[0])
     if (f.workModes.length) params.set('mode', f.workModes.join(','))
     if (f.seniorities.length) params.set('level', f.seniorities.join(','))
@@ -138,6 +166,10 @@ export default function App() {
     query: initialQuery.get('q') ?? '',
     location: initialQuery.get('loc') ?? '',
     country: (initialQuery.get('country') ?? '').toUpperCase(),
+    opportunityType:
+      initialQuery.get('type') === 'gig' || initialQuery.get('type') === 'job'
+        ? (initialQuery.get('type') as 'gig' | 'job')
+        : 'all',
     roleFamilies: initialQuery.get('role') ? [initialQuery.get('role')!] : [],
     workModes: initialQuery.get('mode') ? initialQuery.get('mode')!.split(',') : [],
     seniorities: initialQuery.get('level')
@@ -148,9 +180,10 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [reportingId, setReportingId] = useState<string | null>(null)
   const [telegramLinked, setTelegramLinked] = useState(false)
-  const [applyQuota, setApplyQuota] = useState<ApplyQuota | null>(null)
   const [billingPlans, setBillingPlans] = useState<PlanDefinition[]>([])
   const [billingEnabled, setBillingEnabled] = useState(false)
+  const [billingProvider, setBillingProvider] = useState<string | undefined>(undefined)
+  const [importedCv, setImportedCv] = useState<ImportedCv | null>(null)
   const adminControls = new URLSearchParams(window.location.search).has('adminControls')
 
   const cautionBannerEnabled = (facets?.cautionShare ?? 1) < 0.2
@@ -167,6 +200,7 @@ export default function App() {
 
   const load = useCallback(
     async (force = false) => {
+      if (account.mode !== 'signed-in') return
       const version = ++requestVersion.current
       setLoading(true)
       setLoadError(null)
@@ -186,12 +220,18 @@ export default function App() {
         setFacets(jobsResponse.facets || null)
       } catch (cause) {
         if (version === requestVersion.current)
-          setLoadError(cause instanceof Error ? cause.message : String(cause))
+          setLoadError(
+            cause instanceof ApiError && cause.status === 401
+              ? 'sign-in-ended'
+              : cause instanceof Error
+                ? cause.message
+                : String(cause),
+          )
       } finally {
         if (version === requestVersion.current) setLoading(false)
       }
     },
-    [filters, page],
+    [account.mode, filters, page],
   )
 
   useEffect(() => {
@@ -214,28 +254,18 @@ export default function App() {
     }
   }, [])
   useEffect(() => {
-    if (account.mode !== 'signed-in') {
-      setApplyQuota(null)
-      return
-    }
-    let active = true
-    void fetchApplyQuota()
-      .then((quota) => {
-        if (active) setApplyQuota(quota)
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [account.mode, account.user])
-  useEffect(() => {
+    // Refreshing when the dashboard tab changes also gives the plan page a
+    // clean retry if the first price request failed on a weak connection.
     void fetchPlans()
       .then((catalogue: PlanCatalogue) => {
         setBillingPlans(catalogue.plans)
-        setBillingEnabled(Boolean(catalogue.plans.length))
+        // The server says whether a real payment provider is configured.
+        // A price list existing is not the same as checkout being open.
+        setBillingEnabled(catalogue.billingEnabled)
+        setBillingProvider(catalogue.provider)
       })
       .catch(() => {})
-  }, [])
+  }, [tab])
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState === 'visible') void load()
@@ -309,7 +339,7 @@ export default function App() {
   useEffect(() => {
     document.title =
       jobPage && selectedId && knownJobs[selectedId]
-        ? `${knownJobs[selectedId].title} — FJ - Find Jobs`
+        ? `${knownJobs[selectedId].title} | FJ Find Jobs`
         : 'FJ - Find Jobs'
   }, [jobPage, selectedId, knownJobs])
 
@@ -402,6 +432,19 @@ export default function App() {
     [selected, rates, displayCurrency],
   )
 
+  const proEnabled =
+    PRO_FREE_FOR_ALL ||
+    account.proTrial.status === 'active' ||
+    ['cv_analysis', 'prepared_applications', 'cv_check', 'interview_prep', 'salary_guide'].every(
+      (feature) => account.entitlements.includes(feature),
+    ) ||
+    Boolean(
+      account.subscription &&
+      ['pro', 'pro_graduate', 'pro_annual'].includes(account.subscription.plan) &&
+      ['active', 'trialing'].includes(account.subscription.status) &&
+      (!account.subscription.currentPeriodEnd ||
+        Date.parse(account.subscription.currentPeriodEnd) > Date.now()),
+    )
   const savedIds = useMemo(() => new Set(saved.map((entry) => entry.jobId)), [saved])
   const appliedIds = useMemo(
     () => new Set(saved.filter((entry) => entry.status === 'applied').map((entry) => entry.jobId)),
@@ -414,7 +457,10 @@ export default function App() {
       if (current.some((entry) => entry.jobId === jobId)) {
         return current.filter((entry) => entry.jobId !== jobId)
       }
-      return [...current, { jobId, savedAt: new Date().toISOString(), status: 'saved' }]
+      return [
+        ...current,
+        { jobId, savedAt: new Date().toISOString(), status: 'saved', stage: 'saved' },
+      ]
     })
     setToast(savedIds.has(jobId) ? 'Removed from saved' : 'Job saved')
   }
@@ -430,6 +476,10 @@ export default function App() {
               : {
                   ...entry,
                   status: 'applied',
+                  stage:
+                    entry.stage && ['applied', 'interview', 'offer', 'closed'].includes(entry.stage)
+                      ? entry.stage
+                      : 'applied',
                   appliedAt: entry.appliedAt || new Date().toISOString(),
                 }
             : entry,
@@ -441,6 +491,7 @@ export default function App() {
           jobId,
           savedAt: new Date().toISOString(),
           status: 'applied',
+          stage: 'applied',
           appliedAt: new Date().toISOString(),
         },
       ]
@@ -448,23 +499,23 @@ export default function App() {
     setToast('Marked as applied')
   }
 
-  const runFastApply = async (jobId: string) => {
-    track('apply_start', jobId)
-    try {
-      const result = await fastApply(jobId)
-      track('apply_complete', jobId)
-      setApplyQuota((current) =>
-        current && result.remaining !== null
-          ? { ...current, remaining: result.remaining, used: current.used + 1 }
-          : current,
-      )
-      markApplied(jobId)
-    } catch (error: unknown) {
-      void fetchApplyQuota()
-        .then(setApplyQuota)
-        .catch(() => {})
-      throw error
+  const openPlan = () => {
+    if (view === 'dashboard') {
+      setTab('plan')
+      writeUrl({ tab: 'plan' })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+      window.location.assign('/dashboard?tab=plan')
     }
+  }
+
+  const updateSavedEntry = (entry: SavedApplication) => {
+    setSaved((current) => current.map((item) => (item.jobId === entry.jobId ? entry : item)))
+  }
+
+  const openBestMatch = (job: Job) => {
+    setKnownJobs((current) => ({ ...current, [job.id]: job }))
+    openJob(job.id)
   }
 
   const applySuggestion = (suggestion: CvSuggestion) => {
@@ -510,30 +561,20 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <a
-          className="brand"
-          href="/"
-          aria-label="FJ - Find Jobs"
-          onClick={(event) => {
-            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-            event.preventDefault()
-            if (jobPage) backToResults()
-          }}
-        >
+        <a className="brand" href="/" aria-label="FJ Find Jobs home">
           <img className="brand__logo" src="/favicon.svg" alt="" width="36" height="36" />
-          <span>
-            FJ{' '}
-            <span className="brand__separator" aria-hidden="true">
-              —
-            </span>{' '}
-            Find Jobs
+          <span className="brand__word">
+            <strong>FJ</strong>
+            <span className="brand__suffix"> Find Jobs</span>
           </span>
         </a>
 
         <nav className="topnav" aria-label="Primary">
+          <a href="/">Home</a>
           <a href="/jobs" aria-current={view === 'browse' ? 'page' : undefined}>
             Jobs
           </a>
+          <a href="/ideas">Ideas</a>
           <a href="/pricing">Pricing</a>
           <a
             className="nav-dashboard"
@@ -547,9 +588,15 @@ export default function App() {
         <div className="topbar__spacer" />
 
         <div className="topbar__actions">
-          {account.mode === 'signed-in' && applyQuota && !applyQuota.unlimited && (
-            <a className="chip chip--plain quota-meter" href="/dashboard?tab=plan">
-              {Math.max(0, applyQuota.remaining)} / {applyQuota.limit} left today
+          {account.mode === 'signed-in' && (
+            <a className="chip chip--plain plan-chip" href="/dashboard?tab=plan">
+              {PRO_FREE_FOR_ALL
+                ? 'Free for now'
+                : account.proTrial.status === 'active'
+                  ? 'Pro trial active'
+                  : proEnabled
+                    ? 'Pro active'
+                    : 'Free plan'}
             </a>
           )}
           {account.mode === 'signed-in' && account.user && (
@@ -585,6 +632,15 @@ export default function App() {
           >
             {loading ? <span className="spinner" /> : <RotateCw size={14} />}
           </button>
+          <MobileMenu
+            items={[
+              { href: '/', label: 'Home' },
+              { href: '/jobs', label: 'Jobs', current: view === 'browse' },
+              { href: '/ideas', label: 'Ideas' },
+              { href: '/pricing', label: 'Pricing' },
+              { href: '/dashboard', label: 'Dashboard', current: view === 'dashboard' },
+            ]}
+          />
         </div>
       </header>
 
@@ -615,8 +671,10 @@ export default function App() {
               applied={appliedIds.has(selected.job.id)}
               onSave={() => toggleSave(selected.job.id)}
               onApply={() => markApplied(selected.job.id)}
-              onFastApply={() => runFastApply(selected.job.id)}
-              applyQuota={applyQuota}
+              proEnabled={proEnabled}
+              trial={account.proTrial}
+              onRefreshAccount={account.refresh}
+              onOpenJob={openBestMatch}
               cautionBannerEnabled={cautionBannerEnabled}
             />
           )}
@@ -637,7 +695,7 @@ export default function App() {
                 aria-current={tab === id ? 'page' : undefined}
                 onClick={() => {
                   setTab(id)
-                  writeUrl({})
+                  writeUrl({ tab: id })
                 }}
               >
                 <Icon size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />
@@ -664,23 +722,73 @@ export default function App() {
                 account.mode === 'loading' ||
                 (account.mode === 'signed-in' && (!account.activity || account.activityError))
               }
+              saved={saved}
+              jobs={Object.values(knownJobs)}
+              onOpenSaved={() => {
+                setTab('saved')
+                writeUrl({ tab: 'saved' })
+              }}
+              onOpenTools={() => {
+                setTab('tools')
+                writeUrl({ tab: 'tools' })
+              }}
+              onOpenJob={openJob}
             />
           )}
           {tab === 'plan' && (
             <PlanPanel
               signedIn={account.mode === 'signed-in'}
               billingEnabled={billingEnabled}
-              plans={billingPlans}
+              billingProvider={billingProvider}
               subscription={account.subscription}
               entitlements={account.entitlements}
+              proTrial={account.proTrial}
+              graduateEligibility={account.graduateEligibility}
+              plans={billingPlans}
               onRefresh={account.refresh}
               onRequireSignIn={requireSignIn}
+              onOpenPricing={() => window.location.assign('/pricing')}
+            />
+          )}
+          {tab === 'tools' && (
+            <div className="stack dashboard-stack">
+              <MasterCvPanel
+                signedIn={account.mode === 'signed-in'}
+                proEnabled={proEnabled}
+                trial={account.proTrial}
+                importedCv={importedCv}
+                onOpenPlan={openPlan}
+                onRefresh={account.refresh}
+              />
+              <ProInsightsPanel
+                proEnabled={proEnabled}
+                trial={account.proTrial}
+                onOpenPlan={openPlan}
+                onOpenProfile={() => window.location.assign('/profile')}
+                onOpenJob={openBestMatch}
+              />
+              <AdvertCheckPanel
+                proEnabled={proEnabled}
+                trial={account.proTrial}
+                onOpenPlan={openPlan}
+              />
+            </div>
+          )}
+          {tab === 'salary' && (
+            <SalaryGuidePanel
+              profile={profile}
+              countries={Object.keys(facets?.countries ?? {})}
+              proEnabled={proEnabled}
             />
           )}
           {tab === 'saved' && (
             <SavedPanel
               saved={saved}
               jobs={Object.values(knownJobs)}
+              proEnabled={proEnabled}
+              trial={account.proTrial}
+              onOpenPlan={openPlan}
+              onUpdate={updateSavedEntry}
               onOpen={openJob}
               onRemove={(jobId) =>
                 setSaved((current) => current.filter((entry) => entry.jobId !== jobId))
@@ -694,6 +802,9 @@ export default function App() {
               telegramLinked={telegramLinked}
               signedIn={account.mode === 'signed-in'}
               canDeliver={telegramLinked && Boolean(health?.telegramConfigured)}
+              proEnabled={proEnabled}
+              trial={account.proTrial}
+              onOpenPlan={openPlan}
               onChange={setAlerts}
               onLinkTelegram={linkTelegram}
               onRequireSignIn={requireSignIn}
@@ -732,14 +843,22 @@ export default function App() {
             coverage={facets?.coverage}
             adminControls={adminControls}
           />
-          <CvImport onApply={applySuggestion} />
+          <CvImport onApply={applySuggestion} onExtracted={setImportedCv} />
+          <MasterCvPanel
+            signedIn={account.mode === 'signed-in'}
+            proEnabled={proEnabled}
+            trial={account.proTrial}
+            importedCv={importedCv}
+            onOpenPlan={openPlan}
+            onRefresh={account.refresh}
+          />
           <Footer />
         </main>
       ) : (
         <main className="content browse">
           <div className="page-intro">
             <h1>Find work that fits your skills</h1>
-            <p>Real opportunities in Nigeria and worldwide.</p>
+            <p>Jobs, gigs and contracts in Nigeria and worldwide.</p>
           </div>
           <SearchBar
             value={{
@@ -747,10 +866,17 @@ export default function App() {
               location: filters.location ?? '',
               countryCode: filters.country ?? '',
             }}
-            professionSuggestions={ROLE_FAMILIES.map((family) => ({
-              id: family,
-              label: ROLE_FAMILY_LABELS[family],
-            }))}
+            professionSuggestions={[
+              ...POPULAR_SKILL_SEARCHES.map((shortcut) => ({
+                id: `skill-${shortcut.id}`,
+                label: shortcut.label,
+                query: shortcut.search,
+              })),
+              ...ROLE_FAMILIES.map((family) => ({
+                id: family,
+                label: ROLE_FAMILY_LABELS[family],
+              })),
+            ]}
             onSubmit={(next: SearchValues) => {
               track('search', next.query || next.location || '')
               const updated = {
@@ -789,7 +915,18 @@ export default function App() {
           />
           <div className="results-head">
             <span className="resultcount">
-              {total.toLocaleString()} {total === 1 ? 'job' : 'jobs'}
+              {total.toLocaleString()}{' '}
+              {filters.opportunityType === 'gig'
+                ? total === 1
+                  ? 'gig or contract'
+                  : 'gigs and contracts'
+                : filters.opportunityType === 'job'
+                  ? total === 1
+                    ? 'job'
+                    : 'jobs'
+                  : total === 1
+                    ? 'job or gig'
+                    : 'jobs and gigs'}
               {filters.query.trim() ? ` for \u201c${filters.query.trim()}\u201d` : ''}
               {(filters.location?.trim() || filters.country) && (
                 <>
@@ -845,25 +982,35 @@ export default function App() {
           )}
           {loadError && (
             <div className="banner banner--demo" role="status">
-              <span>{copy('jobs.unavailable')}</span>
-              <button type="button" className="btn btn--sm" onClick={() => void load(true)}>
-                Try again
-              </button>
+              <span>
+                {loadError === 'sign-in-ended'
+                  ? 'Your sign-in has ended. Sign in again to load jobs and gigs.'
+                  : copy('jobs.unavailable')}
+              </span>
+              {loadError === 'sign-in-ended' ? (
+                <a className="btn btn--sm" href="/auth/login?returnTo=%2Fjobs">
+                  Sign in again
+                </a>
+              ) : (
+                <button type="button" className="btn btn--sm" onClick={() => void load(true)}>
+                  Try again
+                </button>
+              )}
             </div>
           )}
           <div className="joblist">
             {loading ? (
               <div className="empty" role="status">
                 <span className="spinner" />
-                <p>Finding your next opportunity…</p>
+                <p>Loading jobs and gigs…</p>
               </div>
             ) : sorted.jobs.length === 0 ? (
               <div className="empty">
-                <p className="empty__title">No roles match</p>
+                <p className="empty__title">No work matches</p>
                 <p>Try loosening a filter or clearing your search.</p>
                 <a
                   className="btn btn--sm"
-                  href={`/dashboard?tab=alerts&q=${encodeURIComponent(filters.query)}`}
+                  href={`/dashboard?tab=alerts&q=${encodeURIComponent(filters.query)}${filters.opportunityType && filters.opportunityType !== 'all' ? `&type=${filters.opportunityType}` : ''}`}
                 >
                   Create an alert for this search
                 </a>
@@ -911,8 +1058,9 @@ export default function App() {
           )}
           {facets && (
             <p className="hint market-line">
-              {facets.remote.toLocaleString()} listed remote · {facets.locations} stated countries ·
-              refreshed{' '}
+              {facets.remote.toLocaleString()} listed remote ·{' '}
+              {facets.opportunities.gig.toLocaleString()} classified as gigs or contracts ·{' '}
+              {facets.locations} stated countries · refreshed{' '}
               {feedUpdatedAt ? new Date(feedUpdatedAt).toLocaleString() : 'every 12 hours'}
             </p>
           )}

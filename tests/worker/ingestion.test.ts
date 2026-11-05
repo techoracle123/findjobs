@@ -110,6 +110,27 @@ describe('ingestion', () => {
     expect(ingested).toHaveLength(3)
   })
 
+  it('persists a source contract type and refreshes it when the source type changes', async () => {
+    await runIngestion(env.DB, 'arbeitnow', { fetchImpl: fixtureFetch(arbeitnowFixture) })
+    const changed = JSON.parse(JSON.stringify(arbeitnowFixture)) as {
+      data: { job_types: string[] }[]
+    }
+    changed.data[0].job_types = ['contract']
+    const result = await runIngestion(env.DB, 'arbeitnow', { fetchImpl: fixtureFetch(changed) })
+    expect(result.updated).toBe(1)
+
+    const { jobs } = await listJobs(env.DB)
+    const backend = jobs.find(
+      (job) => !job.id.startsWith('demo-') && job.title.includes('Senior Backend Engineer'),
+    )
+    expect(backend).toMatchObject({
+      opportunityType: 'gig',
+      engagementType: 'contract',
+      engagementLabel: 'Contract',
+      engagementBasis: 'source',
+    })
+  })
+
   it('closes a posting that the source has dropped, and keeps the record', async () => {
     await runIngestion(env.DB, 'arbeitnow', { fetchImpl: fixtureFetch(arbeitnowFixture) })
 

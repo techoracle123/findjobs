@@ -1,4 +1,7 @@
 import { roleFamilyLabel } from '../shared/taxonomy'
+import { matchesOpportunityFilter, opportunityOf } from '../shared/opportunities'
+import { gigCategoryFor } from '../shared/gig-categories'
+import { compileSearch, normalizeSearchText } from '../shared/search-matching'
 import { marketRank } from '../shared/scoring'
 import type { Job } from '../shared/types'
 import type { JobSearch, JobSearchResult } from './jobs'
@@ -64,6 +67,7 @@ export async function fetchPublicSource(
       id,
       listingUrl: source.listingUrl,
       options: {
+        ...(source.options ?? {}),
         company: source.company,
         companyLabel: source.companyLabel,
         country: source.country,
@@ -178,35 +182,163 @@ export async function livePublicJobs(origin: string): Promise<Job[]> {
   return (await pending).jobs
 }
 
-export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResult {
-  // Nigeria-first ordering for unfiltered browsing: in-market roles (NG or
-  // remote) lead, newest first inside each group. Explicit country/search
-  // filters already narrowed the set, so this only shapes the default feed.
-  const filtered = matchingPublicJobs(jobs, search).sort(
-    (a, b) =>
-      marketRank(b) - marketRank(a) ||
-      b.postedAt.localeCompare(a.postedAt) ||
-      a.id.localeCompare(b.id),
-  )
+export function paginateSortedPublicJobs(filtered: Job[], search: JobSearch): JobSearchResult {
   const limit = Math.min(200, Math.max(1, search.limit ?? 50)),
     offset = Math.max(0, search.offset ?? 0)
   return { jobs: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset }
 }
 
+export function paginatePublicJobs(matched: Job[], search: JobSearch): JobSearchResult {
+  // Nigeria-first ordering for unfiltered browsing: in-market roles (NG or
+  // remote) lead, newest first inside each group. Explicit country/search
+  // filters already narrowed the set, so this only shapes the default feed.
+  const filtered = matched.sort(
+    (a, b) =>
+      marketRank(b) - marketRank(a) ||
+      b.postedAt.localeCompare(a.postedAt) ||
+      a.id.localeCompare(b.id),
+  )
+  return paginateSortedPublicJobs(filtered, search)
+}
+
+export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResult {
+  return paginatePublicJobs(matchingPublicJobs(jobs, search), search)
+}
+
 const haystackCache = new WeakMap<Job, string>()
+
+// One compiled matcher per request search object. Rebuilding term variants
+// for every listing burned enough CPU, on a cold isolate with a
+// 20,000-listing snapshot, to fail live searches outright.
+const matcherCache = new WeakMap<JobSearch, ((normalizedHaystack: string) => boolean) | null>()
+function matcherFor(search: JobSearch): ((normalizedHaystack: string) => boolean) | null {
+  let matcher = matcherCache.get(search)
+  if (matcher === undefined) {
+    matcher = compileSearch(search.query || '')
+    matcherCache.set(search, matcher)
+  }
+  return matcher
+}
+export function buildPublicSearchText(job: Job): string {
+  const opportunity = opportunityOf(job)
+  const gigCategory = opportunity.opportunityType === 'gig' ? gigCategoryFor(job) : null
+  const opportunityTerms = [
+    opportunity.opportunityType,
+    opportunity.engagementType,
+    opportunity.engagementLabel,
+    opportunity.projectDuration ?? '',
+    gigCategory?.label ?? '',
+    gigCategory?.search ?? '',
+    opportunity.opportunityType === 'gig' ? 'gig gigs contract freelance project' : 'job jobs',
+  ].join(' ')
+  // Keep only the opening slice of the description: over a 20,000-listing
+  // snapshot, full-description copies pushed a cold isolate over its CPU and
+  // memory budget. Skill extraction already ran over the full advert at
+  // ingest and those skills remain searchable in full.
+  return normalizeSearchText(
+    `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${opportunityTerms} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')} ${job.description.slice(0, 800)}`,
+  )
+}
+
 function haystack(job: Job): string {
   let value = haystackCache.get(job)
   if (value === undefined) {
-    value =
-      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${job.description} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')}`.toLowerCase()
+    // Current publications carry this derived text. Older snapshots and the
+    // small live fallback still use the same builder on demand.
+    value = (job as Job & { searchText?: string }).searchText ?? buildPublicSearchText(job)
     haystackCache.set(job, value)
   }
   return value
 }
 
-export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
-  const terms = (search.query || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
+export interface PublicFacetMatch {
+  matched: boolean
+  withoutOpportunityType: boolean
+  withoutCountry: boolean
+  withoutRoleFamily: boolean
+  gig: boolean
+}
+
+// There are only 32 possible answers. Sharing them avoids allocating a fresh
+// object for every listing in a full-corpus search and then immediately
+// throwing almost all of those objects away.
+const FACET_MATCHES: PublicFacetMatch[] = Array.from({ length: 32 }, (_, bits) => ({
+  matched: Boolean(bits & 1),
+  withoutOpportunityType: Boolean(bits & 2),
+  withoutCountry: Boolean(bits & 4),
+  withoutRoleFamily: Boolean(bits & 8),
+  gig: Boolean(bits & 16),
+}))
+function facetMatch(
+  matched: boolean,
+  withoutOpportunityType: boolean,
+  withoutCountry: boolean,
+  withoutRoleFamily: boolean,
+  gig: boolean,
+): PublicFacetMatch {
+  return FACET_MATCHES[
+    Number(matched) |
+      (Number(withoutOpportunityType) << 1) |
+      (Number(withoutCountry) << 2) |
+      (Number(withoutRoleFamily) << 3) |
+      (Number(gig) << 4)
+  ]
+}
+const NO_FACET_MATCH = FACET_MATCHES[0]
+
+/**
+ * One-pass facet predicate. The jobs route needs the exact result plus three
+ * disjunctive variants (country, profession and work lane removed one at a
+ * time). Evaluating those as four full-corpus filters was enough, on a cold
+ * isolate, to push the 15,000-listing snapshot over the Worker CPU budget.
+ */
+export function publicFacetMatch(job: Job, search: JobSearch): PublicFacetMatch {
   const place = (search.location || '').toLowerCase().trim()
+  const common =
+    search.status !== 'closed' &&
+    (search.worldwide || job.quality?.isEnglish !== false) &&
+    (!place ||
+      `${job.locationLabel} ${job.quality?.location.city ?? ''} ${job.quality?.location.state ?? ''}`
+        .toLowerCase()
+        .includes(place)) &&
+    (!search.workModes?.length || search.workModes.includes(job.workMode)) &&
+    (!search.seniorities?.length || search.seniorities.includes(job.seniority)) &&
+    (!search.verification?.length || search.verification.includes(job.verification || 'unverified'))
+  if (!common) return NO_FACET_MATCH
+
+  const country = !search.country || job.locationCountry === search.country
+  const roleFamily = !search.roleFamilies?.length || search.roleFamilies.includes(job.roleFamily)
+  if (!country && !roleFamily) return NO_FACET_MATCH
+
+  const opportunityType = opportunityOf(job).opportunityType
+  const gig = opportunityType === 'gig'
+  const opportunity =
+    !search.opportunityType || search.opportunityType === 'all'
+      ? true
+      : search.opportunityType === 'gig'
+        ? gig
+        : !gig
+  // Every facet variant still applies two of these three dimensions. If fewer
+  // than two pass, building a search haystack for this job cannot change any
+  // count.
+  if (Number(country) + Number(roleFamily) + Number(opportunity) < 2)
+    return facetMatch(false, false, false, false, gig)
+
+  const matcher = matcherFor(search)
+  if (matcher && !matcher(haystack(job))) return facetMatch(false, false, false, false, gig)
+
+  return facetMatch(
+    country && roleFamily && opportunity,
+    country && roleFamily,
+    roleFamily && opportunity,
+    country && opportunity,
+    gig,
+  )
+}
+
+export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
+  const place = (search.location || '').toLowerCase().trim()
+  const matcher = matcherFor(search)
   return jobs.filter(
     (job) =>
       search.status !== 'closed' &&
@@ -220,8 +352,10 @@ export function matchingPublicJobs(jobs: Job[], search: JobSearch): Job[] {
       (!search.roleFamilies?.length || search.roleFamilies.includes(job.roleFamily)) &&
       (!search.workModes?.length || search.workModes.includes(job.workMode)) &&
       (!search.seniorities?.length || search.seniorities.includes(job.seniority)) &&
+      matchesOpportunityFilter(job, search.opportunityType) &&
       (!search.verification?.length ||
         search.verification.includes(job.verification || 'unverified')) &&
-      terms.every((term) => haystack(job).includes(term)),
+      // No search terms: never build a haystack (the expensive part) at all.
+      (matcher === null || matcher(haystack(job))),
   )
 }

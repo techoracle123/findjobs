@@ -340,6 +340,7 @@ const PERIOD_MULTIPLIER: Record<string, number> = {
   hour: 2080,
   day: 260,
   week: 52,
+  fortnight: 26,
   month: 12,
   year: 1,
   unknown: 1,
@@ -353,6 +354,13 @@ export function salaryPlausible(
 ): boolean {
   if (!currency || min <= 0) return false
   const band = YEARLY_BANDS[currency.toUpperCase()]
+  if (period === 'project') {
+    // A fixed project fee cannot be annualised. Keep only a broad sanity
+    // range so a stated $500 or ₦250,000 project is not thrown away merely
+    // because it is not a yearly salary.
+    if (!band) return max >= min && max <= 2_000_000_000
+    return min >= Math.max(1, band[0] / 1000) && max >= min && max <= band[1]
+  }
   const multiplier = PERIOD_MULTIPLIER[period] ?? 1
   const yearlyMin = min * multiplier
   const yearlyMax = max * multiplier
@@ -771,24 +779,42 @@ function mergeJobs<T extends Job>(keep: T, incoming: T): T {
 
 export function coverageOf(jobs: Job[]): FieldCoverage {
   const total = jobs.length || 1
-  // Partial rows (tests, legacy shards) are treated as missing fields, never a crash.
-  const count = (test: (job: Job) => boolean) =>
-    jobs.filter((job) => {
-      try {
-        return test(job)
-      } catch {
-        return false
-      }
-    }).length / total
+  const counts: FieldCoverage = {
+    locationCountry: 0,
+    workMode: 0,
+    seniority: 0,
+    salary: 0,
+    requiredSkills: 0,
+    roleFamily: 0,
+    language: 0,
+    eligibleCountries: 0,
+  }
+  // Partial rows (tests, legacy shards) are treated as missing fields, never
+  // a crash. One pass matters on the request path: this runs over the full
+  // matching set whenever facets are rebuilt.
+  for (const job of jobs) {
+    try {
+      if (job.locationCountry) counts.locationCountry += 1
+      if (job.workMode !== 'unknown') counts.workMode += 1
+      if (job.seniority !== 'unknown') counts.seniority += 1
+      if ((job.salaryMin ?? 0) > 0 || (job.salaryMax ?? 0) > 0) counts.salary += 1
+      if (job.requiredSkills?.length) counts.requiredSkills += 1
+      if (job.roleFamily !== 'unknown') counts.roleFamily += 1
+      if (job.language && job.language !== 'unknown') counts.language += 1
+      if (job.eligibleCountries?.length) counts.eligibleCountries += 1
+    } catch {
+      /* Missing fields on a partial row simply do not count. */
+    }
+  }
   return {
-    locationCountry: count((job) => Boolean(job.locationCountry)),
-    workMode: count((job) => job.workMode !== 'unknown'),
-    seniority: count((job) => job.seniority !== 'unknown'),
-    salary: count((job) => (job.salaryMin ?? 0) > 0 || (job.salaryMax ?? 0) > 0),
-    requiredSkills: count((job) => Boolean(job.requiredSkills?.length)),
-    roleFamily: count((job) => job.roleFamily !== 'unknown'),
-    language: count((job) => Boolean(job.language) && job.language !== 'unknown'),
-    eligibleCountries: count((job) => Boolean(job.eligibleCountries?.length)),
+    locationCountry: counts.locationCountry / total,
+    workMode: counts.workMode / total,
+    seniority: counts.seniority / total,
+    salary: counts.salary / total,
+    requiredSkills: counts.requiredSkills / total,
+    roleFamily: counts.roleFamily / total,
+    language: counts.language / total,
+    eligibleCountries: counts.eligibleCountries / total,
   }
 }
 

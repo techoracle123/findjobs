@@ -1,7 +1,8 @@
 /**
- * Employer organisations (Prompt 9). Every route is authenticated and scoped
- * to one org: a member of one organisation can never read another's rows.
- * Posted jobs pass trust scoring and moderation before going live.
+ * Employer organisations are paused. FJ is not ready for employers to create
+ * accounts or post jobs directly, so every write below is refused before it
+ * can touch the database. Existing rows, if any, stay readable by their
+ * members so nothing is silently lost while posting is closed.
  */
 import { Hono } from 'hono'
 import type { AppEnv } from '../env'
@@ -11,6 +12,23 @@ import { verifyDomainToken } from '../employers/dns'
 import { scamScore } from '../trust'
 
 export const employerRoutes = new Hono<AppEnv>()
+
+export const EMPLOYER_POSTING_PAUSED = true
+
+const employerPostingPaused = async (c: AppContext, next: () => Promise<void>) => {
+  if (EMPLOYER_POSTING_PAUSED && c.req.method !== 'GET') {
+    return c.json(
+      {
+        error: 'employer_posting_paused',
+        message: 'Employer accounts and direct job posting are not open on FJ.',
+      },
+      410,
+    )
+  }
+  await next()
+}
+employerRoutes.use('/orgs', employerPostingPaused)
+employerRoutes.use('/orgs/*', employerPostingPaused)
 
 type Role = 'owner' | 'member'
 

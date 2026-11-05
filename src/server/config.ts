@@ -1,5 +1,6 @@
 import type { Env } from './env'
 import type { BillingProviderId } from './billing/types'
+import { hasConfiguredEmailProvider } from './email/provider'
 
 export interface TelegramConfig {
   botToken: string | null
@@ -54,7 +55,7 @@ export interface AppConfig {
   isStaging: boolean
   isTest: boolean
   isLocal: boolean
-  /** True when a real email provider can send sign-in codes. */
+  /** True when a real email provider can send password reset emails. */
   emailConfigured: boolean
   telegram: TelegramConfig
   billing: BillingConfig
@@ -81,7 +82,22 @@ function number(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
 }
 
-const PROVIDERS: BillingProviderId[] = ['fake', 'stripe', 'paystack', 'flutterwave']
+/**
+ * API keys never contain whitespace. Remove accidental spaces or line breaks
+ * copied into a secret before the key is sent in an Authorization header.
+ */
+function cleanApiKey(value: string | undefined): string | null {
+  const cleaned = (value ?? '').replace(/\s+/g, '')
+  return cleaned ? cleaned : null
+}
+
+/** Webhook signing secrets are only end-trimmed; their middle is left alone. */
+function cleanSecret(value: string | undefined): string | null {
+  const cleaned = (value ?? '').trim()
+  return cleaned ? cleaned : null
+}
+
+const PROVIDERS: BillingProviderId[] = ['fake', 'stripe', 'paystack', 'flutterwave', 'bachs']
 
 /**
  * Works out which gateway to use.
@@ -95,9 +111,10 @@ export function resolveProvider(env: Env): BillingProviderId {
   if (requested && (PROVIDERS as string[]).includes(requested)) {
     return requested as BillingProviderId
   }
-  if (env.PAYSTACK_SECRET_KEY) return 'paystack'
-  if (env.FLUTTERWAVE_SECRET_KEY) return 'flutterwave'
-  if (env.STRIPE_SECRET_KEY) return 'stripe'
+  if (cleanApiKey(env.BACHS_SECRET_KEY) && cleanSecret(env.BACHS_WEBHOOK_SECRET)) return 'bachs'
+  if (cleanApiKey(env.PAYSTACK_SECRET_KEY)) return 'paystack'
+  if (cleanApiKey(env.FLUTTERWAVE_SECRET_KEY)) return 'flutterwave'
+  if (cleanApiKey(env.STRIPE_SECRET_KEY)) return 'stripe'
   return 'fake'
 }
 
@@ -117,32 +134,32 @@ export function readConfig(env: Env): AppConfig {
     isStaging: appMode === 'staging',
     isTest,
     isLocal,
-    emailConfigured: Boolean(env.RESEND_API_KEY),
+    emailConfigured: hasConfiguredEmailProvider(env),
     telegram: {
-      botToken: env.TELEGRAM_BOT_TOKEN ?? null,
-      botUsername: env.TELEGRAM_BOT_USERNAME || null,
+      botToken: cleanApiKey(env.TELEGRAM_BOT_TOKEN),
+      botUsername: (env.TELEGRAM_BOT_USERNAME ?? '').trim().replace(/^@/, '') || null,
     },
     billing: {
       provider: resolveProvider(env),
       currency: (env.BILLING_CURRENCY || 'NGN').trim().toUpperCase().slice(0, 3),
-      pricePro: number(env.BILLING_PRICE_PRO, 10000),
+      pricePro: number(env.BILLING_PRICE_PRO, 5000),
       priceGraduate: number(env.BILLING_PRICE_GRADUATE, 3000),
-      priceAnnual: number(env.BILLING_PRICE_ANNUAL, 100000),
+      priceAnnual: number(env.BILLING_PRICE_ANNUAL, 40000),
       stripe: {
-        secretKey: env.STRIPE_SECRET_KEY ?? null,
-        webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? null,
-        pricePro: env.STRIPE_PRICE_PRO ?? null,
+        secretKey: cleanApiKey(env.STRIPE_SECRET_KEY),
+        webhookSecret: cleanSecret(env.STRIPE_WEBHOOK_SECRET),
+        pricePro: cleanSecret(env.STRIPE_PRICE_PRO),
       },
       paystack: {
-        secretKey: env.PAYSTACK_SECRET_KEY ?? null,
+        secretKey: cleanApiKey(env.PAYSTACK_SECRET_KEY),
       },
       flutterwave: {
-        secretKey: env.FLUTTERWAVE_SECRET_KEY ?? null,
-        webhookSecret: env.FLUTTERWAVE_WEBHOOK_SECRET ?? null,
+        secretKey: cleanApiKey(env.FLUTTERWAVE_SECRET_KEY),
+        webhookSecret: cleanSecret(env.FLUTTERWAVE_WEBHOOK_SECRET),
       },
       bachs: {
-        secretKey: env.BACHS_SECRET_KEY ?? null,
-        webhookSecret: env.BACHS_WEBHOOK_SECRET ?? null,
+        secretKey: cleanApiKey(env.BACHS_SECRET_KEY),
+        webhookSecret: cleanSecret(env.BACHS_WEBHOOK_SECRET),
       },
     },
     aiEnabled: Boolean(env.AI || env.OPENROUTER_API_KEY),

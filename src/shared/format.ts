@@ -44,8 +44,11 @@ const SYMBOLS: Record<string, string> = {
 export const PERIOD_LABELS: Record<SalaryPeriod, string> = {
   unknown: '(period not stated)',
   hour: '/hr',
+  week: '/week',
+  fortnight: '/2 weeks',
   month: '/mo',
   year: '/yr',
+  project: '/project',
 }
 
 export function currencySymbol(code: string): string {
@@ -80,7 +83,7 @@ export function formatRange(min: number, max: number, currency: string): string 
   if (!min && !max) return 'Not disclosed'
   if (!min) return `up to ${formatAmount(max, currency)}`
   if (!max) return `from ${formatAmount(min, currency)}`
-  return `${formatAmount(min, currency)} – ${formatAmount(max, currency)}`
+  return `${formatAmount(min, currency)} to ${formatAmount(max, currency)}`
 }
 
 export function formatRelativeTime(iso: string, now: number = Date.now()): string {

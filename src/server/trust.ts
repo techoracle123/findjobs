@@ -100,7 +100,7 @@ const KNOWN_COMPANIES = new Set(
 
 /** Apply-link hosts that are themselves evidence of a real, verifiable listing. */
 const VERIFIABLE_HOST =
-  /(?:greenhouse\.io|lever\.co|ashbyhq\.com|smartrecruiters\.com|workable\.com|recruitee\.com|personio\.|teamtailor\.com|breezy\.hr|myworkdayjobs\.com|icims\.com|jobvite\.com|arbeitnow\.|remoteok\.com|himalayas\.app|themuse\.com|jobicy\.com|workingnomads\.com|weworkremotely\.com|myjobmag\.com|jobberman\.com)/i
+  /(?:greenhouse\.io|lever\.co|ashbyhq\.com|smartrecruiters\.com|workable\.com|recruitee\.com|personio\.|teamtailor\.com|breezy\.hr|myworkdayjobs\.com|icims\.com|jobvite\.com|arbeitnow\.|remoteok\.com|remotejobs\.org|himalayas\.app|themuse\.com|jobicy\.com|workingnomads\.com|weworkremotely\.com|myjobmag\.com|jobberman\.com)/i
 
 function hostOf(url: string | undefined): string {
   try {
@@ -204,6 +204,7 @@ export function scamScore(
   const monthlyBand = job.salaryPeriod === 'month' ? [30_000, 5_000_000] : [200_000, 40_000_000]
   if (
     job.salaryCurrency === 'NGN' &&
+    ['month', 'year', 'unknown'].includes(job.salaryPeriod) &&
     job.salaryMin > 0 &&
     (job.salaryMin > monthlyBand[1] || job.salaryMin < monthlyBand[0] / 4) &&
     !/\b(?:director|head of|chief|executive|manager)\b/i.test(job.title)

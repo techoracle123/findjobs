@@ -3,17 +3,19 @@ export function Footer() {
   return (
     <footer className="site-footer">
       <nav aria-label="Footer">
+        <a href="/">Home</a>
+        <a href="/ideas">Product ideas</a>
         <a href="/about">About</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
         <a href="/scams">How to spot a job scam</a>
         <a href="/faq">FAQ</a>
-        <a href="/pricing">Pricing</a>
+        <a href="/pricing">Pricing and free access</a>
         <a href="/contact">Contact</a>
       </nav>
       <p>
-        FJ shares opportunities. We are not employers, never charge job seekers, and never ask you
-        to pay to apply. Always verify the original listing before applying.
+        FJ is not an employer. We never ask you to pay to apply for a job. Check the company and the
+        original advert before you apply.
       </p>
     </footer>
   )

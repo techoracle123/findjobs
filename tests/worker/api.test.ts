@@ -110,6 +110,7 @@ describe('account routes', () => {
       targetSeniority: ['senior'],
       preferredWorkModes: ['remote'],
       workCountry: 'de',
+      opportunityTypes: ['gig', 'job', 'unknown'],
     }
     const put = await SELF.fetch(`${BASE}/api/account/profile`, {
       method: 'PUT',
@@ -119,9 +120,10 @@ describe('account routes', () => {
     expect(put.status).toBe(200)
 
     const body = (await (await get('/api/account', DEV)).json()) as {
-      profile: { skills: string[]; workCountry: string }
+      profile: { skills: string[]; workCountry: string; opportunityTypes: string[] }
     }
     expect(body.profile.skills).toEqual(['Go', 'PostgreSQL'])
+    expect(body.profile.opportunityTypes).toEqual(['gig', 'job'])
     // The country is normalised to an upper-case code.
     expect(body.profile.workCountry).toBe('DE')
   })
@@ -155,28 +157,35 @@ describe('account routes', () => {
   it('creates, updates and deletes an alert', async () => {
     const created = await post(
       '/api/account/alerts',
-      { id: 'alert-test-1', label: 'Rust roles', query: 'rust', channels: ['telegram'] },
+      {
+        id: 'alert-test-1',
+        label: 'Rust roles',
+        query: 'rust',
+        channels: ['telegram'],
+        opportunityType: 'gig',
+      },
       DEV,
     )
     expect(created.status).toBe(200)
 
     const listed = (await (await get('/api/account/alerts', DEV)).json()) as {
-      alerts: { id: string; label: string }[]
+      alerts: { id: string; label: string; opportunityType?: string }[]
     }
-    expect(listed.alerts.some((alert) => alert.id === 'alert-test-1')).toBe(true)
+    expect(listed.alerts.find((alert) => alert.id === 'alert-test-1')?.opportunityType).toBe('gig')
 
     const patched = await SELF.fetch(`${BASE}/api/account/alerts/alert-test-1`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...DEV },
-      body: JSON.stringify({ label: 'Rust roles in Europe' }),
+      body: JSON.stringify({ label: 'Rust roles in Europe', opportunityType: 'job' }),
     })
     expect(patched.status).toBe(200)
 
     const afterPatch = (await (await get('/api/account/alerts', DEV)).json()) as {
-      alerts: { id: string; label: string }[]
+      alerts: { id: string; label: string; opportunityType?: string }[]
     }
     const updated = afterPatch.alerts.find((alert) => alert.id === 'alert-test-1')
     expect(updated?.label).toBe('Rust roles in Europe')
+    expect(updated?.opportunityType).toBe('job')
 
     const deleted = await SELF.fetch(`${BASE}/api/account/alerts/alert-test-1`, {
       method: 'DELETE',
@@ -191,7 +200,7 @@ describe('account routes', () => {
       {
         profile: { skills: ['Rust'], targetRoleFamilies: ['backend'] },
         saved: [{ jobId: 'demo-0002', status: 'saved' }],
-        alerts: [{ label: 'Imported alert', query: 'rust', channels: [] }],
+        alerts: [{ label: 'Imported alert', query: 'rust', channels: [], opportunityType: 'gig' }],
       },
       DEV,
     )
@@ -202,6 +211,12 @@ describe('account routes', () => {
     expect(body.imported.profile).toBe(true)
     expect(body.imported.saved).toBe(1)
     expect(body.imported.alerts).toBe(1)
+    const alerts = (await (await get('/api/account/alerts', DEV)).json()) as {
+      alerts: { label: string; opportunityType?: string }[]
+    }
+    expect(alerts.alerts.find((alert) => alert.label === 'Imported alert')?.opportunityType).toBe(
+      'gig',
+    )
   })
 })
 

@@ -1,6 +1,7 @@
 import type {
   EligibilityTier,
   Job,
+  OpportunityFilter,
   RatesPayload,
   SalaryPeriod,
   ScoredJob,
@@ -9,12 +10,16 @@ import type {
 import { bucketByPeriod, convertAmount } from '../shared/format'
 import { roleFamilyLabel } from '../shared/taxonomy'
 import { compareScoredJobs } from '../shared/scoring'
+import { gigCategoryFor } from '../shared/gig-categories'
+import { matchesOpportunityFilter, opportunityOf } from '../shared/opportunities'
+import { matchesSearchText } from '../shared/search-matching'
 
 export interface Filters {
   query: string
   /** City/state free text from the Where field. */
   location?: string
   country?: string
+  opportunityType?: OpportunityFilter
   workModes: string[]
   seniorities: string[]
   roleFamilies: string[]
@@ -30,6 +35,7 @@ export const DEFAULT_FILTERS: Filters = {
   query: '',
   location: '',
   country: '',
+  opportunityType: 'all',
   workModes: [],
   seniorities: [],
   roleFamilies: [],
@@ -98,9 +104,9 @@ export function salaryView(
 }
 
 function matchesQuery(job: Job, query: string): boolean {
-  if (!query) return true
-  const needle = query.trim().toLowerCase()
-  if (!needle) return true
+  if (!query.trim()) return true
+  const opportunity = opportunityOf(job)
+  const gigCategory = opportunity.opportunityType === 'gig' ? gigCategoryFor(job) : null
 
   const haystack = [
     job.title,
@@ -109,19 +115,23 @@ function matchesQuery(job: Job, query: string): boolean {
     job.locationLabel,
     job.roleFamily,
     roleFamilyLabel(job.roleFamily),
+    opportunity.engagementLabel,
+    opportunity.projectDuration ?? '',
+    gigCategory?.label ?? '',
+    gigCategory?.search ?? '',
+    opportunity.opportunityType === 'gig' ? 'gig contract freelance project' : 'job',
     ...job.requiredSkills,
     ...job.usefulSkills,
-  ]
-    .join(' ')
-    .toLowerCase()
+  ].join(' ')
 
-  return needle.split(/\s+/).every((token) => haystack.includes(token))
+  return matchesSearchText(haystack, query)
 }
 
 export function filterJobs(scored: ScoredJob[], filters: Filters): ScoredJob[] {
   return scored.filter((entry) => {
     const { job } = entry
     if (!matchesQuery(job, filters.query)) return false
+    if (!matchesOpportunityFilter(job, filters.opportunityType)) return false
     if (filters.country && job.locationCountry !== filters.country) return false
     if (filters.workModes.length > 0 && !filters.workModes.includes(job.workMode)) return false
     if (filters.seniorities.length > 0 && !filters.seniorities.includes(job.seniority)) return false

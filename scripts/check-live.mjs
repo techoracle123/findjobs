@@ -5,160 +5,277 @@ import { franc } from 'franc-min'
 const base = process.env.LIVE_SITE_URL
 if (!base?.startsWith('https://'))
   throw new Error('LIVE_SITE_URL must be the deployed HTTPS origin.')
-// Job data sits behind a free account; sign up a throwaway one for checks.
-// This also proves the production sign-up path works end to end.
-let sessionCookie = ''
-async function json(path) {
-  const response = await fetch(`${base}${path}`, {
-    headers: {
-      ...(process.env.HEALTH_CHECK_KEY ? { 'X-Health-Key': process.env.HEALTH_CHECK_KEY } : {}),
-      ...(sessionCookie ? { Cookie: sessionCookie } : {}),
-    },
-    signal: AbortSignal.timeout(30000),
-  })
-  if (!response.ok) throw new Error(`Live check failed: ${path} returned ${response.status}`)
-  return response.json()
-}
-{
-  const signup = await fetch(`${base}/api/auth/signup`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: 'Live Check',
-      email: `live-check-${Date.now()}@example.com`,
-      password: 'live check password',
-    }),
-    signal: AbortSignal.timeout(30000),
-  })
-  if (!signup.ok) throw new Error(`Live check sign-up failed: ${signup.status}`)
-  sessionCookie = (signup.headers.get('set-cookie') ?? '').split(';')[0]
-  if (!sessionCookie.startsWith('fj_session='))
-    throw new Error('Live check sign-up set no session.')
-  const locked = await fetch(`${base}/api/jobs?limit=1`, { signal: AbortSignal.timeout(30000) })
-  if (locked.status !== 401)
-    throw new Error(`Jobs must refuse anonymous reads, got ${locked.status}`)
-}
-const health = await json('/api/health')
-const rates = await json('/api/rates')
-const jobs = await json('/api/jobs?status=open&limit=200')
-let nigeria = await json('/api/jobs?status=open&limit=200&country=NG')
-// Source refreshes are queued, not instant. Wait boundedly for the first Nigerian ingestion.
-for (let attempt = 0; !nigeria.total && attempt < 12; attempt++) {
-  await new Promise((resolve) => setTimeout(resolve, 10000))
-  nigeria = await json('/api/jobs?status=open&limit=200&country=NG')
-}
-const sources =
-  process.env.STORAGE_DEGRADED === 'true' ? { sources: [] } : await json('/api/sources')
-console.log(
-  `::notice title=Live source status::${JSON.stringify(
-    (sources.sources || [])
-      .filter((source) =>
-        [
-          'myjobmag-ng',
-          'hotnigerianjobs',
-          'weworkremotely',
-          'greenhouse-oneacrefund',
-          'greenhouse-givedirectly',
-          'greenhouse-givewell',
-          'greenhouse-acumen',
-        ].includes(source.id),
-      )
-      .map((source) => ({
-        id: source.id,
-        status: source.lastStatus || source.last_status,
-        jobs: source.liveJobs ?? source.live_jobs,
-        error: source.lastError || source.last_error,
-      })),
-  )}`,
-)
-
-console.log(
-  JSON.stringify(
-    {
-      accessConfigured: health.accessConfigured,
-      aiConfigured: health.aiBinding,
-      telegramConfigured: health.telegramConfigured,
-      jobs: jobs.total,
-      nigeria: nigeria.total,
-      ratesDate: rates.date,
-      ratesSource: rates.source,
-      ngnAvailable: typeof rates.rates?.NGN === 'number',
-    },
-    null,
-    2,
-  ),
-)
-if (!jobs.total || jobs.jobs.some((job) => job.isDemo))
-  throw new Error('The live feed is empty or includes synthetic jobs.')
-if (!health.accessConfigured)
-  console.log(
-    '::warning::Access provisioning is not configured. The browser sign-in check will identify the remaining blocker.',
-  )
-if (!nigeria.total)
-  console.log(
-    '::warning::No Nigerian jobs are currently open. Inspect source diagnostics in the artifact.',
-  )
-if (!rates.rates?.NGN)
-  console.log(
-    '::warning::NGN reference rates were not available. Original salary currencies are preserved.',
-  )
-// Exercise the deployed integration, not only secret presence. Real public job
-// text only; no CV, account profile, email address or credential is logged.
-if (health.aiBinding && process.env.STORAGE_DEGRADED !== 'true') {
-  const post = async (id, action) => {
-    const response = await fetch(`${base}/api/jobs/${encodeURIComponent(id)}/${action}`, {
+async function runLiveChecks() {
+  // Job data sits behind a free account; sign up a throwaway one for checks.
+  // This also proves the production sign-up path works end to end.
+  let sessionCookie = ''
+  async function json(path) {
+    // A cold isolate answering its first full-corpus search can be slow or
+    // briefly unavailable. Allow up to 50 seconds of recovery across five GET
+    // probes; a persistent failure still fails the check.
+    let lastError
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const response = await fetch(`${base}${path}`, {
+          headers: {
+            'Cache-Control': 'no-cache',
+            ...(process.env.HEALTH_CHECK_KEY
+              ? { 'X-Health-Key': process.env.HEALTH_CHECK_KEY }
+              : {}),
+            ...(sessionCookie ? { Cookie: sessionCookie } : {}),
+          },
+          cache: 'no-store',
+          signal: AbortSignal.timeout(30000),
+        })
+        if (response.ok) return response.json()
+        const body = await response.text()
+        const title = body.match(/<title>([^<]+)<\/title>/i)?.[1]
+        const detail = title ?? body.replace(/\s+/g, ' ').trim().slice(0, 160)
+        const ray = response.headers.get('cf-ray')
+        lastError = new Error(
+          `Live check failed: ${path} returned ${response.status}${ray ? ` (Cloudflare Ray ${ray})` : ''}${detail ? `: ${detail}` : ''}`,
+        )
+        if (response.status < 500) throw lastError
+      } catch (error) {
+        if (error === lastError) throw error
+        lastError = error
+      }
+      if (attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 5000 * (attempt + 1)))
+      }
+    }
+    const reason = lastError instanceof Error ? lastError.message : String(lastError)
+    throw new Error(`Live request failed for ${path}: ${reason}`)
+  }
+  {
+    const signup = await fetch(`${base}/api/auth/signup`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-      signal: AbortSignal.timeout(35000),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Live Check',
+        email: `live-check-${Date.now()}@example.com`,
+        password: 'live check password',
+      }),
+      signal: AbortSignal.timeout(30000),
     })
-    if (!response.ok) throw new Error(`Live ${action} check returned ${response.status}`)
-    return response.json()
+    if (!signup.ok) throw new Error(`Live check sign-up failed: ${signup.status}`)
+    sessionCookie = (signup.headers.get('set-cookie') ?? '').split(';')[0]
+    if (!sessionCookie.startsWith('fj_session='))
+      throw new Error('Live check sign-up set no session.')
+    const locked = await fetch(`${base}/api/jobs?limit=1`, { signal: AbortSignal.timeout(30000) })
+    if (locked.status !== 401)
+      throw new Error(`Jobs must refuse anonymous reads, got ${locked.status}`)
   }
-  const advice = await post(jobs.jobs[0].id, 'tips')
-  const foreign = jobs.jobs.find(
-    (job) => !['eng', 'und'].includes(franc(job.description.slice(0, 5000), { minLength: 80 })),
-  )
-  const translation = foreign ? await post(foreign.id, 'translation') : null
+  const health = await json('/api/health')
+  const rates = await json('/api/rates')
+  const jobs = await json('/api/jobs?status=open&limit=200')
+  let nigeria = await json('/api/jobs?status=open&limit=200&country=NG')
+  // Source refreshes are queued, not instant. Wait boundedly for the first Nigerian ingestion.
+  for (let attempt = 0; !nigeria.total && attempt < 12; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 10000))
+    nigeria = await json('/api/jobs?status=open&limit=200&country=NG')
+  }
+  // Gigs are part of the main board, not an optional extra. Check more than one
+  // page and the stored lane on every returned row, then prove gigs do not leak
+  // into the Jobs-only lane.
+  const gigChecks = []
+  for (const offset of [0, 20, 40]) {
+    const gigs = await json(`/api/jobs?status=open&type=gig&limit=20&offset=${offset}`)
+    if (!gigs.total || !gigs.jobs.length)
+      throw new Error('The live gigs lane is empty or returned no page rows.')
+    if (gigs.jobs.some((job) => job.opportunityType !== 'gig' || job.isDemo))
+      throw new Error('The live gigs lane returned a non-gig or demo row.')
+    gigChecks.push({
+      offset,
+      total: gigs.total,
+      returned: gigs.jobs.length,
+      facetTotal: gigs.facets?.opportunities?.gig ?? null,
+      dataSource: gigs.dataSource ?? null,
+    })
+  }
+  const jobLane = await json('/api/jobs?status=open&type=job&limit=20')
+  if (!jobLane.total || jobLane.jobs.some((job) => job.opportunityType === 'gig' || job.isDemo))
+    throw new Error('The live jobs lane is empty or contains a gig or demo row.')
   console.log(
-    `::${advice.provider === 'openrouter' && (!translation || translation.translated) ? 'notice' : 'warning'} title=Live AI check::${JSON.stringify({ adviceProvider: advice.provider, tips: advice.tips?.length, translated: translation?.translated, originalLanguage: translation?.originalLanguage, message: translation?.message || advice.message })}`,
+    `::notice title=Live gigs check::${JSON.stringify({ gigChecks, jobLaneTotal: jobLane.total })}`,
   )
-}
-await mkdir('diagnostics', { recursive: true })
-await writeFile(
-  'diagnostics/live-jobs.json',
-  JSON.stringify({
-    capturedAt: new Date().toISOString(),
-    origin: base,
-    jobs: [...new Map([...jobs.jobs, ...nigeria.jobs].map((job) => [job.id, job])).values()],
-  }),
-)
-await writeFile('diagnostics/live-sources.json', JSON.stringify(sources, null, 2))
+  // Category depth is a product promise, not just a total-listings number.
+  // Record the exact searches skilled users make first so a larger feed cannot
+  // hide a thin WordPress, security, data, media, development or tutoring lane.
+  const categoryQueries = [
+    'WordPress',
+    'cybersecurity',
+    'penetration testing',
+    'data analyst',
+    'data analytics',
+    'video editor',
+    'frontend developer',
+    'backend developer',
+    'tutor',
+    'teacher',
+    'contract',
+    'freelance',
+  ]
+  const categoryChecks = []
+  for (const query of categoryQueries) {
+    const encoded = encodeURIComponent(query)
+    const all = await json(`/api/jobs?status=open&limit=1&q=${encoded}`)
+    const gigs = await json(`/api/jobs?status=open&type=gig&limit=1&q=${encoded}`)
+    categoryChecks.push({
+      query,
+      all: all.total,
+      gigs: gigs.total,
+      firstTitle: all.jobs[0]?.title ?? null,
+      firstSource: all.jobs[0]?.sourceName ?? null,
+    })
+  }
+  console.log(`::notice title=Live category depth::${JSON.stringify(categoryChecks)}`)
+  const sources =
+    process.env.STORAGE_DEGRADED === 'true' ? { sources: [] } : await json('/api/sources')
+  console.log(
+    `::notice title=Live source status::${JSON.stringify(
+      (sources.sources || [])
+        .filter(
+          (source) =>
+            [
+              'myjobmag-ng',
+              'hotnigerianjobs',
+              'weworkremotely',
+              'greenhouse-oneacrefund',
+              'greenhouse-givedirectly',
+              'greenhouse-givewell',
+              'greenhouse-acumen',
+              'arbeitnow',
+              'himalayas',
+              'jobicy',
+              'themuse',
+              'remoteok',
+              'workingnomads',
+              'workday-shell-nigeria',
+              'oracle-mtn-nigeria',
+              'zoho-gtbank',
+              'efcc-recruitment-portal',
+              'fcsc-vacancies',
+              'nnpc-careers',
+            ].includes(source.id) ||
+            source.id.startsWith('himalayas-') ||
+            source.id.startsWith('jobicy-') ||
+            source.id.startsWith('themuse-') ||
+            source.id.startsWith('remotejobs-'),
+        )
+        .map((source) => ({
+          id: source.id,
+          status: source.lastStatus || source.last_status,
+          jobs: source.liveJobs ?? source.live_jobs,
+          error: source.lastError || source.last_error,
+        })),
+    )}`,
+  )
 
-// A small public-only sample can be read through GitHub's checks API when this
-// restricted workspace cannot download Azure-hosted artifacts. No credentials,
-// account data or CVs are present; the full snapshot remains an ignored artifact.
-if (process.env.GITHUB_ACTIONS === 'true' && process.env.FJ_CAPTURE_PUBLIC_SAMPLE === 'true') {
-  const sample = {
-    capturedAt: new Date().toISOString(),
-    origin: base,
-    rates,
-    jobs: [
-      ...new Map(
-        [...jobs.jobs.slice(0, 4), ...nigeria.jobs.slice(0, 8)].map((job) => [job.id, job]),
-      ).values(),
-    ],
-  }
-  let compressed = gzipSync(JSON.stringify(sample)).toString('base64')
-  while (compressed.length > 18000 && sample.jobs.length > 2) {
-    sample.jobs.pop()
-    compressed = gzipSync(JSON.stringify(sample)).toString('base64')
-  }
-  // GitHub truncates each annotation to 4,096 characters and caps notices per step.
-  // Six chunks leave room for the source-status and AI notices. Opt-in only.
-  const chunks = compressed.match(/.{1,3000}/g) || []
-  for (let index = 0; index < chunks.length; index++)
+  console.log(
+    JSON.stringify(
+      {
+        accessConfigured: health.accessConfigured,
+        aiConfigured: health.aiBinding,
+        telegramConfigured: health.telegramConfigured,
+        jobs: jobs.total,
+        gigs: gigChecks[0]?.total ?? 0,
+        jobLane: jobLane.total,
+        categories: Object.fromEntries(
+          categoryChecks.map((check) => [check.query, { all: check.all, gigs: check.gigs }]),
+        ),
+        nigeria: nigeria.total,
+        ratesDate: rates.date,
+        ratesSource: rates.source,
+        ngnAvailable: typeof rates.rates?.NGN === 'number',
+      },
+      null,
+      2,
+    ),
+  )
+  if (!jobs.total || jobs.jobs.some((job) => job.isDemo))
+    throw new Error('The live feed is empty or includes synthetic jobs.')
+  if (!health.accessConfigured)
     console.log(
-      `::notice title=Public-feed sample ${index + 1} of ${chunks.length}::${chunks[index]}`,
+      '::warning::Access provisioning is not configured. The browser sign-in check will identify the remaining blocker.',
     )
+  if (!nigeria.total)
+    console.log(
+      '::warning::No Nigerian jobs are currently open. Inspect source diagnostics in the artifact.',
+    )
+  if (!rates.rates?.NGN)
+    console.log(
+      '::warning::NGN reference rates were not available. Original salary currencies are preserved.',
+    )
+  // Exercise the deployed integration, not only secret presence. Real public job
+  // text only; no CV, account profile, email address or credential is logged.
+  if (health.aiBinding && process.env.STORAGE_DEGRADED !== 'true') {
+    const post = async (id, action) => {
+      const response = await fetch(`${base}/api/jobs/${encodeURIComponent(id)}/${action}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+        signal: AbortSignal.timeout(35000),
+      })
+      if (!response.ok) throw new Error(`Live ${action} check returned ${response.status}`)
+      return response.json()
+    }
+    const advice = await post(jobs.jobs[0].id, 'tips')
+    const foreign = jobs.jobs.find(
+      (job) => !['eng', 'und'].includes(franc(job.description.slice(0, 5000), { minLength: 80 })),
+    )
+    const translation = foreign ? await post(foreign.id, 'translation') : null
+    console.log(
+      `::${advice.provider === 'openrouter' && (!translation || translation.translated) ? 'notice' : 'warning'} title=Live AI check::${JSON.stringify({ adviceProvider: advice.provider, tips: advice.tips?.length, translated: translation?.translated, originalLanguage: translation?.originalLanguage, message: translation?.message || advice.message })}`,
+    )
+  }
+  await mkdir('diagnostics', { recursive: true })
+  await writeFile(
+    'diagnostics/live-jobs.json',
+    JSON.stringify({
+      capturedAt: new Date().toISOString(),
+      origin: base,
+      jobs: [...new Map([...jobs.jobs, ...nigeria.jobs].map((job) => [job.id, job])).values()],
+    }),
+  )
+  await writeFile('diagnostics/live-sources.json', JSON.stringify(sources, null, 2))
+
+  // A small public-only sample can be read through GitHub's checks API when this
+  // restricted workspace cannot download Azure-hosted artifacts. No credentials,
+  // account data or CVs are present; the full snapshot remains an ignored artifact.
+  if (process.env.GITHUB_ACTIONS === 'true' && process.env.FJ_CAPTURE_PUBLIC_SAMPLE === 'true') {
+    const sample = {
+      capturedAt: new Date().toISOString(),
+      origin: base,
+      rates,
+      jobs: [
+        ...new Map(
+          [...jobs.jobs.slice(0, 4), ...nigeria.jobs.slice(0, 8)].map((job) => [job.id, job]),
+        ).values(),
+      ],
+    }
+    let compressed = gzipSync(JSON.stringify(sample)).toString('base64')
+    while (compressed.length > 18000 && sample.jobs.length > 2) {
+      sample.jobs.pop()
+      compressed = gzipSync(JSON.stringify(sample)).toString('base64')
+    }
+    // GitHub truncates each annotation to 4,096 characters and caps notices per step.
+    // Six chunks leave room for the source-status and AI notices. Opt-in only.
+    const chunks = compressed.match(/.{1,3000}/g) || []
+    for (let index = 0; index < chunks.length; index++)
+      console.log(
+        `::notice title=Public-feed sample ${index + 1} of ${chunks.length}::${chunks[index]}`,
+      )
+  }
 }
+
+runLiveChecks().catch((error) => {
+  const message = error instanceof Error ? error.message : String(error)
+  const safe = message
+    .replaceAll('%', '%25')
+    .replaceAll('\r', '%0D')
+    .replaceAll('\n', '%0A')
+    .slice(0, 3500)
+  console.log(`::error title=Live integration check failed::${safe}`)
+  process.exitCode = 1
+})
