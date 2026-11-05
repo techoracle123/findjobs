@@ -1,22 +1,41 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { roleFamilyLabel } from '../../src/shared/taxonomy'
 
 let signupCounter = 0
 
 /**
- * Creates a fresh free account and signs this page in with it. The job
- * board sits behind a free account now, so board tests start here. Each
- * test gets its own account so saved jobs and progress never leak across.
+ * Creates a fresh local account, or signs into the isolated account that the
+ * deployment provisioned for this exact test and retry. This keeps production
+ * signup protection intact when the full authenticated suite runs repeatedly.
  */
-async function signUp(page: Page): Promise<string> {
+async function signUpRequest(request: APIRequestContext): Promise<string> {
   signupCounter += 1
-  const email = `fj-browser-${Date.now()}-${signupCounter}@example.com`
-  const response = await page.request.post('/api/auth/signup', {
+  const run = process.env.FJ_BROWSER_TEST_RUN?.trim() ?? ''
+  const digest = await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`site.spec.ts\0${test.info().title}`),
+  )
+  const key = [...new Uint8Array(digest)]
+    .slice(0, 8)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+  const email = run
+    ? `fj-browser-${run}-${key}-${test.info().retry}@example.com`
+    : `fj-browser-${Date.now()}-${signupCounter}@example.com`
+  const action = run ? 'login' : 'signup'
+  const response = await request.post(`/api/auth/${action}`, {
     data: { name: 'Browser Test', email, password: 'browser test password' },
   })
-  expect(response.ok()).toBe(true)
+  if (!response.ok()) {
+    const body = (await response.text()).slice(0, 400)
+    throw new Error(`Browser ${action} failed (${response.status()}): ${body}`)
+  }
   return email
+}
+
+async function signUp(page: Page): Promise<string> {
+  return signUpRequest(page.request)
 }
 
 /** Runs an action and waits until its account write has reached the server. */
@@ -231,14 +250,7 @@ test('jobs API needs an account, serves real jobs to one, and rejects forged ide
   let headers: Record<string, string> = {}
   if (devHeaderWorks) headers = { 'x-dev-user-email': 'local@example.com' }
   else {
-    const signup = await request.post('/api/auth/signup', {
-      data: {
-        name: 'API Test',
-        email: `fj-api-${Date.now()}@example.com`,
-        password: 'browser test password',
-      },
-    })
-    expect(signup.ok()).toBe(true)
+    await signUpRequest(request)
   }
   const response = await request.get('/api/jobs?status=open&limit=20', { headers })
   expect(response.ok()).toBe(true)
@@ -584,7 +596,10 @@ NYSC completed in 2024.`
     page.getByRole('heading', { name: 'Best matches and skills to learn' }),
   ).toBeVisible()
   const bestMatchesResponse = await page.request.get('/api/pro/best-matches')
-  expect(bestMatchesResponse.ok()).toBe(true)
+  if (!bestMatchesResponse.ok()) {
+    const body = (await bestMatchesResponse.text()).slice(0, 400)
+    throw new Error(`Best Matches failed (${bestMatchesResponse.status()}): ${body}`)
+  }
   const bestMatchesBody = await bestMatchesResponse.json()
   if (bestMatchesBody.matches.length) {
     await expect(page.locator('.best-match-card').first()).toBeVisible({ timeout: 30_000 })
@@ -758,19 +773,15 @@ test('expanded live corpus is paginated, regularly refreshed and opens complete 
   expect(metadata.sourceCount).toBeGreaterThan(10)
   expect(Date.now() - Date.parse(metadata.updatedAt)).toBeLessThan(36 * 3600000)
   // Job data needs an account now; sign this request context in.
-  const signup = await request.post('/api/auth/signup', {
-    data: {
-      name: 'Corpus Test',
-      email: `fj-corpus-${Date.now()}@example.com`,
-      password: 'browser test password',
-    },
-  })
-  expect(signup.ok()).toBe(true)
+  await signUpRequest(request)
   const offset = Math.min(5000, Math.floor(metadata.total / 2))
   const response = await request.get(`/api/jobs?status=open&offset=${offset}&limit=2`, {
     timeout: 45000,
   })
-  expect(response.ok()).toBe(true)
+  if (!response.ok()) {
+    const body = (await response.text()).slice(0, 400)
+    throw new Error(`Paginated corpus request failed (${response.status()}): ${body}`)
+  }
   const feed = await response.json()
   expect(feed.dataSource).toBe('public-snapshot')
   expect(feed.total).toBe(metadata.total)
