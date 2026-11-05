@@ -286,18 +286,14 @@ it('keeps cold shard reads bounded, ordered and complete across a transient miss
   let attempts = 0
   let active = 0
   let maxActive = 0
-  let maxBatch = 0
   const kv = {
-    get: async (key: string | string[]) => {
-      if (!Array.isArray(key)) return null
+    get: async (key: string) => {
       active += 1
       maxActive = Math.max(maxActive, active)
-      maxBatch = Math.max(maxBatch, key.length)
       try {
         await new Promise((resolve) => setTimeout(resolve, 2))
-        if (key.includes('part:2') && ++attempts < 3) throw new Error('transient KV timeout')
-        // Reverse the response map to prove input shard order is preserved.
-        return new Map([...key].reverse().map((part) => [part, rows.get(part) ?? null]))
+        if (key === 'part:2' && ++attempts < 3) throw new Error('transient KV timeout')
+        return rows.get(key) ?? null
       } finally {
         active -= 1
       }
@@ -308,16 +304,15 @@ it('keeps cold shard reads bounded, ordered and complete across a transient miss
     Array.from({ length: 12 }, (_, index) => `job-${index}`),
   )
   expect(attempts).toBe(3)
-  expect(maxBatch).toBe(5)
-  expect(maxActive).toBe(2)
+  expect(maxActive).toBe(3)
 })
 
 it('never returns a partial publication after a persistent shard miss', async () => {
   let attempts = 0
   const kv = {
-    get: async (keys: string[]) => {
-      attempts += 1
-      return new Map(keys.filter((key) => key !== 'missing').map((key) => [key, [{ id: key }]]))
+    get: async (key: string) => {
+      if (key === 'missing') attempts += 1
+      return key === 'missing' ? null : [{ id: key }]
     },
   } as unknown as KVNamespace
   await expect(readPublicationShards(kv, ['present', 'missing'])).rejects.toThrow(

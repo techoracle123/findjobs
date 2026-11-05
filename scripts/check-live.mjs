@@ -26,7 +26,10 @@ async function runLiveChecks() {
           signal: AbortSignal.timeout(30000),
         })
         if (response.ok) return response.json()
-        lastError = new Error(`Live check failed: ${path} returned ${response.status}`)
+        const body = (await response.text()).slice(0, 300)
+        lastError = new Error(
+          `Live check failed: ${path} returned ${response.status}${body ? `: ${body}` : ''}`,
+        )
         if (response.status < 500) throw lastError
       } catch (error) {
         if (error === lastError) throw error

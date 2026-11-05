@@ -525,8 +525,7 @@ let cached: PublicSnapshot | null = null
 let loadedAt = 0
 let pending: Promise<PublicSnapshot | null> | null = null
 
-const PUBLICATION_READ_BATCH = 5
-const PUBLICATION_READ_CONCURRENCY = 2
+const PUBLICATION_READ_CONCURRENCY = 3
 
 export async function readPublicationPointer(kv: KVNamespace): Promise<PublicSnapshot | null> {
   // The pointer carries every public ID, so a cold read can occasionally
@@ -547,25 +546,21 @@ export async function readPublicationPointer(kv: KVNamespace): Promise<PublicSna
   throw lastError
 }
 
-async function readPublicationBatch(
-  kv: KVNamespace,
-  keys: string[],
-): Promise<Map<string, IndexedJob[] | null>> {
-  // Ten hot shards at once made a cold read large enough to hit intermittent
-  // KV timeouts as the corpus grew. Smaller bounded reads keep the same five
-  // normal waves, while three attempts absorb a transient miss without ever
-  // returning an incomplete publication. These timestamped shards are
-  // immutable, so edge reads can be reused for five minutes; the small
-  // publication pointer still revalidates every minute.
+async function readPublicationShard(kv: KVNamespace, key: string): Promise<IndexedJob[]> {
+  // A multi-shard response is several megabytes with the expanded corpus. One
+  // transient key then forces every healthy key in that batch to be downloaded
+  // again. Read the immutable 500-row shards independently instead: only the
+  // failed shard is retried, three readers bound memory, and no partial result
+  // is ever exposed. Edge reads remain reusable for five minutes.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const candidate = await withTimeout(
-        kv.get<IndexedJob[]>(keys, { type: 'json', cacheTtl: 300 }),
-        5000,
+        kv.get<IndexedJob[]>(key, { type: 'json', cacheTtl: 300 }),
+        8000,
       )
-      if (keys.every((key) => candidate.get(key))) return candidate
+      if (candidate) return candidate
     } catch {
-      // Retry below. A partial or failed batch is never exposed to readers.
+      // Retry below. A missing or failed shard is never treated as an empty one.
     }
     if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250))
   }
@@ -577,15 +572,10 @@ export async function readPublicationShards(
   keys: string[],
 ): Promise<IndexedJob[]> {
   const jobs = new Map<string, IndexedJob>()
-  const batches: string[][] = []
-  for (let index = 0; index < keys.length; index += PUBLICATION_READ_BATCH)
-    batches.push(keys.slice(index, index + PUBLICATION_READ_BATCH))
-  for (let index = 0; index < batches.length; index += PUBLICATION_READ_CONCURRENCY) {
-    const wave = batches.slice(index, index + PUBLICATION_READ_CONCURRENCY)
-    const loaded = await Promise.all(wave.map((batch) => readPublicationBatch(kv, batch)))
-    for (const [batchIndex, parts] of loaded.entries())
-      for (const key of wave[batchIndex])
-        for (const job of parts.get(key) ?? []) if (!jobs.has(job.id)) jobs.set(job.id, job)
+  for (let index = 0; index < keys.length; index += PUBLICATION_READ_CONCURRENCY) {
+    const wave = keys.slice(index, index + PUBLICATION_READ_CONCURRENCY)
+    const loaded = await Promise.all(wave.map((key) => readPublicationShard(kv, key)))
+    for (const part of loaded) for (const job of part) if (!jobs.has(job.id)) jobs.set(job.id, job)
   }
   return [...jobs.values()]
 }
