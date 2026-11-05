@@ -163,6 +163,73 @@ test('jobs send a visitor without an account to sign in first', async ({ page })
   await expect(page.getByRole('heading', { name: 'Welcome back. Sign in.' })).toBeVisible()
 })
 
+test('compact public navigation keeps every page reachable on phones and tablets', async ({
+  page,
+}) => {
+  for (const width of [320, 768]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/')
+    const toggle = page.getByRole('button', { name: 'Open navigation menu' })
+    await expect(toggle).toBeVisible()
+    const headerBox = await page.locator('header.topbar').boundingBox()
+    expect(headerBox).not.toBeNull()
+    expect(headerBox!.height).toBeLessThan(90)
+
+    await toggle.click()
+    const menu = page.getByRole('navigation', { name: 'Mobile primary' })
+    await expect(menu).toBeVisible()
+    for (const label of ['Home', 'Jobs', 'Ideas', 'Pricing', 'About']) {
+      await expect(menu.getByRole('link', { name: label, exact: true })).toBeVisible()
+    }
+    const menuBox = await menu.boundingBox()
+    expect(menuBox).not.toBeNull()
+    expect(menuBox!.x).toBeGreaterThanOrEqual(0)
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(width)
+
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(toggle).toBeFocused()
+    await toggle.click()
+    await menu.getByRole('link', { name: 'Pricing', exact: true }).click()
+    await expect(page).toHaveURL(/\/pricing$/)
+  }
+})
+
+test('signed-in phone navigation and job actions have usable touch targets', async ({ page }) => {
+  await signUp(page)
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto('/jobs')
+  await expect(page.locator('.jobrow').first()).toBeVisible({ timeout: 20_000 })
+
+  const toggle = page.getByRole('button', { name: 'Open navigation menu' })
+  await toggle.click()
+  const menu = page.getByRole('navigation', { name: 'Mobile primary' })
+  await expect(menu.getByRole('link', { name: 'Jobs', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  await expect(menu.getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+
+  for (const locator of [
+    toggle,
+    page.getByRole('button', { name: 'Search', exact: true }),
+    page.getByRole('button', { name: /^Save / }).first(),
+  ]) {
+    const box = await locator.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+
+  await toggle.click()
+  await menu.getByRole('link', { name: 'Dashboard', exact: true }).click()
+  await expect(page).toHaveURL(/\/dashboard$/)
+})
+
 test('first job card lands within one screen on a phone and search is full width', async ({
   page,
 }) => {
@@ -175,7 +242,8 @@ test('first job card lands within one screen on a phone and search is full width
   )
   // 1146px before the revamp pushed the first card below the fold. The
   // Popular skills row adds one compact scrollable line (~46px), so the
-  // first card now starts around 546px, still well inside the first screen.
+  // first card starts around 551px with the larger mobile controls, still
+  // well inside the first screen.
   expect(firstCardY).toBeLessThanOrEqual(600)
   const searchWidth = await page.evaluate(
     () => document.querySelector('.searchbar')!.getBoundingClientRect().width,

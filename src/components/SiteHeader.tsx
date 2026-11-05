@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
+import { MobileMenu } from './MobileMenu'
 
 type SiteHeaderPage = 'home' | 'jobs' | 'ideas' | 'pricing' | 'about' | 'dashboard'
 
@@ -38,7 +39,8 @@ export function SiteHeader({ current, signedIn: signedInProp }: SiteHeaderProps)
       <a className="brand" href="/" aria-label="FJ Find Jobs home">
         <img className="brand__logo" src="/favicon.svg" alt="" width="36" height="36" />
         <span className="brand__word">
-          <strong>FJ</strong> Find Jobs
+          <strong>FJ</strong>
+          <span className="brand__suffix"> Find Jobs</span>
         </span>
       </a>
 
@@ -81,6 +83,18 @@ export function SiteHeader({ current, signedIn: signedInProp }: SiteHeaderProps)
             </a>
           </Fragment>
         )}
+        <MobileMenu
+          items={[
+            { href: '/', label: 'Home', current: current === 'home' },
+            { href: '/jobs', label: 'Jobs', current: current === 'jobs' },
+            { href: '/ideas', label: 'Ideas', current: current === 'ideas' },
+            { href: '/pricing', label: 'Pricing', current: current === 'pricing' },
+            { href: '/about', label: 'About', current: current === 'about' },
+            ...(signedIn
+              ? [{ href: '/dashboard', label: 'Dashboard', current: current === 'dashboard' }]
+              : []),
+          ]}
+        />
       </div>
     </header>
   )

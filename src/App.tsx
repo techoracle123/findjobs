@@ -45,6 +45,7 @@ import { FilterChips } from './components/FilterChips'
 import { SearchBar, type SearchValues } from './components/SearchBar'
 import { Pagination } from './components/Pagination'
 import { Footer } from './components/Footer'
+import { MobileMenu } from './components/MobileMenu'
 import { JobRow } from './components/JobRow'
 import { JobDetail } from './components/JobDetail'
 import { SavedPanel } from './components/SavedPanel'
@@ -563,7 +564,8 @@ export default function App() {
         <a className="brand" href="/" aria-label="FJ Find Jobs home">
           <img className="brand__logo" src="/favicon.svg" alt="" width="36" height="36" />
           <span className="brand__word">
-            <strong>FJ</strong> Find Jobs
+            <strong>FJ</strong>
+            <span className="brand__suffix"> Find Jobs</span>
           </span>
         </a>
 
@@ -630,6 +632,15 @@ export default function App() {
           >
             {loading ? <span className="spinner" /> : <RotateCw size={14} />}
           </button>
+          <MobileMenu
+            items={[
+              { href: '/', label: 'Home' },
+              { href: '/jobs', label: 'Jobs', current: view === 'browse' },
+              { href: '/ideas', label: 'Ideas' },
+              { href: '/pricing', label: 'Pricing' },
+              { href: '/dashboard', label: 'Dashboard', current: view === 'dashboard' },
+            ]}
+          />
         </div>
       </header>
 
