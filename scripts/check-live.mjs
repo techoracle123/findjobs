@@ -18,17 +18,22 @@ async function runLiveChecks() {
       try {
         const response = await fetch(`${base}${path}`, {
           headers: {
+            'Cache-Control': 'no-cache',
             ...(process.env.HEALTH_CHECK_KEY
               ? { 'X-Health-Key': process.env.HEALTH_CHECK_KEY }
               : {}),
             ...(sessionCookie ? { Cookie: sessionCookie } : {}),
           },
+          cache: 'no-store',
           signal: AbortSignal.timeout(30000),
         })
         if (response.ok) return response.json()
-        const body = (await response.text()).slice(0, 300)
+        const body = await response.text()
+        const title = body.match(/<title>([^<]+)<\/title>/i)?.[1]
+        const detail = title ?? body.replace(/\s+/g, ' ').trim().slice(0, 160)
+        const ray = response.headers.get('cf-ray')
         lastError = new Error(
-          `Live check failed: ${path} returned ${response.status}${body ? `: ${body}` : ''}`,
+          `Live check failed: ${path} returned ${response.status}${ray ? ` (Cloudflare Ray ${ray})` : ''}${detail ? `: ${detail}` : ''}`,
         )
         if (response.status < 500) throw lastError
       } catch (error) {
