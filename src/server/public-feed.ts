@@ -535,11 +535,13 @@ async function readPublicationBatch(
   // Ten hot shards at once made a cold read large enough to hit intermittent
   // KV timeouts as the corpus grew. Smaller bounded reads keep the same five
   // normal waves, while three attempts absorb a transient miss without ever
-  // returning an incomplete publication.
+  // returning an incomplete publication. These timestamped shards are
+  // immutable, so edge reads can be reused for five minutes; the small
+  // publication pointer still revalidates every minute.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const candidate = await withTimeout(
-        kv.get<IndexedJob[]>(keys, { type: 'json', cacheTtl: 60 }),
+        kv.get<IndexedJob[]>(keys, { type: 'json', cacheTtl: 300 }),
         5000,
       )
       if (keys.every((key) => candidate.get(key))) return candidate

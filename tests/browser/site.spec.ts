@@ -718,7 +718,15 @@ test('match rings are visible on phones and never show a numeric grade', async (
   await writeAndWait(page, '/api/account/profile', 'PUT', async () => {
     await page.getByLabel('preferred profession', { exact: false }).selectOption('administration')
   })
+  const feedResponsePromise = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/jobs',
+  )
   await page.goto('/jobs')
+  const feedResponse = await feedResponsePromise
+  expect(
+    feedResponse.status(),
+    'The job board API should return the complete public snapshot',
+  ).toBe(200)
   // A cold live isolate may need longer than Playwright's 5 second default to
   // assemble the first public snapshot page.
   await expect(page.locator('.joblist .jobrow').first()).toBeVisible({ timeout: 30_000 })

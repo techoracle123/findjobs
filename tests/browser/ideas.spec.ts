@@ -104,13 +104,15 @@ test('an idea can be saved, shared, checked and downloaded with its evidence', a
   await page.getByRole('button', { name: 'Saved on this device (1)', exact: true }).click()
   await expect(page.locator('.idea-grid .idea-card')).toHaveCount(1)
   await page.getByRole('button', { name: 'Product ideas', exact: true }).click()
+  const detailResponsePromise = page.waitForResponse((response) =>
+    response.url().includes('/api/ideas/'),
+  )
   await page.locator('.idea-grid .idea-card').first().locator('h2 a').click()
+  const detailResponse = await detailResponsePromise
 
   await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible()
   await expect(page).toHaveURL(/\/ideas\/[^/]+$/)
   await expect(page.locator('.idea-evidence-value')).toHaveText(evidence)
-  const detailPath = new URL(page.url()).pathname.replace(/^\/ideas\//, '/api/ideas/')
-  const detailResponse = await page.request.get(detailPath)
   expect(detailResponse.ok()).toBe(true)
   const detailBody = (await detailResponse.json()) as { idea: { evidence: { value: number } } }
   const exactValue = String(detailBody.idea.evidence.value)
@@ -213,7 +215,14 @@ test('trends show their collection time, source and honest traffic limitation', 
 })
 
 test('an unknown idea returns a useful not-found state', async ({ page }) => {
-  await page.goto('/ideas/not-a-real-idea')
+  const response = await page.goto('/ideas/not-a-real-idea')
+  if (response?.status() === 404) {
+    // Cloudflare Pages correctly returns a real 404 rather than booting the
+    // SPA for an unknown detail route. Local Vite uses the inline state below.
+    await expect(page.getByRole('heading', { name: /Page not found/ })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Explore current jobs on FJ' })).toBeVisible()
+    return
+  }
   await expect(page.getByRole('alert')).toContainText('not in the current evidence catalogue')
   await expect(page.getByRole('link', { name: 'Back to product ideas' })).toBeVisible()
 })
