@@ -189,6 +189,11 @@ test('compact public navigation keeps every page reachable on phones and tablets
     await page.keyboard.press('Escape')
     await expect(menu).toHaveCount(0)
     await expect(toggle).toBeFocused()
+
+    await toggle.click()
+    await page.mouse.click(width - 16, 850)
+    await expect(menu).toHaveCount(0)
+
     await toggle.click()
     await menu.getByRole('link', { name: 'Pricing', exact: true }).click()
     await expect(page).toHaveURL(/\/pricing$/)
