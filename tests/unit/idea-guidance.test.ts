@@ -7,7 +7,10 @@ describe('plain-language idea build guides', () => {
     expect(guide.intro).toContain('simple website')
     expect(guide.intro).toContain('Android or iPhone')
     expect(guide.steps).toHaveLength(4)
+    expect(guide.steps.join(' ')).toContain('Android Studio')
+    expect(guide.steps.join(' ')).toContain('real Android phone')
     expect(guide.costs).toContain('Website hosting and internet data')
+    expect(guide.costs).toContain('Android app testing and publishing if an app is needed')
   })
 
   it('starts physical products with one sample and clear costs', () => {
