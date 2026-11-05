@@ -415,9 +415,19 @@ test('homepage and pricing explain Phase 2 cleanly at phone, tablet and desktop 
     await expect(
       page.getByRole('heading', { name: 'Everything on FJ is free for now', level: 1 }),
     ).toBeVisible()
-    await expect(
-      page.locator('.site-header .topnav').getByRole('link', { name: 'Pricing' }),
-    ).toBeVisible()
+    if (width <= 900) {
+      await page.getByRole('button', { name: 'Open navigation menu' }).click()
+      await expect(
+        page
+          .getByRole('navigation', { name: 'Mobile primary' })
+          .getByRole('link', { name: 'Pricing', exact: true }),
+      ).toBeVisible()
+      await page.keyboard.press('Escape')
+    } else {
+      await expect(
+        page.locator('.site-header .topnav').getByRole('link', { name: 'Pricing' }),
+      ).toBeVisible()
+    }
     await expect(
       page.getByRole('heading', { name: 'You do not need a card or a trial' }),
     ).toBeVisible()
