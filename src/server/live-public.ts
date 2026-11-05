@@ -182,6 +182,12 @@ export async function livePublicJobs(origin: string): Promise<Job[]> {
   return (await pending).jobs
 }
 
+export function paginateSortedPublicJobs(filtered: Job[], search: JobSearch): JobSearchResult {
+  const limit = Math.min(200, Math.max(1, search.limit ?? 50)),
+    offset = Math.max(0, search.offset ?? 0)
+  return { jobs: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset }
+}
+
 export function paginatePublicJobs(matched: Job[], search: JobSearch): JobSearchResult {
   // Nigeria-first ordering for unfiltered browsing: in-market roles (NG or
   // remote) lead, newest first inside each group. Explicit country/search
@@ -192,9 +198,7 @@ export function paginatePublicJobs(matched: Job[], search: JobSearch): JobSearch
       b.postedAt.localeCompare(a.postedAt) ||
       a.id.localeCompare(b.id),
   )
-  const limit = Math.min(200, Math.max(1, search.limit ?? 50)),
-    offset = Math.max(0, search.offset ?? 0)
-  return { jobs: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset }
+  return paginateSortedPublicJobs(filtered, search)
 }
 
 export function searchLivePublic(jobs: Job[], search: JobSearch): JobSearchResult {
@@ -215,30 +219,33 @@ function matcherFor(search: JobSearch): ((normalizedHaystack: string) => boolean
   }
   return matcher
 }
+export function buildPublicSearchText(job: Job): string {
+  const opportunity = opportunityOf(job)
+  const gigCategory = opportunity.opportunityType === 'gig' ? gigCategoryFor(job) : null
+  const opportunityTerms = [
+    opportunity.opportunityType,
+    opportunity.engagementType,
+    opportunity.engagementLabel,
+    opportunity.projectDuration ?? '',
+    gigCategory?.label ?? '',
+    gigCategory?.search ?? '',
+    opportunity.opportunityType === 'gig' ? 'gig gigs contract freelance project' : 'job jobs',
+  ].join(' ')
+  // Keep only the opening slice of the description: over a 20,000-listing
+  // snapshot, full-description copies pushed a cold isolate over its CPU and
+  // memory budget. Skill extraction already ran over the full advert at
+  // ingest and those skills remain searchable in full.
+  return normalizeSearchText(
+    `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${opportunityTerms} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')} ${job.description.slice(0, 800)}`,
+  )
+}
+
 function haystack(job: Job): string {
   let value = haystackCache.get(job)
   if (value === undefined) {
-    const opportunity = opportunityOf(job)
-    const gigCategory = opportunity.opportunityType === 'gig' ? gigCategoryFor(job) : null
-    const opportunityTerms = [
-      opportunity.opportunityType,
-      opportunity.engagementType,
-      opportunity.engagementLabel,
-      opportunity.projectDuration ?? '',
-      gigCategory?.label ?? '',
-      gigCategory?.search ?? '',
-      opportunity.opportunityType === 'gig' ? 'gig gigs contract freelance project' : 'job jobs',
-    ].join(' ')
-    // Keep only the opening slice of the description: haystacks are cached
-    // per listing, and over a 20,000-listing snapshot the full-description
-    // copies pushed a cold isolate over its CPU/memory budget, so the
-    // first real search could fail outright. Skill extraction already ran
-    // over the full advert at ingest and the extracted skills are in the
-    // haystack in full, so a specific tool mentioned late in an advert
-    // (WordPress in a long "web developer" posting) is still findable.
-    value = normalizeSearchText(
-      `${job.title} ${job.company} ${job.locationLabel} ${roleFamilyLabel(job.roleFamily)} ${opportunityTerms} ${job.requiredSkills.join(' ')} ${job.usefulSkills.join(' ')} ${job.description.slice(0, 800)}`,
-    )
+    // Current publications carry this derived text. Older snapshots and the
+    // small live fallback still use the same builder on demand.
+    value = (job as Job & { searchText?: string }).searchText ?? buildPublicSearchText(job)
     haystackCache.set(job, value)
   }
   return value

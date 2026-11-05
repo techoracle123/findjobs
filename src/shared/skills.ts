@@ -124,17 +124,33 @@ export function skillsMatch(a: string, b: string): boolean {
   return left === right
 }
 
-export function matchSkills(jobSkills: string[], profileSkills: string[]) {
+export function canonicalSkillSet(skills: string[]): Set<string> {
+  return new Set(skills.map(canonicalSkill).filter(Boolean))
+}
+
+export function countMatchingSkills(
+  jobSkills: string[],
+  profileCanonical: ReadonlySet<string>,
+): number {
+  let count = 0
+  for (const skill of jobSkills) {
+    if (profileCanonical.has(canonicalSkill(skill))) count += 1
+  }
+  return count
+}
+
+export function matchSkillsCanonical(jobSkills: string[], profileCanonical: ReadonlySet<string>) {
   const matched: string[] = []
   const missing: string[] = []
-  const profileCanonical = new Set(profileSkills.map(canonicalSkill).filter(Boolean))
-
   for (const skill of jobSkills) {
     if (profileCanonical.has(canonicalSkill(skill))) matched.push(skill)
     else missing.push(skill)
   }
-
   return { matched, missing }
+}
+
+export function matchSkills(jobSkills: string[], profileSkills: string[]) {
+  return matchSkillsCanonical(jobSkills, canonicalSkillSet(profileSkills))
 }
 
 /**

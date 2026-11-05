@@ -121,6 +121,7 @@ export async function bootstrapPublicFeed(api, auth) {
   })
   const {
     PRECLASSIFIED_SNAPSHOT_VERSION,
+    SEARCH_TEXT_SNAPSHOT_VERSION,
     PUBLIC_SOURCES,
     refreshPublicSource,
     publishPublicSnapshot,
@@ -143,10 +144,14 @@ export async function bootstrapPublicFeed(api, auth) {
       )
       return { id: ns.id, count: repaired.jobs.length }
     }
-    if (current.opportunityVersion !== PRECLASSIFIED_SNAPSHOT_VERSION || !current.stats) {
+    if (
+      current.opportunityVersion !== PRECLASSIFIED_SNAPSHOT_VERSION ||
+      current.searchTextVersion !== SEARCH_TEXT_SNAPSHOT_VERSION ||
+      !current.stats
+    ) {
       const upgraded = await publishPublicSnapshot(kv)
       console.log(
-        `::notice title=Publication preclassified::${upgraded.jobs.length} listings republished with stored job and gig lanes and public totals; no publisher recrawl.`,
+        `::notice title=Publication index upgraded::${upgraded.jobs.length} listings republished with stored search text, job and gig lanes, and public totals; no publisher recrawl.`,
       )
       return { id: ns.id, count: upgraded.jobs.length }
     }

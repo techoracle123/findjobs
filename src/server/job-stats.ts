@@ -1,6 +1,6 @@
 import type { Job } from '../shared/types'
 import type { JobSearch } from './jobs'
-import { paginatePublicJobs, publicFacetMatch, searchLivePublic } from './live-public'
+import { paginatePublicJobs, paginateSortedPublicJobs, publicFacetMatch } from './live-public'
 import { coverageOf } from './quality'
 import type { FieldCoverage } from '../shared/quality'
 
@@ -23,10 +23,31 @@ function increment(counts: Record<string, number>, key: string): void {
 }
 /** Disjunctive facet counts: each selector excludes only its own selection.
  * Summary metrics always describe the exact full result set before pagination. */
-const facetCache = new Map<string, { at: number; value: JobFacets }>()
+interface CachedFacets {
+  at: number
+  value: JobFacets
+}
+interface CachedResults {
+  at: number
+  matched: Job[]
+  facets: JobFacets
+}
+const facetCache = new Map<string, CachedFacets>()
+const resultCache = new Map<string, CachedResults>()
+const snapshotIds = new WeakMap<Job[], number>()
+let nextSnapshotId = 1
 
 function cacheKey(jobs: Job[], search: JobSearch): string {
-  return `${jobs.length}:${JSON.stringify(search)}`
+  let snapshotId = snapshotIds.get(jobs)
+  if (!snapshotId) {
+    snapshotId = nextSnapshotId++
+    snapshotIds.set(jobs, snapshotId)
+  }
+  const filters: Partial<JobSearch> = { ...search }
+  // Pagination changes only the slice, not the matching set or its facets.
+  delete filters.limit
+  delete filters.offset
+  return `${snapshotId}:${JSON.stringify(filters)}`
 }
 function cachedFacets(key: string): JobFacets | null {
   const hit = facetCache.get(key)
@@ -35,6 +56,16 @@ function cachedFacets(key: string): JobFacets | null {
 function storeFacets(key: string, value: JobFacets): void {
   if (facetCache.size > 50) facetCache.clear()
   facetCache.set(key, { at: Date.now(), value })
+}
+function cachedResults(key: string): CachedResults | null {
+  const hit = resultCache.get(key)
+  return hit && Date.now() - hit.at < 60_000 ? hit : null
+}
+function storeResults(key: string, matched: Job[], facets: JobFacets): void {
+  // These are references to the shared publication, not copied jobs. Keep the
+  // list short so the retry/page cache cannot become its own memory problem.
+  if (resultCache.size >= 12) resultCache.clear()
+  resultCache.set(key, { at: Date.now(), matched, facets })
 }
 
 export function jobFacets(jobs: Job[], search: JobSearch): JobFacets {
@@ -49,12 +80,18 @@ export function jobFacets(jobs: Job[], search: JobSearch): JobFacets {
 /** Results and disjunctive facets from one full-corpus pass on the hot route. */
 export function searchPublicJobs(jobs: Job[], search: JobSearch) {
   const key = cacheKey(jobs, search)
-  const cached = cachedFacets(key)
-  if (cached) return { ...searchLivePublic(jobs, search), facets: cached }
+  const cached = cachedResults(key)
+  if (cached) {
+    return { ...paginateSortedPublicJobs(cached.matched, search), facets: cached.facets }
+  }
   const matched: Job[] = []
   const facets = computeFacets(jobs, search, matched)
+  const result = paginatePublicJobs(matched, search)
+  // paginatePublicJobs sorts this array in place. Reuse that exact order for
+  // later pages and retries instead of scanning and sorting the board again.
+  storeResults(key, matched, facets)
   storeFacets(key, facets)
-  return { ...paginatePublicJobs(matched, search), facets }
+  return { ...result, facets }
 }
 
 function computeFacets(jobs: Job[], search: JobSearch, matched: Job[] = []): JobFacets {

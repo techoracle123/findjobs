@@ -12,7 +12,7 @@ import {
 import { scoreJob } from '../../src/shared/scoring'
 import type { Job, Profile } from '../../src/shared/types'
 import { matchingPublicJobs } from '../../src/server/live-public'
-import { jobFacets } from '../../src/server/job-stats'
+import { jobFacets, searchPublicJobs } from '../../src/server/job-stats'
 
 function makeJob(overrides: Partial<Job> = {}): Job {
   return {
@@ -209,6 +209,34 @@ describe('opportunity filters and badges', () => {
       professions: { frontend: 1 },
       opportunities: { all: 3, job: 2, gig: 1 },
     })
+  })
+})
+
+describe('cached public job searches', () => {
+  it('shares pages within a publication without mixing equal-sized publications', () => {
+    const jobs = Array.from({ length: 5 }, (_, index) =>
+      makeJob({
+        id: `job-${index}`,
+        postedAt: new Date(Date.UTC(2026, 9, 30 - index)).toISOString(),
+      }),
+    )
+    const first = searchPublicJobs(jobs, { query: 'React', limit: 2, offset: 0 })
+    const second = searchPublicJobs(jobs, { query: 'React', limit: 2, offset: 2 })
+
+    expect(first.jobs.map((job) => job.id)).toEqual(['job-0', 'job-1'])
+    expect(second.jobs.map((job) => job.id)).toEqual(['job-2', 'job-3'])
+    expect(second.total).toBe(5)
+    expect(second.facets).toBe(first.facets)
+
+    const replacement = jobs.map((job) => ({
+      ...job,
+      title: 'Accountant',
+      description: 'No matching terms here.',
+      requiredSkills: [],
+    }))
+    const refreshed = searchPublicJobs(replacement, { query: 'React', limit: 2, offset: 0 })
+    expect(refreshed.total).toBe(0)
+    expect(refreshed.facets.total).toBe(0)
   })
 })
 

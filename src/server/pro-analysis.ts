@@ -1,5 +1,5 @@
 import { suggestFromKeywords } from '../shared/cv-suggest'
-import { compareScoredJobs, scoreJob } from '../shared/scoring'
+import { compareScoredJobs, rankJobs, scoreJobs } from '../shared/scoring'
 import { matchSkills } from '../shared/skills'
 import { roleFamilyLabel } from '../shared/taxonomy'
 import type {
@@ -525,12 +525,21 @@ export function buildBestMatches(
   limit = 12,
   excludedIds: ReadonlySet<string> = new Set(),
 ): BestMatch[] {
-  const scored = jobs
-    .filter((job) => !job.isDemo && job.jobStatus !== 'closed' && !excludedIds.has(job.id))
-    .map((job) => scoreJob(job, profile))
-    .sort(compareScoredJobs)
+  const ranked = rankJobs(
+    jobs.filter((job) => !job.isDemo && job.jobStatus !== 'closed' && !excludedIds.has(job.id)),
+    profile,
+  )
+    .map((entry, index) => ({ entry, index, postedAt: Date.parse(entry.job.postedAt) }))
+    .sort(
+      (a, b) => compareScoredJobs(a.entry, b.entry, a.postedAt, b.postedAt) || a.index - b.index,
+    )
+  const capped = Math.max(1, Math.min(30, limit))
+  const scored = scoreJobs(
+    ranked.slice(0, capped).map(({ entry }) => entry.job),
+    profile,
+  )
 
-  return scored.slice(0, Math.max(1, Math.min(30, limit))).map((entry) => {
+  return scored.map((entry) => {
     const reasons: string[] = []
     if (entry.matchedSkills.length)
       reasons.push(`Matches your skills: ${entry.matchedSkills.slice(0, 4).join(', ')}.`)

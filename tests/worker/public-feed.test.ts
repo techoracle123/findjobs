@@ -10,7 +10,7 @@ import {
   type PublicSnapshot,
   type SourceIndex,
 } from '../../src/server/public-feed'
-import { fetchPublicSource } from '../../src/server/live-public'
+import { buildPublicSearchText, fetchPublicSource } from '../../src/server/live-public'
 import { SEED_SOURCES } from '../../src/server/sources/seed'
 import { resetHostCache } from '../../src/server/sources/polite'
 import { enqueuePublicRefresh } from '../../src/server/public-schedule'
@@ -74,6 +74,8 @@ describe('durable broad public feed', () => {
     // List shards never carry per-skill evidence (it lives in detail
     // payloads); carrying it once made every deploy republish the corpus.
     expect(snapshot.jobs[0].quality?.skillEvidence ?? []).toHaveLength(0)
+    expect(snapshot.searchTextVersion).toBe(1)
+    expect(snapshot.jobs[0].searchText).toBe(buildPublicSearchText(snapshot.jobs[0]))
     expect(snapshot.jobs[0].id).toBe(original.id)
   })
   it('drops publishers that have not confirmed content within the freshness window', async () => {
@@ -222,6 +224,7 @@ it('serves the broad index without D1 and returns full descriptions on individua
   expect(body.dataSource).toBe('public-snapshot')
   expect(body.jobs[0].descriptionPreview).toBe(true)
   expect(body.jobs[0].detailKey).toBeUndefined()
+  expect(body.jobs[0].searchText).toBeUndefined()
   expect(body.jobs.every((job) => typeof job.opportunityType === 'string')).toBe(true)
   const gigFeed = await app.request(
     'https://public-feed-tests.example/api/jobs?status=open&limit=20&ww=1&type=gig',

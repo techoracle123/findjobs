@@ -8,7 +8,7 @@ import { withTimeout } from './timeouts'
 import { logger } from './logging'
 import type { Job } from '../shared/types'
 import { SEED_SOURCES } from './sources/seed'
-import { fetchPublicSource } from './live-public'
+import { buildPublicSearchText, fetchPublicSource } from './live-public'
 
 export const REFRESH_HOURS = 12
 export const PUBLIC_SOURCES = SEED_SOURCES.filter(
@@ -50,6 +50,8 @@ const MAX_AGE = 8 * 86_400_000
 const EXPIRY = 10 * 86400
 export interface IndexedJob extends Job {
   detailKey: string
+  /** Derived publication text; made non-enumerable when a snapshot is read. */
+  searchText?: string
 }
 export interface SourceIndex {
   sourceId: string
@@ -58,6 +60,7 @@ export interface SourceIndex {
   jobs: IndexedJob[]
 }
 export const PRECLASSIFIED_SNAPSHOT_VERSION = 1
+export const SEARCH_TEXT_SNAPSHOT_VERSION = 1
 
 export interface PublicSnapshotStats {
   total: number
@@ -72,6 +75,8 @@ export interface PublicSnapshot {
   version: 1
   /** Rows in this publication already carry job/gig classifications. */
   opportunityVersion?: number
+  /** Shards carry normalized text, so cold searches do not rebuild it. */
+  searchTextVersion?: number
   refreshedAt: string
   refreshHours: number
   sourceCount: number
@@ -380,7 +385,7 @@ export function assemblePublicSnapshot(
       usefulSkills: job.usefulSkills,
     })
     const opportunity = opportunityOf(job)
-    return {
+    const normalized: IndexedJob = {
       ...job,
       ...patch,
       opportunityType: opportunity.opportunityType,
@@ -397,6 +402,7 @@ export function assemblePublicSnapshot(
       roleFamily: specialistRole(job.title) || job.roleFamily,
       locationCountry: patch.quality.location.country || job.locationCountry,
     }
+    return { ...normalized, searchText: buildPublicSearchText(normalized) }
   })
   const { unique, dropped } = dedupeJobs(normalised)
   const withheld = unique.filter(
@@ -414,6 +420,7 @@ export function assemblePublicSnapshot(
   return {
     version: 1,
     opportunityVersion: PRECLASSIFIED_SNAPSHOT_VERSION,
+    searchTextVersion: SEARCH_TEXT_SNAPSHOT_VERSION,
     stats: snapshotStats(jobs),
     refreshedAt: new Date(now).toISOString(),
     refreshHours: REFRESH_HOURS,
@@ -621,6 +628,16 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
         job.engagementLabel = opportunity.engagementLabel
         job.engagementBasis = opportunity.engagementBasis
         if (opportunity.projectDuration) job.projectDuration = opportunity.projectDuration
+        if (typeof job.searchText === 'string') {
+          // Keep the derived index available to search without adding it to
+          // list responses, Best Matches or other objects built with spread.
+          Object.defineProperty(job, 'searchText', {
+            value: job.searchText,
+            writable: true,
+            configurable: true,
+            enumerable: false,
+          })
+        }
       }
       // Held/rejected listings and report-hidden listings never reach users.
       const hidden = await kv
