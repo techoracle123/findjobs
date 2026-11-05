@@ -18,9 +18,12 @@ interface Candidate {
 }
 
 interface IdeaIndex {
-  candidates: Candidate[]
+  snapshot: IdeaEvidenceSnapshot
+  candidates: Candidate[] | null
   byCountry: Map<string, Candidate[]>
+  countryById: Map<string, IdeaCountry>
   countries: IdeaListResponse['countries']
+  catalogTotal: number
 }
 
 export interface IdeaQuery {
@@ -37,7 +40,7 @@ const categoryById = new Map(IDEA_CATEGORIES.map((entry) => [entry.id, entry]))
 const conceptById = new Map(IDEA_CONCEPTS.map((entry) => [entry.id, entry]))
 const indexCache = new WeakMap<IdeaEvidenceSnapshot, IdeaIndex>()
 
-function candidateFor(concept: IdeaConcept, country: IdeaCountry): Candidate | null {
+function strengthFor(concept: IdeaConcept, country: IdeaCountry): number | null {
   const category = categoryById.get(concept.categoryId)
   const observation = country.observations[category?.indicatorId ?? '']
   if (!category || !observation || !Number.isFinite(observation.value)) return null
@@ -47,38 +50,38 @@ function candidateFor(concept: IdeaConcept, country: IdeaCountry): Candidate | n
       : (observation.value / category.scaleMax) * 100
   // A zero-strength observation supplies no problem pressure under this
   // deliberately simple rule. It must not inflate the public idea total.
-  if (strength <= 0) return null
-  return { concept, category, country, observation, strength: Math.min(100, strength) }
+  return strength > 0 ? Math.min(100, strength) : null
+}
+
+function candidateFor(concept: IdeaConcept, country: IdeaCountry): Candidate | null {
+  const strength = strengthFor(concept, country)
+  if (strength === null) return null
+  const category = categoryById.get(concept.categoryId)!
+  const observation = country.observations[category.indicatorId]!
+  return { concept, category, country, observation, strength }
 }
 
 function buildIndex(snapshot: IdeaEvidenceSnapshot): IdeaIndex {
   const cached = indexCache.get(snapshot)
   if (cached) return cached
-  const candidates: Candidate[] = []
-  const byCountry = new Map<string, Candidate[]>()
-  for (const country of snapshot.countries) {
-    const local: Candidate[] = []
-    for (const concept of IDEA_CONCEPTS) {
-      const candidate = candidateFor(concept, country)
-      if (candidate) {
-        candidates.push(candidate)
-        local.push(candidate)
-      }
-    }
-    byCountry.set(country.iso3, local)
-  }
-  const counts = new Map<string, number>()
-  for (const candidate of candidates) {
-    counts.set(candidate.country.iso3, (counts.get(candidate.country.iso3) ?? 0) + 1)
-  }
+  let catalogTotal = 0
   const countries = snapshot.countries
-    .map((country) => ({
-      iso3: country.iso3,
-      iso2: country.iso2,
-      name: country.iso3 === 'WLD' ? 'Worldwide' : country.name,
-      region: country.region,
-      count: counts.get(country.iso3) ?? 0,
-    }))
+    .map((country) => {
+      // Counts need arithmetic, not 25,000 short-lived candidate objects.
+      // Candidates are created later only for the requested country.
+      let count = 0
+      for (const concept of IDEA_CONCEPTS) {
+        if (strengthFor(concept, country) !== null) count += 1
+      }
+      catalogTotal += count
+      return {
+        iso3: country.iso3,
+        iso2: country.iso2,
+        name: country.iso3 === 'WLD' ? 'Worldwide' : country.name,
+        region: country.region,
+        count,
+      }
+    })
     .filter((country) => country.count > 0)
     .sort((a, b) => {
       if (a.iso3 === 'WLD') return -1
@@ -87,9 +90,39 @@ function buildIndex(snapshot: IdeaEvidenceSnapshot): IdeaIndex {
       if (b.iso3 === 'NGA') return 1
       return a.name.localeCompare(b.name)
     })
-  const index = { candidates, byCountry, countries }
+  const index: IdeaIndex = {
+    snapshot,
+    candidates: null,
+    byCountry: new Map<string, Candidate[]>(),
+    countryById: new Map(snapshot.countries.map((country) => [country.iso3, country])),
+    countries,
+    catalogTotal,
+  }
   indexCache.set(snapshot, index)
   return index
+}
+
+function countryCandidates(index: IdeaIndex, countryId: string): Candidate[] {
+  const cached = index.byCountry.get(countryId)
+  if (cached) return cached
+  const country = index.countryById.get(countryId)
+  const candidates: Candidate[] = []
+  if (country) {
+    for (const concept of IDEA_CONCEPTS) {
+      const candidate = candidateFor(concept, country)
+      if (candidate) candidates.push(candidate)
+    }
+  }
+  index.byCountry.set(countryId, candidates)
+  return candidates
+}
+
+function allCandidates(index: IdeaIndex): Candidate[] {
+  if (index.candidates) return index.candidates
+  index.candidates = index.snapshot.countries.flatMap((country) =>
+    countryCandidates(index, country.iso3),
+  )
+  return index.candidates
 }
 
 function displayValue(observation: IdeaObservation): string {
@@ -177,7 +210,7 @@ function filtered(index: IdeaIndex, query: IdeaQuery, omit?: 'category' | 'forma
   const category = omit === 'category' ? '' : (query.category ?? '')
   const format = omit === 'format' ? '' : (query.format ?? '')
   const text = (query.q ?? '').trim().slice(0, 100)
-  const source = country === 'ALL' ? index.candidates : (index.byCountry.get(country) ?? [])
+  const source = country === 'ALL' ? allCandidates(index) : countryCandidates(index, country)
   return source.filter(
     (candidate) =>
       (!category || candidate.category.id === category) &&
@@ -232,7 +265,7 @@ export function searchIdeas(snapshot: IdeaEvidenceSnapshot, query: IdeaQuery): I
   return {
     ideas: page.map(materialize),
     total: matchesAll.length,
-    catalogTotal: index.candidates.length,
+    catalogTotal: index.catalogTotal,
     limit,
     offset,
     countries: index.countries,
@@ -263,19 +296,20 @@ export function findIdea(
   const countryId = id.slice(separator + 1).toUpperCase()
   const concept = conceptById.get(conceptId)
   const index = buildIndex(snapshot)
-  const candidate = index.byCountry.get(countryId)?.find((entry) => entry.concept.id === conceptId)
+  const local = countryCandidates(index, countryId)
+  const candidate = local.find((entry) => entry.concept.id === conceptId)
   if (!concept || !candidate) return null
   const related = sorted(
-    (index.byCountry.get(countryId) ?? []).filter(
+    local.filter(
       (entry) => entry.category.id === candidate.category.id && entry.concept.id !== conceptId,
     ),
     {},
   )
     .slice(0, 4)
     .map(materialize)
-  return { idea: materialize(candidate), related, catalogTotal: index.candidates.length }
+  return { idea: materialize(candidate), related, catalogTotal: index.catalogTotal }
 }
 
 export function catalogTotal(snapshot: IdeaEvidenceSnapshot): number {
-  return buildIndex(snapshot).candidates.length
+  return buildIndex(snapshot).catalogTotal
 }
