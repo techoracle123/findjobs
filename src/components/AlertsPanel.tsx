@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Bell, Link2, Plus, Trash2 } from 'lucide-react'
 import type { AlertPreference, OpportunityFilter, ProTrialState, WorkMode } from '../shared/types'
 import { OPPORTUNITY_FILTER_OPTIONS } from '../shared/opportunities'
+import { PRO_FREE_FOR_ALL } from '../shared/access'
 
 interface AlertsPanelProps {
   alerts: AlertPreference[]
@@ -474,7 +475,11 @@ export function AlertsPanel({
               />
               <span>
                 <strong>Pro alert with filters</strong>
-                <small>Choose score, country, pay, company and words to avoid.</small>
+                <small>
+                  {PRO_FREE_FOR_ALL
+                    ? 'Included free during early access. Choose score, country, pay, company and words to avoid.'
+                    : 'Choose score, country, pay, company and words to avoid.'}
+                </small>
               </span>
             </label>
           </fieldset>

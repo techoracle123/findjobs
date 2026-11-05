@@ -13,6 +13,7 @@
       "migrations_dir": "migrations",
     },
   ],
+  "kv_namespaces": [{ "binding": "PUBLIC_JOBS", "id": "00000000-0000-0000-0000-000000000004" }],
   "vars": {
     "APP_MODE": "local-preview",
     "BILLING_PROVIDER": "fake",

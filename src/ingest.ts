@@ -40,7 +40,22 @@ export default {
     if (env.PUBLIC_FEED_ONLY === '1') {
       ctx.waitUntil(
         (async () => {
+          const scheduledTime = String(event.scheduledTime ?? Date.now())
           const hourUtc = new Date(event.scheduledTime ?? Date.now()).getUTCHours()
+          // Evidence is a separate daily operation, not a side effect of a
+          // successful publisher crawl or a non-empty source batch.
+          if (hourUtc === 0 && env.INGEST_QUEUE) {
+            try {
+              await env.INGEST_QUEUE.send({
+                operation: 'ideas-evidence-refresh',
+                run: scheduledTime,
+              })
+            } catch (error) {
+              logger.error('idea evidence refresh could not be queued', {
+                error: error instanceof Error ? error.message : String(error),
+              })
+            }
+          }
           const disabled = new Set<string>()
           if (env.PUBLIC_JOBS)
             for (const source of PUBLIC_SOURCES)

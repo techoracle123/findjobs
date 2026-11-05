@@ -6,6 +6,7 @@
  * queue rather than by how long a single Worker invocation may run.
  */
 import { refreshPublicSource, publishPublicSnapshot } from './server/public-feed'
+import { refreshIdeaEvidence } from './server/ideas/evidence'
 import { runIngestion } from './server/ingest'
 import { deliverNewAlerts } from './server/alerts'
 import { logger } from './server/logging'
@@ -26,6 +27,23 @@ export default {
     let sawNewPosting = false
 
     for (const message of batch.messages) {
+      if (message.body?.operation === 'ideas-evidence-refresh') {
+        try {
+          if (!env.PUBLIC_JOBS) throw new Error('No public snapshot binding')
+          const snapshot = await refreshIdeaEvidence(env.PUBLIC_JOBS)
+          logger.info('idea evidence refreshed', {
+            ideas: snapshot.catalogTotal,
+            countries: snapshot.countries.length,
+          })
+          message.ack()
+        } catch (error) {
+          logger.warn('idea evidence refresh failed; preserving previous snapshot', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          message.retry({ delaySeconds: 300 })
+        }
+        continue
+      }
       if (message.body?.operation?.startsWith('public-')) {
         try {
           if (!env.PUBLIC_JOBS) throw new Error('No public snapshot binding')

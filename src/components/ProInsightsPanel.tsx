@@ -4,6 +4,7 @@ import { fetchBestMatches, fetchSkillPlan } from '../lib/api'
 import type { BestMatch, Job, ProTrialState, SkillPlanResult } from '../shared/types'
 import { PERIOD_LABELS } from '../shared/format'
 import { opportunityBadge } from '../shared/opportunities'
+import { PRO_FREE_FOR_ALL } from '../shared/access'
 
 interface ProInsightsPanelProps {
   proEnabled: boolean
@@ -109,7 +110,7 @@ export function ProInsightsPanel({
     <section className="panel" aria-labelledby="pro-insights-heading">
       <div className="panel__head panel-head-row">
         <div>
-          <p className="eyebrow">Pro</p>
+          <p className="eyebrow">{PRO_FREE_FOR_ALL ? 'Pro · free early access' : 'Pro'}</p>
           <h2 className="panel__title" id="pro-insights-heading">
             Best matches and skills to learn
           </h2>

@@ -2,6 +2,7 @@ import { CalendarClock, Trash2 } from 'lucide-react'
 import type { ApplicationStage, Job, ProTrialState, SavedApplication } from '../shared/types'
 import { formatRange, PERIOD_LABELS } from '../shared/format'
 import { opportunityBadge, opportunityOf } from '../shared/opportunities'
+import { PRO_FREE_FOR_ALL } from '../shared/access'
 
 interface SavedPanelProps {
   saved: SavedApplication[]
@@ -89,8 +90,9 @@ export function SavedPanel({
       </div>
       <div className="panel__body stack">
         <p className="panel__note">
-          Saving jobs and gigs and marking them as applied is free. Pro adds more stages and follow
-          up dates.
+          {PRO_FREE_FOR_ALL
+            ? 'Saving jobs and gigs is free. All application stages and follow-up dates are included during free early access.'
+            : 'Saving jobs and gigs and marking them as applied is free. Pro adds more stages and follow up dates.'}
         </p>
         {due.length ? (
           <p className="banner banner--info" role="status">

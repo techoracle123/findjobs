@@ -19,12 +19,6 @@ async function signUp(page: Page): Promise<string> {
   return email
 }
 
-async function paymentsOpen(page: Page): Promise<boolean> {
-  const response = await page.request.get('/api/billing/plans')
-  expect(response.ok()).toBe(true)
-  return Boolean(((await response.json()) as { billingEnabled?: boolean }).billingEnabled)
-}
-
 /** Runs an action and waits until its account write has reached the server. */
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
@@ -101,17 +95,20 @@ test('homepage explains the platform in plain words and sends people to sign up'
   await expect(page.locator('body')).toContainText('gigs and contracts')
   await expect(page.locator('body')).toContainText('FJ Match Intelligence')
   await expect(page.locator('body')).toContainText('will not ask you to pay to get a job')
-  await expect(page.getByRole('heading', { name: 'Pro helps you check and prepare' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Try it free for 3 days' })).toBeVisible()
-  await expect(page.locator('.home-price-grid')).toContainText('₦5,000/month')
-  await expect(page.locator('.home-price-grid')).toContainText('₦40,000/year')
-  await expect(page.locator('.home-price-grid')).toContainText('₦3,000/month')
+  await expect(
+    page.getByRole('heading', { name: 'Every preparation tool is free for now' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'No card. No trial limit. Payments paused.' }),
+  ).toBeVisible()
+  await expect(page.locator('.home-pro')).toContainText('You do not need to start a trial')
+  await expect(page.locator('.home-ideas-teaser')).toContainText('localized product ideas')
   await expect(page.locator('.home-user-count')).toContainText(/registered on FJ/)
   await expect(page.locator('.home-user-count strong')).toHaveText(/^\d[\d,]*$/)
   await expect(page.locator('.home-stat').first()).toHaveClass(/home-stat--users/)
   await expect(page.locator('.home-stat--users')).toContainText('registered users')
   await expect(page.locator('.home-stat--users strong')).toHaveText(/^\d[\d,]*$/)
-  await expect(page.locator('body')).toContainText('Compare the plans before you decide')
+  await expect(page.locator('body')).toContainText('See everything included')
   await page
     .getByRole('link', { name: /Create a free account/ })
     .first()
@@ -286,11 +283,15 @@ test('job deep links, browser history and scroll return to the results', async (
   await expect(page).not.toHaveURL(jobUrl)
 })
 
-test('pricing is linked in the header and the page loads', async ({ page }) => {
+test('pricing stays findable and honestly explains free access with payments paused', async ({
+  page,
+}) => {
   await page.goto('/')
   await page.locator('.topnav').getByRole('link', { name: 'Pricing' }).click()
   await expect(page).toHaveURL(/\/pricing$/)
-  await expect(page.getByRole('heading', { name: 'Simple pricing' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Everything in FJ is free for now', level: 1 }),
+  ).toBeVisible()
   const pricingNav = page.locator('.site-header .topnav')
   await expect(pricingNav.getByRole('link', { name: 'Home' })).toBeVisible()
   await expect(pricingNav.getByRole('link', { name: 'Jobs' })).toBeVisible()
@@ -299,28 +300,17 @@ test('pricing is linked in the header and the page loads', async ({ page }) => {
     'page',
   )
   await expect(pricingNav.getByRole('link', { name: 'About' })).toBeVisible()
-  const pricingTable = page.locator('.pricing-table')
-  await expect(page.locator('.pricing-cards')).toContainText('Pro for Graduates')
-  await expect(page.locator('.pricing-cards')).toContainText('₦5,000')
-  await expect(page.locator('.pricing-cards')).toContainText('₦40,000')
-  await expect(page.locator('.pricing-cards')).toContainText('₦3,000')
-  await expect(pricingTable.getByText('Prepare your application or pitch')).toBeVisible()
-  await expect(pricingTable.getByText('FJ Match Intelligence')).toBeVisible()
-  await expect(pricingTable.getByText('Check an advert before you apply')).toBeVisible()
-  await expect(pricingTable).toContainText('essential requirements from desirable ones')
-  await expect(pricingTable).toContainText('suggests stronger alternatives')
-  await expect(page.getByRole('heading', { name: 'Try Pro free for 3 days' })).toBeVisible()
-  await expect(page.locator('body')).toContainText('Check one CV in full')
-  await expect(page.locator('body')).toContainText('for three listings')
-  if (await paymentsOpen(page)) {
-    await expect(page.locator('body')).toContainText('Pay by card or bank transfer')
-    await expect(page.locator('body')).toContainText(
-      'FJ will not charge you again unless you choose to pay',
-    )
-  } else {
-    await expect(page.getByRole('heading', { name: 'Payments are not open yet' })).toBeVisible()
-  }
-  await expect(page.getByText(/Employer accounts and direct job posting are paused/)).toBeVisible()
+  const included = page.locator('.free-access-grid')
+  await expect(included).toContainText('Prepare your application or pitch')
+  await expect(included).toContainText('FJ Match Intelligence')
+  await expect(included).toContainText('Check an advert before you apply')
+  await expect(included).toContainText('essential requirements from desirable ones')
+  await expect(included).toContainText('suggests stronger alternatives')
+  await expect(
+    page.getByRole('heading', { name: 'No checkout. No card. No trial limit.' }),
+  ).toBeVisible()
+  await expect(page.locator('body')).toContainText('Payments are paused')
+  await expect(page.getByRole('button', { name: /Buy|Start.*trial|Check payment/ })).toHaveCount(0)
   await expect(page.getByText(/Desk\+/)).toHaveCount(0)
 })
 
@@ -334,18 +324,25 @@ test('homepage and pricing explain Phase 2 cleanly at phone, tablet and desktop 
     await expect(page.getByRole('heading', { level: 1 })).toContainText(
       'Thousands of job opportunities',
     )
-    await expect(page.locator('.home-price-grid')).toContainText('Pro for Graduates')
+    await expect(page.locator('.home-pro')).toContainText('Every preparation tool is free for now')
+    await expect(page.locator('.home-ideas-teaser')).toContainText('product idea')
     await expectNoHorizontalOverflow(page)
     await page.screenshot({ path: testInfo.outputPath(`phase2-home-${width}.png`) })
 
     await page.goto('/pricing')
-    await expect(page.getByRole('heading', { name: 'Simple pricing' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Everything in FJ is free for now', level: 1 }),
+    ).toBeVisible()
     await expect(
       page.locator('.site-header .topnav').getByRole('link', { name: 'Pricing' }),
     ).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Try Pro free for 3 days' })).toBeVisible()
-    await expect(page.locator('.pricing-table')).toContainText('Save and check your CV')
-    await expect(page.locator('.pricing-table')).toContainText('Telegram alerts with more filters')
+    await expect(
+      page.getByRole('heading', { name: 'No checkout. No card. No trial limit.' }),
+    ).toBeVisible()
+    await expect(page.locator('.free-access-grid')).toContainText('Save and check your CV')
+    await expect(page.locator('.free-access-grid')).toContainText(
+      'Telegram alerts with more filters',
+    )
     await expectNoHorizontalOverflow(page)
     await page.screenshot({ path: testInfo.outputPath(`phase2-pricing-${width}.png`) })
   }
@@ -394,31 +391,28 @@ test('work setting and gig filters are visible and employers link is gone', asyn
   await expect(page.locator('.topnav').getByText('For employers')).toHaveCount(0)
 })
 
-test('job detail shows a plain before-you-apply checklist and no AI panels', async ({ page }) => {
+test('job detail keeps the before-you-apply checklist and original-source safety copy', async ({
+  page,
+}) => {
   await signUp(page)
   await page.goto('/jobs')
   await page.locator('.joblist .jobrow').first().click()
-  await expect(page.getByRole('heading', { name: 'Before you apply' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Before you apply', exact: true })).toBeVisible()
   await expect(page.locator('.detail')).toContainText(/Never pay anyone/)
   await expect(page.getByRole('heading', { name: 'Original listing' })).toBeVisible()
   await expect(page.locator('.original-listing')).toContainText('FJ does not verify or endorse')
   await expect(page.getByText(/AI-generated|Get application tips/)).toHaveCount(0)
 })
 
-test('Pro tools prepare help on a job and unlock the salary guide', async ({ page }) => {
+test('free Pro tools prepare help on a job and open the salary guide without checkout', async ({
+  page,
+}) => {
   test.setTimeout(180_000)
   await signUp(page)
   await page.goto('/jobs')
   await page.locator('.joblist .jobrow').first().click()
-  await expect(page.getByRole('heading', { name: 'More help with this application' })).toBeVisible()
-
-  const confirmed = await page.request.post('/api/billing/confirm', { data: { plan: 'pro' } })
-  // The confirmation shortcut exists only in local/test. Hosted production
-  // correctly refuses it, and the worker suite covers the entitled API path.
-  if (!confirmed.ok()) return
-
-  await page.reload()
   await expect(page.getByRole('heading', { name: 'Pro tools for this job' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Trial or buy Pro/ })).toHaveCount(0)
   await page.getByText('Your saved application answers').click()
   await page.getByLabel('Full name').fill('Browser Test User')
   await page
@@ -447,7 +441,7 @@ test('Pro tools prepare help on a job and unlock the salary guide', async ({ pag
   await expect(page.getByRole('button', { name: 'Show salary guide' })).toBeVisible()
 })
 
-test('3-day trial unlocks the saved CV, job tools and dashboard tools without a card', async ({
+test('free early access unlocks the saved CV, job tools and dashboard tools without a card or trial', async ({
   page,
 }, testInfo) => {
   test.setTimeout(240_000)
@@ -477,55 +471,34 @@ NYSC completed in 2024.`
   await page.setViewportSize({ width: 390, height: 844 })
   await signUp(page)
   await page.goto('/dashboard?tab=plan')
-  await expect(page.getByRole('heading', { name: '3-day Pro free trial' })).toBeVisible()
-  await expect(page.locator('body')).toContainText('We do not ask for card details')
-  const paymentsAreOpen = await paymentsOpen(page)
-  await expect(page.locator('body')).toContainText(
-    paymentsAreOpen
-      ? 'You do not need to start the free trial before you pay.'
-      : 'Payments are not open yet. Nothing on this page can charge you.',
-  )
-  if (paymentsAreOpen) {
-    await expect(page.getByRole('button', { name: 'Buy Pro Monthly' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Buy Pro Yearly' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Check payment' })).toBeVisible()
-  }
+  await expect(page.getByRole('heading', { name: 'Free early access' })).toBeVisible()
+  await expect(page.locator('body')).toContainText('Payments are paused')
+  await expect(page.locator('body')).toContainText('nothing on FJ asks for card details')
+  await expect(page.getByRole('button', { name: /Buy|Start.*trial|Check payment/ })).toHaveCount(0)
   await page.goto('/profile')
   const freeSavedCv = page.locator('.master-cv-panel')
   await expect(freeSavedCv.getByRole('heading', { name: 'Your saved CV' })).toBeVisible()
   await freeSavedCv.getByText('Paste CV text instead').click()
   await freeSavedCv.getByLabel('CV text').fill(sampleCv)
   await freeSavedCv.getByLabel(/I agree that FJ can save/).check()
+  await expect(freeSavedCv).toContainText('Full CV check included')
   await writeAndWait(page, '/api/pro/cv', 'PUT', () =>
-    freeSavedCv.getByRole('button', { name: 'Save CV text free' }).click(),
+    freeSavedCv.getByRole('button', { name: 'Check my CV' }).click(),
   )
-  await expect(freeSavedCv).toContainText('CV text saved')
-  await expect(freeSavedCv.getByRole('heading', { name: 'What FJ found' })).toBeVisible()
-  await expect(freeSavedCv.getByRole('button', { name: 'Trial or buy Pro' }).first()).toBeVisible()
+  await expect(freeSavedCv).toContainText('Your full CV check is ready')
+  await expect(freeSavedCv.getByRole('heading', { name: 'Fix these first' })).toBeVisible()
+  await expect(freeSavedCv).not.toContainText('trial or Pro')
 
   await page.goto('/dashboard?tab=plan')
-  await expect(page.getByRole('heading', { name: '3-day Pro free trial' })).toBeVisible()
-  await writeAndWait(page, '/api/pro/trial/start', 'POST', () =>
-    page.getByRole('button', { name: 'Start my 3-day free trial' }).click(),
-  )
-  await expect(page.getByRole('heading', { name: 'What is left in your trial' })).toBeVisible()
-  if (paymentsAreOpen) {
-    await expect(page.getByRole('button', { name: 'Buy Pro Monthly' })).toBeVisible()
-    await page.goto('/pricing')
-    await expect(page.locator('body')).toContainText('You do not need the free trial first')
-    await expect(page.getByRole('button', { name: 'Buy Pro Monthly' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Buy Pro Yearly' })).toBeVisible()
-  }
+  await expect(page.getByRole('heading', { name: 'Free early access' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Start my 3-day free trial' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Buy Pro/ })).toHaveCount(0)
   await expectNoHorizontalOverflow(page)
   await page.screenshot({ path: testInfo.outputPath('phase2-plan-390.png') })
 
   await page.goto('/profile')
   const masterCv = page.locator('.master-cv-panel')
   await expect(masterCv.getByRole('heading', { name: 'Your saved CV' })).toBeVisible()
-  await expect(masterCv.getByRole('button', { name: 'Run full CV check' })).toBeVisible()
-  await writeAndWait(page, '/api/pro/cv/analyze', 'POST', () =>
-    masterCv.getByRole('button', { name: 'Run full CV check' }).click(),
-  )
   await expect(masterCv.getByRole('heading', { name: 'Fix these first' })).toBeVisible()
   await expect(masterCv.getByRole('button', { name: 'View saved text' })).toBeVisible()
   await expect(masterCv.getByRole('button', { name: 'Download report' })).toBeVisible()
@@ -610,7 +583,14 @@ NYSC completed in 2024.`
   await expect(
     page.getByRole('heading', { name: 'Best matches and skills to learn' }),
   ).toBeVisible()
-  await expect(page.locator('.best-match-card').first()).toBeVisible({ timeout: 30_000 })
+  const bestMatchesResponse = await page.request.get('/api/pro/best-matches')
+  expect(bestMatchesResponse.ok()).toBe(true)
+  const bestMatchesBody = await bestMatchesResponse.json()
+  if (bestMatchesBody.matches.length) {
+    await expect(page.locator('.best-match-card').first()).toBeVisible({ timeout: 30_000 })
+  } else {
+    await expect(page.getByText('No current listing reaches a useful fit yet.')).toBeVisible()
+  }
   await page.getByRole('button', { name: 'Show skills to learn' }).click()
   await expect(page.getByRole('heading', { name: 'Skills to learn' })).toBeVisible()
   await page
@@ -1035,7 +1015,7 @@ test('job caution note sits above the card instead of beside it', async ({ page 
 
 test('footer is present on every route with the safety links', async ({ page }) => {
   await signUp(page)
-  for (const path of ['/', '/jobs', '/dashboard', '/profile', '/about', '/auth/login']) {
+  for (const path of ['/', '/jobs', '/ideas', '/dashboard', '/profile', '/about', '/auth/login']) {
     await page.goto(path)
     const footer = page.locator('.site-footer')
     await expect(footer).toBeVisible()
@@ -1049,6 +1029,7 @@ test('no serious accessibility violations on the main routes', async ({ page }) 
     '/',
     '/auth/login',
     '/pricing',
+    '/ideas',
     '/jobs',
     '/profile',
     '/dashboard',

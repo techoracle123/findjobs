@@ -136,7 +136,7 @@ beforeAll(async () => {
 })
 
 describe('3-day trial and saved master CV', () => {
-  it('saves CV text free, then runs the full check on that saved text in the trial', async () => {
+  it('saves CV text and runs the full check during free early access', async () => {
     const savedResponse = await request('/api/pro/cv', 'PUT', FREE_CV, {
       fileName: 'free-ada.pdf',
       fileType: 'application/pdf',
@@ -156,16 +156,16 @@ describe('3-day trial and saved master CV', () => {
       canFullAnalysis: boolean
       trial: { cvAnalysesUsed: number }
     }
-    expect(saved).toMatchObject({ locked: true, canSave: true, canFullAnalysis: false })
-    expect(saved.cv.analysisLevel).toBe('saved_only')
-    expect(saved.cv.report).toBeNull()
+    expect(saved).toMatchObject({ locked: false, canSave: true, canFullAnalysis: true })
+    expect(saved.cv.analysisLevel).toBe('full')
+    expect(saved.cv.report).not.toBeNull()
     expect(saved.cv.text).toBeUndefined()
     expect(saved.cv.basicSummary.detectedSkills).toContain('TypeScript')
     expect(saved.trial.cvAnalysesUsed).toBe(0)
 
-    const lockedAnalysis = await request('/api/pro/cv/analyze', 'POST', FREE_CV, {})
-    expect(lockedAnalysis.status).toBe(403)
-    expect(await lockedAnalysis.json()).toMatchObject({ error: 'pro_required' })
+    const freeAnalysis = await request('/api/pro/cv/analyze', 'POST', FREE_CV, {})
+    expect(freeAnalysis.status).toBe(200)
+    expect(await freeAnalysis.json()).toMatchObject({ cv: { analysisLevel: 'full' } })
 
     await startTrial(FREE_CV)
     const analysedResponse = await request('/api/pro/cv/analyze', 'POST', FREE_CV, {})
@@ -182,7 +182,7 @@ describe('3-day trial and saved master CV', () => {
     expect(analysed.cv.report.sections.length).toBeGreaterThanOrEqual(7)
     expect(analysed.cv.report.detectedSkills).toContain('TypeScript')
     expect(analysed.cv.text).toBeUndefined()
-    expect(analysed.trial.cvAnalysesUsed).toBe(1)
+    expect(analysed.trial.cvAnalysesUsed).toBe(0)
 
     const withText = (await (
       await request('/api/pro/cv?includeText=1', 'GET', FREE_CV)
@@ -200,7 +200,7 @@ describe('3-day trial and saved master CV', () => {
     expect(again.trial.endsAt).toBe(started.trial.endsAt)
   })
 
-  it('requires explicit consent, saves only readable text, and does not spend a second analysis on identical text', async () => {
+  it('requires explicit consent, saves readable text, and does not consume trial quota in free access', async () => {
     const refused = await request('/api/pro/cv', 'PUT', TRIAL_CV, {
       fileName: 'ada.pdf',
       fileType: 'application/pdf',
@@ -229,7 +229,7 @@ describe('3-day trial and saved master CV', () => {
     expect(saved.cv.text).toBeUndefined()
     expect(saved.cv.report.sections.length).toBeGreaterThanOrEqual(7)
     expect(saved.cv.report.detectedSkills).toContain('TypeScript')
-    expect(saved.trial.cvAnalysesUsed).toBe(1)
+    expect(saved.trial.cvAnalysesUsed).toBe(0)
 
     const same = await request('/api/pro/cv', 'PUT', TRIAL_CV, {
       fileName: 'ada.pdf',
@@ -241,7 +241,7 @@ describe('3-day trial and saved master CV', () => {
     const account = (await (await request('/api/account', 'GET', TRIAL_CV)).json()) as {
       proTrial: { cvAnalysesUsed: number }
     }
-    expect(account.proTrial.cvAnalysesUsed).toBe(1)
+    expect(account.proTrial.cvAnalysesUsed).toBe(0)
 
     const changed = await request('/api/pro/cv', 'PUT', TRIAL_CV, {
       fileName: 'ada-v2.pdf',
@@ -255,14 +255,14 @@ describe('3-day trial and saved master CV', () => {
       fullAnalysisDeferred: boolean
       trial: { cvAnalysesUsed: number }
     }
-    expect(changedBody).toMatchObject({ fullAnalysisDeferred: true })
-    expect(changedBody.cv.analysisLevel).toBe('saved_only')
-    expect(changedBody.cv.report).toBeNull()
-    expect(changedBody.trial.cvAnalysesUsed).toBe(1)
+    expect(changedBody.fullAnalysisDeferred).toBeUndefined()
+    expect(changedBody.cv.analysisLevel).toBe('full')
+    expect(changedBody.cv.report).not.toBeNull()
+    expect(changedBody.trial.cvAnalysesUsed).toBe(0)
 
-    const blockedAnalysis = await request('/api/pro/cv/analyze', 'POST', TRIAL_CV, {})
-    expect(blockedAnalysis.status).toBe(403)
-    expect(await blockedAnalysis.json()).toMatchObject({ error: 'trial_limit_reached' })
+    const freeAnalysis = await request('/api/pro/cv/analyze', 'POST', TRIAL_CV, {})
+    expect(freeAnalysis.status).toBe(200)
+    expect(await freeAnalysis.json()).toMatchObject({ cv: { analysisLevel: 'full' } })
 
     const withText = (await (
       await request('/api/pro/cv?includeText=1', 'GET', TRIAL_CV)
@@ -271,7 +271,7 @@ describe('3-day trial and saved master CV', () => {
     expect(withText.cv.text).toContain('appointment dashboard')
   })
 
-  it('counts distinct trial job packs once, including detailed CV checks', async () => {
+  it('allows repeated application tools without consuming trial packs in free access', async () => {
     await startTrial(PACK)
     const cv = await request('/api/pro/cv', 'PUT', PACK, {
       fileName: 'pack-cv.docx',
@@ -300,7 +300,7 @@ describe('3-day trial and saved master CV', () => {
       true,
     )
     expect(check.check.tailoredSummary).toContain('TypeScript')
-    expect(check.trial.applicationPacksUsed).toBe(1)
+    expect(check.trial.applicationPacksUsed).toBe(0)
 
     for (const path of [
       `/api/jobs/${JOB_IDS[0]}/prepared-application`,
@@ -312,17 +312,22 @@ describe('3-day trial and saved master CV', () => {
       expect((await request(path, 'POST', PACK, body)).status).toBe(200)
     }
 
-    const denied = await request(`/api/jobs/${JOB_IDS[3]}/prepared-application`, 'POST', PACK, {})
-    expect(denied.status).toBe(403)
-    expect(await denied.json()).toMatchObject({ error: 'trial_limit_reached' })
+    const alsoAllowed = await request(
+      `/api/jobs/${JOB_IDS[3]}/prepared-application`,
+      'POST',
+      PACK,
+      {},
+    )
+    expect(alsoAllowed.status).toBe(200)
+    expect(await alsoAllowed.json()).toMatchObject({ prepared: { jobId: JOB_IDS[3] } })
 
     const account = (await (await request('/api/account', 'GET', PACK)).json()) as {
       proTrial: { applicationPacksUsed: number }
     }
-    expect(account.proTrial.applicationPacksUsed).toBe(3)
+    expect(account.proTrial.applicationPacksUsed).toBe(0)
   })
 
-  it('keeps generated CV reports and packs readable after trial expiry', async () => {
+  it('keeps generated CV reports and packs readable after trial expiry with free access', async () => {
     await startTrial(EXPIRED)
     expect(
       (
@@ -349,7 +354,7 @@ describe('3-day trial and saved master CV', () => {
       cv: { report: { summary: string } } | null
       locked: boolean
     }
-    expect(cv.locked).toBe(true)
+    expect(cv.locked).toBe(false)
     expect(cv.cv?.report.summary).toBeTruthy()
 
     const pack = await request(`/api/jobs/${JOB_IDS[0]}/prepared-application`, 'GET', EXPIRED)
@@ -358,8 +363,8 @@ describe('3-day trial and saved master CV', () => {
 
     expect(
       (await request(`/api/jobs/${JOB_IDS[1]}/prepared-application`, 'POST', EXPIRED, {})).status,
-    ).toBe(403)
-    expect((await request('/api/pro/cv/analyze', 'POST', EXPIRED, {})).status).toBe(403)
+    ).toBe(200)
+    expect((await request('/api/pro/cv/analyze', 'POST', EXPIRED, {})).status).toBe(200)
 
     const sameCvResponse = await request('/api/pro/cv', 'PUT', EXPIRED, {
       fileName: 'expired.txt',
@@ -372,7 +377,7 @@ describe('3-day trial and saved master CV', () => {
       cv: { analysisLevel: string; report: { summary: string } | null }
       locked: boolean
     }
-    expect(sameCv.locked).toBe(true)
+    expect(sameCv.locked).toBe(false)
     expect(sameCv.cv.analysisLevel).toBe('full')
     expect(sameCv.cv.report?.summary).toBeTruthy()
   })
@@ -401,7 +406,7 @@ describe('graduate price separation', () => {
       plan: 'pro_graduate',
     })
     expect(checkout.status).toBe(503)
-    expect(await checkout.json()).toMatchObject({ error: 'billing_not_configured' })
+    expect(await checkout.json()).toMatchObject({ error: 'payments_paused' })
   })
 
   it('sends conflicting CV evidence to admin review and lets an admin approve it', async () => {
@@ -427,7 +432,8 @@ describe('graduate price separation', () => {
     const checkout = await request('/api/billing/checkout', 'POST', CONFLICT, {
       plan: 'pro_graduate',
     })
-    expect(checkout.status).toBe(403)
+    expect(checkout.status).toBe(503)
+    expect(await checkout.json()).toMatchObject({ error: 'payments_paused' })
 
     expect((await request('/api/admin/graduate-reviews', 'GET', CONFLICT)).status).toBe(403)
     const list = (await (await request('/api/admin/graduate-reviews', 'GET', ADMIN)).json()) as {
@@ -563,7 +569,7 @@ describe('advert checks, best matches and skill gaps', () => {
 })
 
 describe('pipeline and smart alert account gates', () => {
-  it('downgrades free advanced stages and smart alerts without taking away the basic records', async () => {
+  it('allows advanced stages and smart alerts during free early access', async () => {
     expect(
       (
         await request('/api/account/saved', 'POST', FREE, {
@@ -580,15 +586,17 @@ describe('pipeline and smart alert account gates', () => {
       followUpAt: new Date(Date.now() + 86400000).toISOString(),
     })
     expect(savedResponse.status).toBe(200)
-    expect(await savedResponse.json()).toMatchObject({ ok: true, proRequired: true })
+    const savedBody = (await savedResponse.json()) as { ok: boolean; proRequired?: boolean }
+    expect(savedBody.ok).toBe(true)
+    expect(savedBody.proRequired).not.toBe(true)
     const saved = (await (await request('/api/account/saved', 'GET', FREE)).json()) as {
       saved: { jobId: string; status: string; stage: string; followUpAt?: string }[]
     }
     expect(saved.saved.find((entry) => entry.jobId === JOB_IDS[0])).toMatchObject({
       status: 'applied',
-      stage: 'applied',
+      stage: 'interview',
     })
-    expect(saved.saved.find((entry) => entry.jobId === JOB_IDS[0])?.followUpAt).toBeUndefined()
+    expect(saved.saved.find((entry) => entry.jobId === JOB_IDS[0])?.followUpAt).toBeTruthy()
 
     const alertResponse = await request('/api/account/alerts', 'POST', FREE, {
       id: `free-smart-${suffix}`,
@@ -600,7 +608,7 @@ describe('pipeline and smart alert account gates', () => {
       countries: ['NG'],
     })
     expect(alertResponse.status).toBe(200)
-    expect(await alertResponse.json()).toMatchObject({ alert: { kind: 'keyword' } })
+    expect(await alertResponse.json()).toMatchObject({ alert: { kind: 'smart', minScore: 80 } })
   })
 
   it('persists trial pipeline stages and smart settings, preserving settings after expiry', async () => {
@@ -677,15 +685,22 @@ describe('pipeline and smart alert account gates', () => {
       stage: 'offer',
       followUpAt: new Date(Date.now() + 7 * 86400000).toISOString(),
     })
-    expect(await expiredStageResponse.json()).toMatchObject({ ok: true, proRequired: true })
+    const expiredStageBody = (await expiredStageResponse.json()) as {
+      ok: boolean
+      proRequired?: boolean
+    }
+    expect(expiredStageBody.ok).toBe(true)
+    expect(expiredStageBody.proRequired).not.toBe(true)
     const savedAfterExpiry = (await (await request('/api/account/saved', 'GET', PACK)).json()) as {
       saved: { jobId: string; status: string; stage: string; followUpAt?: string }[]
     }
     expect(savedAfterExpiry.saved.find((entry) => entry.jobId === JOB_IDS[1])).toMatchObject({
       status: 'applied',
-      stage: 'interview',
-      followUpAt: follow,
+      stage: 'offer',
     })
+    expect(
+      savedAfterExpiry.saved.find((entry) => entry.jobId === JOB_IDS[1])?.followUpAt,
+    ).toBeTruthy()
   })
 })
 

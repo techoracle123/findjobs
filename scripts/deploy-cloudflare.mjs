@@ -186,6 +186,95 @@ async function deployCheckCookie(baseUrl) {
   return cookie
 }
 
+async function verifyIdeaDeployment(url) {
+  const listing = await publicJson(`${url}/api/ideas?country=ALL&limit=1`, 18)
+  const first = listing?.ideas?.[0]
+  const evidence = first?.evidence
+  if (
+    !Number.isInteger(listing?.catalogTotal) ||
+    listing.catalogTotal <= 15_000 ||
+    listing.total !== listing.catalogTotal ||
+    !first ||
+    typeof evidence?.value !== 'number' ||
+    !['percent', 'per_1000', 'pm25'].includes(evidence?.unit) ||
+    !evidence?.displayValue ||
+    !Number.isInteger(evidence?.year) ||
+    typeof evidence?.sourceLastUpdated !== 'string' ||
+    !String(evidence?.sourceName ?? '').includes('World Bank') ||
+    !/^https:\/\/data\.worldbank\.org\/indicator\//.test(evidence?.sourceUrl ?? '')
+  ) {
+    throw new Error(
+      'Live Ideas did not return more than 15,000 computed ideas with exact official evidence.',
+    )
+  }
+  const detail = await publicJson(`${url}/api/ideas/${encodeURIComponent(first.id)}`, 3)
+  if (
+    detail?.idea?.id !== first.id ||
+    !Array.isArray(detail?.idea?.validationSteps) ||
+    detail.idea.validationSteps.length < 4 ||
+    !detail.idea.product ||
+    !detail.idea.buyer ||
+    !detail.idea.firstVersion ||
+    !detail.idea.revenueModel ||
+    !Array.isArray(detail.idea.skills) ||
+    !detail.idea.skills.length ||
+    !Array.isArray(detail.idea.risks) ||
+    !detail.idea.risks.length ||
+    !Array.isArray(detail?.related)
+  ) {
+    throw new Error('Live Ideas detail links or validation briefs are incomplete.')
+  }
+  const trends = await publicJson(`${url}/api/idea-trends?geo=NG`, 3)
+  if (
+    !Array.isArray(trends?.trends) ||
+    !Number.isFinite(Date.parse(trends?.fetchedAt ?? '')) ||
+    !String(trends?.sourceUrl ?? '').includes('trends.google.com/')
+  ) {
+    throw new Error('Live trend signals did not return an honest timestamped source response.')
+  }
+  annotation(
+    'notice',
+    'Ideas and trends verified',
+    `${listing.catalogTotal} computed localized ideas; detail evidence and ${trends.stale ? 'last saved' : 'current'} trends are available.`,
+  )
+  return listing.catalogTotal
+}
+
+async function verifyFreeAccess(url, cookie) {
+  const plans = await publicJson(`${url}/api/billing/plans`, 3, cookie)
+  if (plans.paymentsPaused !== true || plans.billingEnabled !== false) {
+    throw new Error('Deployment does not report the required payment pause.')
+  }
+  const access = await publicJson(`${url}/api/pro/access`, 3, cookie)
+  if (
+    access.freeAccess !== true ||
+    access.paid !== false ||
+    !Array.isArray(access.features) ||
+    !access.features.includes('cv_analysis')
+  ) {
+    throw new Error('A free account did not receive honest complimentary Pro access.')
+  }
+  const cv = await publicJson(`${url}/api/pro/cv`, 3, cookie)
+  if (cv.canFullAnalysis !== true || cv.locked !== false) {
+    throw new Error('The free CV tool is still locked after deployment.')
+  }
+  const checkout = await fetch(`${url}/api/billing/checkout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ plan: 'pro' }),
+    signal: AbortSignal.timeout(30_000),
+  })
+  const body = await checkout.json().catch(() => ({}))
+  if (checkout.status !== 503 || body.error !== 'payments_paused') {
+    throw new Error('Checkout did not reject a new payment attempt with payments_paused.')
+  }
+  annotation(
+    'notice',
+    'Free access verified',
+    'Pro tools are open to a free account and checkout is paused.',
+  )
+}
+
 export function sourceRegistrySql(sources) {
   const quote = (value) =>
     value == null
@@ -381,14 +470,14 @@ export async function main() {
     secrets.BACHS_WEBHOOK_SECRET = bachs.webhookSecret
     annotation(
       'notice',
-      'Bachs live payments configured',
-      'Production checkout will use Bachs. Confirm one small real payment turns Pro on before announcing payments.',
+      'Bachs billing credentials retained',
+      'Checkout remains paused and every current tool is free. Existing billing records and provider configuration are preserved for later; no payment probe or new charge is needed.',
     )
   } else
     annotation(
-      'warning',
-      'Bachs payments not open',
-      'Save BACHS_SECRET_KEY (a live sk_live_ key) and BACHS_WEBHOOK_SECRET as encrypted repository secrets, then rerun deployment. Never paste them in chat. Until both are present, checkout stays off and nobody can be charged.',
+      'notice',
+      'Checkout paused',
+      'Every current tool is free and nobody can be charged. Bachs credentials are not needed during free early access; keep any existing encrypted records for later reactivation.',
     )
   await pageSecrets(api, project, secrets)
   const vars = {
@@ -437,12 +526,28 @@ export async function main() {
       throw new Error(
         'Expanded public discovery is not ready; refusing to claim thousands of regularly refreshed listings.',
       )
+    const publicationAgeMs = Date.now() - Date.parse(expanded.updatedAt)
+    if (
+      !Number.isFinite(publicationAgeMs) ||
+      publicationAgeMs < -300_000 ||
+      publicationAgeMs > 12 * 3_600_000
+    ) {
+      throw new Error(
+        'The deployed publication timestamp is missing, future-dated or more than 12 hours old.',
+      )
+    }
+    annotation(
+      'notice',
+      'Deployed inventory measured',
+      `${expanded.total} visible listings, including ${expanded.gigs} gigs and contracts, from ${expanded.sourceCount} sources. Published ${Math.max(0, Math.round(publicationAgeMs / 60000))} minutes ago. Scheduler heartbeat is checked separately and is not treated as proof of publication.`,
+    )
+    const ideaTotal = await verifyIdeaDeployment(url)
     wrangler(['deploy', '--config', 'wrangler.ingest-consumer.jsonc'])
     wrangler(['deploy', '--config', 'wrangler.ingest.jsonc'])
     annotation(
       'notice',
-      '12-hour discovery refresh active',
-      'Cloudflare cron queues independent publisher refreshes at 00:00 and 12:00 UTC. No workspace timer or D1 quota required.',
+      'Tiered discovery and evidence refresh active',
+      'Cloudflare cron checks source tiers every hour and queues idea evidence daily. No workspace timer or D1 quota is required for public discovery.',
     )
     if (quotaBlocked) {
       const checkCookie = await deployCheckCookie(url)
@@ -460,6 +565,7 @@ export async function main() {
         checkCookie,
       )
       if (!detail.job?.id) throw new Error('Live public job pages did not recover.')
+      await verifyFreeAccess(url, checkCookie)
       annotation(
         'warning',
         'Public browsing recovered; account storage degraded',
@@ -516,6 +622,7 @@ export async function main() {
       'The durable public collector handles discovery; legacy full-corpus D1 ingestion is not queued on deployment.',
     )
     const checkCookie = await deployCheckCookie(url)
+    await verifyFreeAccess(url, checkCookie)
     let feed
     for (let attempt = 0; attempt < 18; attempt++) {
       const response = await fetch(`${url}/api/jobs?status=open&limit=20`, {
@@ -560,12 +667,12 @@ export async function main() {
           .join(' '),
       )
     console.log(
-      `Find Jobs deployed: ${url}. ${bachs.configured ? 'Bachs payments are configured.' : 'Payments are disabled.'}`,
+      `Find Jobs deployed: ${url}. Checkout is paused and every current tool is free. ${bachs.configured ? 'Existing Bachs configuration is retained for later.' : 'No payment provider is configured.'}`,
     )
     if (process.env.GITHUB_STEP_SUMMARY) {
       await writeFile(
         process.env.GITHUB_STEP_SUMMARY,
-        `## Find Jobs deployed\n\n${url}\n\n${feed.total} live open jobs. ${bachs.configured ? 'Bachs payments are configured. Confirm one small real payment before announcing.' : 'Payments disabled.'}\nSign-in: FJ email and password${process.env.BREVO_API_KEY?.trim() || process.env.RESEND_API_KEY?.trim() ? ' (password reset email on)' : ' (needs password reset email secrets)'}. Telegram: ${telegram ? 'bot and webhook verified' : 'requires encrypted bot token'}.\n`,
+        `## Find Jobs deployed\n\n${url}\n\n${expanded.total} visible listings, including ${expanded.gigs} gigs and contracts. ${ideaTotal} evidence-linked localized product ideas. Checkout is paused and every current tool is free; existing billing records are retained for later.\nSign-in: FJ email and password${process.env.BREVO_API_KEY?.trim() || process.env.RESEND_API_KEY?.trim() ? ' (password reset email on)' : ' (needs password reset email secrets)'}. Telegram: ${telegram ? 'bot and webhook verified' : 'requires encrypted bot token'}.\n`,
         { flag: 'a' },
       )
     }

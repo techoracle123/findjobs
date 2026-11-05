@@ -174,7 +174,9 @@ describe('Bachs fixed-time payments', () => {
     expect((await signedWebhook(refundEvent)).status).toBe(200)
     const afterRefund = await subscriptionFor(email)
     expect(afterRefund.subscription?.status).toBe('canceled')
-    expect(afterRefund.entitlements).not.toContain('cv_analysis')
+    // The paid subscription is canceled, but the separate free-access policy
+    // still makes current Pro tools available without recreating paid time.
+    expect(afterRefund.entitlements).toContain('cv_analysis')
     expect(await getFoundingClaim(env.DB, userId)).toBeNull()
   })
 

@@ -8,6 +8,7 @@
 import {
   isAppRoute,
   isCrawler,
+  ideaMeta,
   jobMeta,
   jobPostingJsonLd,
   pageBody,
@@ -21,7 +22,10 @@ import {
   sitemapEligible,
 } from '../src/server/seo'
 import { publishedPublicJobs } from '../src/server/public-feed'
+import { findIdea } from '../src/server/ideas/catalog'
+import { readIdeaEvidence } from '../src/server/ideas/evidence'
 import type { Job } from '../src/shared/types'
+import { IDEA_UNIT_LABELS } from '../src/shared/ideas'
 
 interface Env {
   PUBLIC_JOBS?: KVNamespace
@@ -111,10 +115,23 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
         (item) => item.id === jobMatch[1],
       ) ?? null)
     : null
+  const ideaMatch = path.match(/^\/ideas\/([^/]+)$/)
+  let idea: ReturnType<typeof findIdea> = null
+  if (ideaMatch) {
+    let id = ideaMatch[1]
+    try {
+      id = decodeURIComponent(id)
+    } catch {
+      id = ''
+    }
+    const snapshot = await readIdeaEvidence(ctx.env.PUBLIC_JOBS)
+    if (!snapshot) return new Response('Idea evidence is temporarily unavailable.', { status: 503 })
+    idea = findIdea(snapshot, id)
+  }
 
   // Unknown routes are 404s, never a soft-200 homepage — for crawlers and
   // humans alike.
-  const known = isAppRoute(path) && (!jobMatch || Boolean(job))
+  const known = isAppRoute(path) && (!jobMatch || Boolean(job)) && (!ideaMatch || Boolean(idea))
   if (!known) {
     return new Response(render404(origin, nonce), {
       status: 404,
@@ -128,13 +145,21 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
 
   const ua = ctx.request.headers.get('user-agent')
   if (isCrawler(ua, url)) {
-    const meta =
-      job && jobMatch ? jobMeta(job, origin) : { ...pageMeta(path), canonical: `${origin}${path}` }
-    const bodyHtml = job
-      ? `<p>${escLite(job.company || 'Employer not stated')} · ${escLite(job.locationLabel || 'Location not stated')}</p>
+    const meta = idea
+      ? ideaMeta(idea.idea, origin)
+      : job && jobMatch
+        ? jobMeta(job, origin)
+        : { ...pageMeta(path), canonical: `${origin}${path}` }
+    const bodyHtml = idea
+      ? `<p>${escLite(idea.idea.product)}</p>
+<p><strong>Official context:</strong> ${escLite(idea.idea.evidence.displayValue)} for ${escLite(idea.idea.evidence.indicatorName)} in ${escLite(idea.idea.location.name)} (${idea.idea.evidence.year}). Exact source value: ${idea.idea.evidence.value}; unit: ${escLite(IDEA_UNIT_LABELS[idea.idea.evidence.unit])}. Source release: ${escLite(idea.idea.evidence.sourceLastUpdated)}.</p>
+<p>${escLite(idea.idea.evidence.interpretation)}</p>
+<p><a href="${escLite(idea.idea.evidence.sourceUrl)}">Read the official source</a>. This is a product hypothesis, not proof of demand.</p>`
+      : job
+        ? `<p>${escLite(job.company || 'Employer not stated')} · ${escLite(job.locationLabel || 'Location not stated')}</p>
 <p>${escLite((job.description || '').slice(0, 4000))}</p>
 <p><a href="${job.applyUrl || job.sourceUrl}">Apply on the original listing</a> — always free.</p>`
-      : pageBody(path)
+        : pageBody(path)
     const html = renderShell({
       title: meta.title,
       description: meta.description,

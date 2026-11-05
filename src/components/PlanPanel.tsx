@@ -11,6 +11,7 @@ import {
 } from '../lib/api'
 import type { GraduateEligibilityState, ProTrialState } from '../shared/types'
 import { FREE_FEATURES, PRO_FEATURES, PRO_LIMITS } from '../lib/pro-features'
+import { FREE_ACCESS_MESSAGE, PRO_FREE_FOR_ALL } from '../shared/access'
 
 interface PlanPanelProps {
   signedIn: boolean
@@ -237,6 +238,63 @@ export function PlanPanel({
   const shownPlans = plans
     .filter((plan) => (plan.audience ?? 'seeker') === 'seeker')
     .sort((a, b) => planOrder.indexOf(a.id) - planOrder.indexOf(b.id))
+
+  if (PRO_FREE_FOR_ALL) {
+    return (
+      <section className="panel-page plan-panel" aria-label="Free early access">
+        <header className="panel-head">
+          <div>
+            <p className="eyebrow">Your FJ access</p>
+            <h2>Free early access</h2>
+            <p className="muted">{FREE_ACCESS_MESSAGE}</p>
+          </div>
+          <div className="plan-actions">
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={signedIn ? onOpenPricing : onRequireSignIn}
+            >
+              {signedIn ? 'See what is included' : 'Create a free account'}
+            </button>
+          </div>
+        </header>
+        <div className="billing-box">
+          <h3>Payments are paused</h3>
+          <p className="muted">
+            There is no checkout and nothing on FJ asks for card details. Existing paid
+            subscriptions and billing records are preserved for later. You can use the tools below
+            now, subject to normal fair-use and safety limits.
+          </p>
+        </div>
+        <div className="plan-feature-grid">
+          <article className="plan-column">
+            <p className="eyebrow">Included now</p>
+            <h3>Everything in FJ</h3>
+            {[...FREE_FEATURES, ...PRO_FEATURES].map((feature) => (
+              <div className="plan-feature" key={feature.id}>
+                <strong>{feature.title}</strong>
+                <p>{feature.what}</p>
+                <span>{feature.why}</span>
+              </div>
+            ))}
+          </article>
+          <article className="plan-column">
+            <p className="eyebrow">Still important</p>
+            <h3>What free access does not change</h3>
+            {PRO_LIMITS.map((limit) => (
+              <p className="plan-limit" key={limit}>
+                {limit}
+              </p>
+            ))}
+            <p className="plan-limit">
+              Saved CV text and account information stay private. Product ideas and live trends are
+              free to explore without a paid plan.
+            </p>
+          </article>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className="panel-page plan-panel" aria-label="Your plan">

@@ -4,12 +4,13 @@ export function Footer() {
     <footer className="site-footer">
       <nav aria-label="Footer">
         <a href="/">Home</a>
+        <a href="/ideas">Product ideas</a>
         <a href="/about">About</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
         <a href="/scams">How to spot a job scam</a>
         <a href="/faq">FAQ</a>
-        <a href="/pricing">Pricing</a>
+        <a href="/pricing">Pricing and free access</a>
         <a href="/contact">Contact</a>
       </nav>
       <p>

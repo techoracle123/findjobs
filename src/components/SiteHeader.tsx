@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
 
-type SiteHeaderPage = 'home' | 'jobs' | 'pricing' | 'about' | 'dashboard'
+type SiteHeaderPage = 'home' | 'jobs' | 'ideas' | 'pricing' | 'about' | 'dashboard'
 
 interface SiteHeaderProps {
   current?: SiteHeaderPage
@@ -48,6 +48,9 @@ export function SiteHeader({ current, signedIn: signedInProp }: SiteHeaderProps)
         </a>
         <a href="/jobs" aria-current={current === 'jobs' ? 'page' : undefined}>
           Jobs
+        </a>
+        <a href="/ideas" aria-current={current === 'ideas' ? 'page' : undefined}>
+          Ideas
         </a>
         <a href="/pricing" aria-current={current === 'pricing' ? 'page' : undefined}>
           Pricing

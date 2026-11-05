@@ -13,7 +13,7 @@ import type {
 } from '../../shared/types'
 import { ROLE_FAMILIES, SENIORITIES, WORK_MODES } from '../../shared/taxonomy'
 import {
-  getEntitlements,
+  getStoredEntitlements,
   getProfile,
   getSubscription,
   listSaved,
@@ -64,6 +64,7 @@ import {
   normaliseAdvertCheckInput,
 } from '../advert-check'
 import { analyzeMatchIntelligence } from '../match-intelligence'
+import { PRO_FREE_FOR_ALL } from '../../shared/access'
 
 export const proRoutes = new Hono<AppEnv>()
 
@@ -152,7 +153,7 @@ async function requireSignedIn(c: AppContext): Promise<SignedInGate> {
 
 async function paidFeature(db: D1Database, userId: string, feature: string): Promise<boolean> {
   const [entitlements, subscription] = await Promise.all([
-    getEntitlements(db, userId),
+    getStoredEntitlements(db, userId),
     getSubscription(db, userId),
   ])
   return (
@@ -172,7 +173,7 @@ async function requireFeature(c: AppContext, feature: string): Promise<FeatureGa
     paidFeature(signedIn.db, signedIn.user.id, feature),
     getTrialState(signedIn.db, signedIn.user.id),
   ])
-  const allowed = paid || trial.status === 'active'
+  const allowed = PRO_FREE_FOR_ALL || paid || trial.status === 'active'
   if (!allowed) {
     return {
       ok: false,
@@ -199,7 +200,7 @@ async function enforceTrialPack(
   gate: Extract<FeatureGate, { ok: true }>,
   jobId: string,
 ): Promise<Response | null> {
-  if (gate.paid) return null
+  if (PRO_FREE_FOR_ALL || gate.paid) return null
   if (await canUseTrialPack(gate.db, gate.user.id, jobId)) return null
   return c.json(
     {
@@ -260,7 +261,11 @@ async function generateFullMasterCv(
     return { kind: 'full', cv: publicCv, trial: gate.trial }
   }
 
-  if (!gate.paid && !(await canUseTrialCvAnalysis(gate.db, gate.user.id, input.textHash))) {
+  if (
+    !PRO_FREE_FOR_ALL &&
+    !gate.paid &&
+    !(await canUseTrialCvAnalysis(gate.db, gate.user.id, input.textHash))
+  ) {
     return { kind: 'trial_limit', trial: await getTrialState(gate.db, gate.user.id) }
   }
 
@@ -282,7 +287,8 @@ async function generateFullMasterCv(
     updatedAt: now,
   }
   await saveMasterCv(gate.db, gate.user.id, cv)
-  if (!gate.paid) await recordTrialCvAnalysis(gate.db, gate.user.id, input.textHash)
+  if (!PRO_FREE_FOR_ALL && !gate.paid)
+    await recordTrialCvAnalysis(gate.db, gate.user.id, input.textHash)
   await recordAudit(gate.db, gate.user.id, 'pro.cv.analysis', {
     fileType: input.fileType,
     wordCount: report.wordCount,
@@ -336,7 +342,9 @@ proRoutes.get('/pro/access', async (c) => {
     paid,
     trial,
     graduate,
-    features: paid || trial.status === 'active' ? planEntitlements('pro') : ['alerts'],
+    features:
+      PRO_FREE_FOR_ALL || paid || trial.status === 'active' ? planEntitlements('pro') : ['alerts'],
+    freeAccess: PRO_FREE_FOR_ALL,
   })
 })
 
@@ -399,7 +407,7 @@ proRoutes.get('/pro/cv', async (c) => {
     getTrialState(gate.db, gate.user.id),
     paidFeature(gate.db, gate.user.id, 'cv_analysis'),
   ])
-  const locked = !paid && trial.status !== 'active'
+  const locked = !PRO_FREE_FOR_ALL && !paid && trial.status !== 'active'
   return c.json({ cv, locked, canSave: true, canFullAnalysis: !locked, trial, paid })
 })
 
@@ -410,7 +418,7 @@ proRoutes.put('/pro/cv', async (c) => {
     paidFeature(signedIn.db, signedIn.user.id, 'cv_analysis'),
     getTrialState(signedIn.db, signedIn.user.id),
   ])
-  const canFullAnalysis = paid || trial.status === 'active'
+  const canFullAnalysis = PRO_FREE_FOR_ALL || paid || trial.status === 'active'
   const gate: Extract<FeatureGate, { ok: true }> = {
     ok: true,
     user: signedIn.user,
@@ -759,7 +767,7 @@ proRoutes.post('/jobs/:id/prepared-application', async (c) => {
     )
     .bind(gate.user.id, job.id, JSON.stringify(prepared), prepared.generatedAt)
     .run()
-  if (!gate.paid) await recordTrialPack(gate.db, gate.user.id, job.id)
+  if (!PRO_FREE_FOR_ALL && !gate.paid) await recordTrialPack(gate.db, gate.user.id, job.id)
   return c.json({ prepared, trial: await getTrialState(gate.db, gate.user.id), paid: gate.paid })
 })
 
@@ -783,7 +791,7 @@ proRoutes.post('/jobs/:id/cv-check', async (c) => {
     suppliedCvText ? Promise.resolve('') : getMasterCvText(gate.db, gate.user.id),
   ])
   const check = buildCvCheck(job, profile, suppliedCvText || masterCvText)
-  if (!gate.paid) await recordTrialPack(gate.db, gate.user.id, job.id)
+  if (!PRO_FREE_FOR_ALL && !gate.paid) await recordTrialPack(gate.db, gate.user.id, job.id)
   return c.json({ check, trial: await getTrialState(gate.db, gate.user.id), paid: gate.paid })
 })
 
@@ -817,7 +825,7 @@ proRoutes.post('/jobs/:id/match-intelligence', async (c) => {
     fitScore: match.fitScore,
     basis: match.basis,
   })
-  if (!gate.paid && match.verdict !== 'not-enough-evidence') {
+  if (!PRO_FREE_FOR_ALL && !gate.paid && match.verdict !== 'not-enough-evidence') {
     await recordTrialPack(gate.db, gate.user.id, job.id)
   }
   return c.json({ match, trial: await getTrialState(gate.db, gate.user.id), paid: gate.paid })

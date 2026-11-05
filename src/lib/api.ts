@@ -687,6 +687,8 @@ export interface PlanCatalogue {
   provider: string
   currency: string
   billingEnabled: boolean
+  paymentsPaused?: boolean
+  proFreeForAll?: boolean
 }
 
 export function fetchPlans(): Promise<PlanCatalogue> {

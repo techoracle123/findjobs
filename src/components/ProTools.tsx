@@ -24,6 +24,7 @@ import {
 import { formatRange, PERIOD_LABELS } from '../shared/format'
 import { AdvertCheckResultView } from './AdvertCheckPanel'
 import { MatchIntelligencePanel } from './MatchIntelligencePanel'
+import { PRO_FREE_FOR_ALL } from '../shared/access'
 
 const EMPTY_ANSWERS: ApplicationAnswers = {
   fullName: '',
@@ -313,7 +314,7 @@ export function ProTools({ job, proEnabled, trial, onRefresh, onOpenJob }: ProTo
   return (
     <section className="detail-section pro-tools" aria-label="Pro tools">
       <h2>Pro tools for this job</h2>
-      {trialState?.status === 'active' ? (
+      {!PRO_FREE_FOR_ALL && trialState?.status === 'active' ? (
         <p className="trial-inline" role="status">
           Free trial: help for {trialPacksLeft} of {trialState.limits.applicationPacks} listings is
           left. A new listing uses one. The same listing does not use another.

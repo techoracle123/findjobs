@@ -362,7 +362,10 @@ describe('crawler bodies (3.1) and email (1)', () => {
   it('serves real content, not a meta-description stub', () => {
     expect(pageBody('/privacy').length).toBeGreaterThan(1200)
     expect(pageBody('/privacy')).toContain('What we collect')
-    expect(pageBody('/pricing')).toContain('₦10,000')
+    expect(pageBody('/pricing')).toContain('Every current FJ tool is free for now')
+    expect(pageBody('/pricing')).toContain('Payments are paused')
+    expect(pageBody('/ideas')).toContain('physical and software product ideas')
+    expect(pageBody('/ideas')).toContain('Latest official value')
   })
 
   it('builds the branded OTP email with the code in the subject', () => {

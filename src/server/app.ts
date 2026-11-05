@@ -25,6 +25,7 @@ import { applyRoutes } from './routes/apply'
 import { adminRoutes } from './routes/admin'
 import { authRoutes } from './routes/auth'
 import { employerRoutes } from './routes/employers'
+import { ideaRoutes } from './routes/ideas'
 import { trustRoutes } from './routes/trust'
 import { jobFacets } from './job-stats'
 import { withTimeout } from './timeouts'
@@ -649,6 +650,7 @@ app.route('/api', trustRoutes)
 app.route('/api', accountRoutes)
 app.route('/api', authRoutes)
 app.route('/api', employerRoutes)
+app.route('/api', ideaRoutes)
 app.route('/api', sourceRoutes)
 app.route('/api', billingRoutes)
 app.route('/api', telegramRoutes)

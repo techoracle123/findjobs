@@ -44,6 +44,7 @@ import {
 import { badRequest, readJson, requireUser, unauthorized } from '../http'
 import { getGraduateEligibility, getTrialState } from '../phase2'
 import { logger } from '../logging'
+import { PAYMENTS_PAUSED, PRO_FREE_FOR_ALL } from '../../shared/access'
 
 export const billingRoutes = new Hono<AppEnv>()
 
@@ -168,7 +169,9 @@ billingRoutes.get('/billing/plans', async (c) => {
     })),
     provider: provider.id,
     currency: config.billing.currency,
-    billingEnabled: hasRealProvider(config),
+    billingEnabled: hasRealProvider(config) && !PAYMENTS_PAUSED,
+    paymentsPaused: PAYMENTS_PAUSED,
+    freeAccess: PRO_FREE_FOR_ALL,
   })
 })
 
@@ -191,6 +194,16 @@ billingRoutes.post('/billing/checkout', async (c) => {
   if (!user) return unauthorized(c)
   const db = c.env?.DB
   if (!db) return c.json({ error: 'storage_unavailable' }, 503)
+  if (PAYMENTS_PAUSED) {
+    return c.json(
+      {
+        error: 'payments_paused',
+        message:
+          'Payments are paused. Every current FJ tool is free for now, so no checkout or card is needed.',
+      },
+      503,
+    )
+  }
 
   const limited = await enforceRateLimit(c, {
     bucket: 'billing-checkout',

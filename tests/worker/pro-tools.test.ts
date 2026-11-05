@@ -64,7 +64,7 @@ beforeAll(async () => {
 })
 
 describe('Pro tool gates', () => {
-  it('refuses every Pro tool to a free account while leaving the job readable', async () => {
+  it('allows every current Pro tool during free early access while leaving the job readable', async () => {
     expect((await request('/api/jobs/pro-tools-job', 'GET', FREE)).status).toBe(200)
     const checks = [
       await request('/api/pro/application-answers', 'GET', FREE),
@@ -75,8 +75,8 @@ describe('Pro tool gates', () => {
       await request('/api/salary-guide', 'GET', FREE),
     ]
     for (const response of checks) {
-      expect(response.status).toBe(403)
-      expect(await response.json()).toMatchObject({ error: 'pro_required' })
+      expect(response.status).toBe(200)
+      expect(await response.json()).not.toMatchObject({ error: 'pro_required' })
     }
   })
 })

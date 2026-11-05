@@ -3,6 +3,7 @@ import { Download, FileText, LoaderCircle, ShieldCheck, Trash2, Upload } from 'l
 import { analyseSavedMasterCv, deleteMasterCv, fetchMasterCv, saveMasterCv } from '../lib/api'
 import type { MasterCv, ProTrialState } from '../shared/types'
 import type { ImportedCv } from './CvImport'
+import { PRO_FREE_FOR_ALL } from '../shared/access'
 
 interface MasterCvPanelProps {
   signedIn: boolean
@@ -201,9 +202,11 @@ export function MasterCvPanel({
       setNotice(
         body.cv.report
           ? 'Your full CV check is ready. We saved the readable text and report in your account.'
-          : body.canFullAnalysis
-            ? 'Your CV text is saved. The full check in your trial was already used, so no new report was made.'
-            : 'Your CV text is saved free. Use the trial or Pro when you want the full check.',
+          : PRO_FREE_FOR_ALL
+            ? 'Your CV text is saved. Run the full check when you are ready.'
+            : body.canFullAnalysis
+              ? 'Your CV text is saved. The full check in your trial was already used, so no new report was made.'
+              : 'Your CV text is saved free. Use the trial or Pro when you want the full check.',
       )
       // The saved CV is already visible. Refreshing trial counters in the
       // background must not keep the button busy or turn a successful save
@@ -273,7 +276,7 @@ export function MasterCvPanel({
   }
 
   const trialUsed = trial.cvAnalysesUsed >= trial.limits.cvAnalyses
-  const trialCheckUsed = trial.status === 'active' && trialUsed && !paidAccess
+  const trialCheckUsed = !PRO_FREE_FOR_ALL && trial.status === 'active' && trialUsed && !paidAccess
   const canRunFull = fullAccess && !trialCheckUsed
   const replacementText = pending?.text ?? pasted
   const replacementTooLong = replacementText.length > 60_000
@@ -292,7 +295,11 @@ export function MasterCvPanel({
     <section className="panel master-cv-panel" aria-labelledby="master-cv-heading">
       <div className="panel__head panel-head-row">
         <div>
-          <p className="eyebrow">Free save · Full check with trial or Pro</p>
+          <p className="eyebrow">
+            {PRO_FREE_FOR_ALL
+              ? 'Free early access · Full CV check included'
+              : 'Free save · Full check with trial or Pro'}
+          </p>
           <h2 className="panel__title" id="master-cv-heading">
             Your saved CV
           </h2>
@@ -301,8 +308,9 @@ export function MasterCvPanel({
       </div>
       <div className="panel__body stack">
         <p className="panel__note">
-          Save the readable text from your CV free. A trial or Pro plan can also make a full check
-          that shows what to fix first.
+          {PRO_FREE_FOR_ALL
+            ? 'Save the readable text from your CV and run a full check that shows what to fix first. Both are included during free early access.'
+            : 'Save the readable text from your CV free. A trial or Pro plan can also make a full check that shows what to fix first.'}
         </p>
         <p className="field__hint">
           Your browser reads the file. With your permission, FJ saves only the text and a short
@@ -404,7 +412,7 @@ export function MasterCvPanel({
                 old attachments before saving. FJ will not cut the text without telling you.
               </p>
             ) : null}
-            {trial.status === 'active' && !paidAccess ? (
+            {!PRO_FREE_FOR_ALL && trial.status === 'active' && !paidAccess ? (
               <p className="field__hint" role="status">
                 {trialCheckUsed
                   ? 'Your one trial CV check has been used. You can still save or replace CV text free.'

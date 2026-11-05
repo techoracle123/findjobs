@@ -18,7 +18,15 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           check your CV and prepare an application. Check the company and the original advert
           yourself before you apply. Never pay to apply.
         </p>
-        <p>We help you find jobs. You apply on the company website.</p>
+        <p>
+          FJ also has a separate Problems and product ideas section. It combines dated official
+          location indicators, current search trends and detailed physical or software product
+          hypotheses. Evidence supports a broad problem context; it does not prove demand for an
+          idea.
+        </p>
+        <p>
+          We help you find work and investigate ideas. You apply, build and validate independently.
+        </p>
       </>
     ),
   },
@@ -38,6 +46,13 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           accounts. It does not show your name, email address or anything about your account.
         </p>
         <p>
+          <strong>Product ideas stay on your device.</strong> You can browse evidence and live
+          trends without an account. Saved ideas and validation checklists are stored only in your
+          browser. FJ does not receive them. World Bank and Google process ordinary technical
+          requests when their public data feeds are loaded, but FJ does not send them your profile,
+          CV or saved ideas.
+        </p>
+        <p>
           <strong>Free CV import stays on your device.</strong> When you use basic CV import to
           improve your matches, the file is read in your browser for skill suggestions. It is not
           saved in that step.
@@ -46,11 +61,11 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           <strong>Saved CV text on Free or Pro.</strong> Saving CV text is a separate choice for any
           signed-in user. Only when you tick the permission box does FJ save the readable text from
           your CV, a code that identifies that text, and a short summary in your account. A full
-          report is added only when a trial or Pro CV check runs. The original PDF, DOCX or TXT file
-          is not retained. The saved text is used only to give you the CV check, job checks,
-          prepared applications and interview practice. FJ does not send it to an employer for you.
-          You can view it, download it, replace it or delete it from your profile and Pro tools. It
-          is included in account export and removed when you delete it or delete your account.
+          report can be added during free early access. The original PDF, DOCX or TXT file is not
+          retained. The saved text is used only to give you the CV check, job checks, prepared
+          applications and interview practice. FJ does not send it to an employer for you. You can
+          view it, download it, replace it or delete it from your profile and Pro tools. It is
+          included in account export and removed when you delete it or delete your account.
         </p>
         <p>
           <strong>One-off checks.</strong> CV text pasted into a single job check is not saved as
@@ -70,10 +85,10 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           email delivery partner, which processes your email address only to deliver that message.
         </p>
         <p>
-          <strong>Payments.</strong> If you buy Pro, our payment partner Bachs processes your name,
-          email, payment amount and payment details so it can take the payment and confirm it to FJ.
-          FJ stores your plan, amount paid, payment reference and paid end date. FJ never sees or
-          stores your full card number.
+          <strong>Payments are paused.</strong> Every current FJ tool is free for now and no new
+          checkout is available. If payments reopen later, FJ will explain the price and the payment
+          partner before asking you to choose. Any historical payment record remains protected. FJ
+          never sees or stores your full card number.
         </p>
         <p>
           <strong>Retention.</strong> Account data is kept until you delete the relevant item or
@@ -108,31 +123,29 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           client will respond. No employment relationship exists between you and FJ.
         </p>
         <p>
-          <strong>Finding and applying are free.</strong> We do not charge to browse, save, receive
-          basic alerts or apply on an employer's or client's own site. Pro tools are optional and
-          paid, but Pro is never a fee for a job, gig, application or pitch. Anyone asking you for
-          money to get a job found through FJ should be reported.
+          <strong>Everything is free for now.</strong> Browsing, saving, receiving alerts, applying
+          and using the current preparation tools are free during early access. Payments are paused.
+          Normal account, privacy, fair-use and safety limits still apply. FJ never charges for a
+          job, gig, application or pitch. Anyone asking you for money to get a job found through FJ
+          should be reported.
         </p>
         <p>
           <strong>Your use of FJ.</strong> Use the service lawfully, do not scrape or abuse it, and
           verify listings independently before sharing personal information.
         </p>
         <p>
-          <strong>Pro tools and the free trial.</strong> The trial lasts 3 days. It includes one
-          full CV check and help for three listings. It ends on its own. We do not take card
-          details. CV suggestions and prepared applications are drafts. You must check that every
+          <strong>Free preparation tools.</strong> During early access you do not need a trial or
+          paid plan. CV suggestions and prepared applications are drafts. You must check that every
           statement is true before sending it. FJ does not submit applications for you and does not
           guarantee a reply, interview, client call, offer, job or gig. FJ Match Intelligence is a
           decision aid, not a hiring prediction. The advert checker shows evidence and warning
           signs; it is not employer or client verification.
         </p>
         <p>
-          <strong>Paid time and refunds.</strong> Each naira payment buys one month or one year of
-          Pro. It does not renew by itself. Pro turns on when our payment partner confirms the
-          payment. If a confirmed payment does not turn Pro on, FJ will fix it or refund that
-          payment. If you pay twice for the same time by mistake, contact FJ about the duplicate
-          payment. After paid time has started, it normally runs to the end date shown in your
-          account and then stops.
+          <strong>Payment records.</strong> New payments are paused. Historical payment and
+          paid-time records are retained for account support. If paid plans return, FJ will show the
+          current terms before you choose to pay. Product ideas and trend signals are starting
+          points for research, not business, financial or demand guarantees.
         </p>
         <p>
           <strong>Liability.</strong> FJ is provided “as is”. To the extent permitted by law, we are
@@ -161,8 +174,9 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           “recruiter”.
         </p>
         <p>
-          <strong>How often does FJ refresh?</strong> Listings are recollected automatically every
-          12 hours; publishers can add or remove roles at any time.
+          <strong>How often does FJ refresh?</strong> Collection runs automatically throughout the
+          day and timing varies by source. Publishers can add or remove roles at any time, so check
+          the original advert before applying.
         </p>
         <p>
           <strong>Why do I see fewer non-English jobs?</strong> The default feed is English-first
@@ -174,30 +188,30 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           applying on the original site is always free.
         </p>
         <p>
-          <strong>What is Pro?</strong> Pro adds a full CV check and FJ Match Intelligence. Match
-          Intelligence compares your CV with one advert, separates essential requirements from
-          desirable ones, names missing skills, checks location signals and suggests stronger
-          alternatives. Pro also helps prepare applications, checks adverts, shows best matches,
-          sends Telegram alerts with more filters, tracks stages, lists skills to learn, helps with
-          interviews and checks pay. See <a href="/pricing">Pricing</a> to compare plans.
+          <strong>Are all tools free?</strong> Yes, for now. That includes the full CV check, FJ
+          Match Intelligence, application preparation, advert checks, best matches, Telegram alerts,
+          tracking, skill guidance, interview help and pay checks. Create a free account and open
+          Plan to see the tools. Payments are paused, so you cannot buy or renew a plan.
         </p>
         <p>
-          <strong>How does the free trial work?</strong> After creating a free account, you can
-          start one free Pro trial for 3 days. We do not ask for card details. It includes one full
-          CV check and help for three listings. It ends on its own. Work you create stays in your
-          account. The trial is optional. You can skip it and buy Pro at once.
+          <strong>Do I need to start a trial?</strong> No. The current tools are available without a
+          trial during free early access. Your account and private work remain protected by normal
+          sign-in and permission checks.
         </p>
         <p>
-          <strong>Who gets Pro for Graduates?</strong> Final-year students, recent graduates and
-          current or recent NYSC members with less than two years of full time paid work. The
-          pricing page has the checker and exact time windows.
+          <strong>What are Problems and product ideas?</strong> This separate public section uses
+          dated official indicators to suggest physical and software products for different places.
+          It shows the exact source value and year. Live trends are separate search-interest
+          signals. Neither proves demand or business success. Browse{' '}
+          <a href="/ideas">Problems and ideas</a> without an account and save your work on your
+          device.
         </p>
         <p>
           <strong>Does FJ save my CV?</strong> Only if you choose the separate saved-CV action and
-          tick the permission box. Free and Pro users can save readable CV text and a short summary.
-          The trial or Pro can add a full report. FJ does not keep the original file. Basic CV
-          import remains on your device until you choose to save it. You can download or delete the
-          saved text.
+          tick the permission box. Every signed-in user can save readable CV text and a short
+          summary. Free early access can add a full report. FJ does not keep the original file.
+          Basic CV import remains on your device until you choose to save it. You can download or
+          delete the saved text.
         </p>
         <p>
           <strong>Does FJ apply for me?</strong> No. FJ can prepare the words, but you review and
@@ -229,7 +243,7 @@ const PAGES: Record<string, { title: string; body: JSX.Element }> = {
           <li>Salary that is far above the market for the role.</li>
         </ul>
         <p>
-          Pro and the free trial can check jobs on FJ and adverts you paste from WhatsApp, Telegram,
+          The free advert check can review jobs on FJ and adverts you paste from WhatsApp, Telegram,
           email or another site. The check looks for fees, requests for ID, contact by message only,
           and words about who can work from Nigeria. It does not approve a company. Check the
           company website yourself.

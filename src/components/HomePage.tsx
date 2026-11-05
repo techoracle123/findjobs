@@ -7,6 +7,7 @@ import {
   Check,
   Globe2,
   GraduationCap,
+  Lightbulb,
   MapPin,
   ShieldCheck,
   Users,
@@ -34,6 +35,7 @@ interface PublicStats {
 export function HomePage() {
   const [stats, setStats] = useState<PublicStats | null>(null)
   const [registeredUsers, setRegisteredUsers] = useState<number | null>(null)
+  const [ideaTotal, setIdeaTotal] = useState<number | null>(null)
   const [signedIn, setSignedIn] = useState(false)
 
   useEffect(() => {
@@ -71,6 +73,13 @@ export function HomePage() {
         }
       } catch {
         /* Signed out is the safe assumption. */
+      }
+      try {
+        const response = await fetch('/api/ideas?country=NGA&limit=1')
+        const body = (await response.json()) as { catalogTotal?: number }
+        if (response.ok && typeof body.catalogTotal === 'number') setIdeaTotal(body.catalogTotal)
+      } catch {
+        // Jobs and the public counters remain useful if idea evidence is refreshing.
       }
     })()
   }, [])
@@ -220,6 +229,29 @@ export function HomePage() {
           </div>
         </section>
 
+        <section className="home-section home-ideas-teaser" aria-labelledby="home-ideas-heading">
+          <p className="eyebrow">Beyond finding work</p>
+          <h2 id="home-ideas-heading">See problems. Get a product idea. Test it.</h2>
+          <p className="home-lead">
+            Explore physical and software products you could build or sell, backed by dated location
+            evidence and separate live search trends. Choose Nigeria, another country or a worldwide
+            view. Every idea includes a buyer, a first version, risks and a validation plan.
+          </p>
+          {ideaTotal !== null ? (
+            <p className="home-idea-count">
+              <Lightbulb size={19} /> <strong>{number(ideaTotal)}</strong> localized product ideas
+              in the current evidence catalogue
+            </p>
+          ) : null}
+          <p className="field__hint">
+            Evidence supports the broad problem context. It does not prove demand or guarantee a
+            successful business.
+          </p>
+          <a className="btn btn--primary" href="/ideas">
+            Find a problem worth solving <ArrowRight size={17} />
+          </a>
+        </section>
+
         <section className="home-section" aria-labelledby="home-free-heading">
           <p className="eyebrow">No card. No application limit.</p>
           <h2 id="home-free-heading">Everything you need to find and apply is free</h2>
@@ -239,8 +271,8 @@ export function HomePage() {
         </section>
 
         <section className="home-section home-pro" aria-labelledby="home-pro-heading">
-          <p className="eyebrow">More help</p>
-          <h2 id="home-pro-heading">Pro helps you check and prepare</h2>
+          <p className="eyebrow">Free early access</p>
+          <h2 id="home-pro-heading">Every preparation tool is free for now</h2>
           <p className="home-lead">
             Finding work is only one part. FJ Match Intelligence compares your CV with an advert,
             separates essential requirements from desirable ones, names missing skills, checks
@@ -258,42 +290,20 @@ export function HomePage() {
           </div>
           <div className="home-trial-band">
             <div>
-              <h3>Try it free for 3 days</h3>
+              <h3>No card. No trial limit. Payments paused.</h3>
               <p>
-                Check one CV in full and get help, including FJ Match Intelligence, for three
-                listings. We do not ask for card details. The trial ends on its own. It is optional.
-                You can skip it and buy Pro at once.
+                Use the CV check, FJ Match Intelligence, application preparation, interview help and
+                the other current tools with your free account. You do not need to start a trial or
+                buy anything.
               </p>
             </div>
-            <a className="btn btn--primary" href="/pricing#trial-heading">
-              See how the trial works <ArrowRight size={17} aria-hidden="true" />
+            <a className="btn btn--primary" href="/pricing">
+              See everything included <ArrowRight size={17} aria-hidden="true" />
             </a>
           </div>
-          <div className="home-price-grid" aria-label="FJ prices">
-            <div>
-              <span>Free</span>
-              <strong>₦0</strong>
-              <p>Search, save, get alerts and apply free.</p>
-            </div>
-            <div>
-              <span>Pro Monthly</span>
-              <strong>₦5,000/month</strong>
-              <p>Founding price for the first 500 paying members.</p>
-            </div>
-            <div>
-              <span>Pro Yearly</span>
-              <strong>₦40,000/year</strong>
-              <p>Same tools for about ₦3,333 a month at the founding price.</p>
-            </div>
-            <div>
-              <span>Pro for Graduates</span>
-              <strong>₦3,000/month</strong>
-              <p>Same Pro tools for students, new graduates and corps members who qualify.</p>
-            </div>
-          </div>
           <p className="field__hint">
-            Compare the plans before you decide. The free trial needs no card, and you do not need
-            it before you pay. <a href="/pricing">See prices or check the graduate price</a>.
+            Private CV text and account information still require sign-in and your permission.
+            Normal fair-use and safety limits still apply.
           </p>
         </section>
 

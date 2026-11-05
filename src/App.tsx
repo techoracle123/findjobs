@@ -99,6 +99,7 @@ function routeJobId(): string | null {
 }
 
 import { copy } from './shared/copy'
+import { PRO_FREE_FOR_ALL } from './shared/access'
 import { track } from './lib/analytics'
 
 export default function App() {
@@ -431,6 +432,7 @@ export default function App() {
   )
 
   const proEnabled =
+    PRO_FREE_FOR_ALL ||
     account.proTrial.status === 'active' ||
     ['cv_analysis', 'prepared_applications', 'cv_check', 'interview_prep', 'salary_guide'].every(
       (feature) => account.entitlements.includes(feature),
@@ -570,6 +572,7 @@ export default function App() {
           <a href="/jobs" aria-current={view === 'browse' ? 'page' : undefined}>
             Jobs
           </a>
+          <a href="/ideas">Ideas</a>
           <a href="/pricing">Pricing</a>
           <a
             className="nav-dashboard"
@@ -585,11 +588,13 @@ export default function App() {
         <div className="topbar__actions">
           {account.mode === 'signed-in' && (
             <a className="chip chip--plain plan-chip" href="/dashboard?tab=plan">
-              {account.proTrial.status === 'active'
-                ? 'Pro trial active'
-                : proEnabled
-                  ? 'Pro active'
-                  : 'Free plan'}
+              {PRO_FREE_FOR_ALL
+                ? 'Free early access'
+                : account.proTrial.status === 'active'
+                  ? 'Pro trial active'
+                  : proEnabled
+                    ? 'Pro active'
+                    : 'Free plan'}
             </a>
           )}
           {account.mode === 'signed-in' && account.user && (

@@ -11,6 +11,8 @@ import type {
 } from '../../shared/types'
 import { EMPTY_APPLICATION_ANSWERS, normaliseApplicationAnswers } from '../pro-tools'
 import { getGraduateEligibility, getMasterCv, getTrialState } from '../phase2'
+import { PRO_FREE_FOR_ALL } from '../../shared/access'
+import { planEntitlements } from '../billing/types'
 
 export interface AccountUser {
   id: string
@@ -552,7 +554,7 @@ export async function upsertSubscription(
     .run()
 }
 
-export async function getEntitlements(db: D1Database, userId: string): Promise<string[]> {
+export async function getStoredEntitlements(db: D1Database, userId: string): Promise<string[]> {
   const now = new Date().toISOString()
   const result = await db
     .prepare(
@@ -562,6 +564,13 @@ export async function getEntitlements(db: D1Database, userId: string): Promise<s
     .bind(userId, now)
     .all<{ feature: string }>()
   return (result.results ?? []).map((row) => row.feature)
+}
+
+export async function getEntitlements(db: D1Database, userId: string): Promise<string[]> {
+  const stored = await getStoredEntitlements(db, userId)
+  // Early access is a product policy, not a fake paid subscription. No
+  // entitlement rows are written and paid-period records stay untouched.
+  return PRO_FREE_FOR_ALL ? [...new Set([...stored, ...planEntitlements('pro')])] : stored
 }
 
 export async function setEntitlements(

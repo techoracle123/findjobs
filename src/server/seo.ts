@@ -1,6 +1,7 @@
 import type { Job } from '../shared/types'
 import { opportunityOf } from '../shared/opportunities'
 import { roleFamilyLabel } from '../shared/taxonomy'
+import type { ProductIdea } from '../shared/ideas'
 
 /** The crawler surface. Humans get the SPA; crawlers get this. */
 
@@ -17,6 +18,7 @@ export function isCrawler(userAgent: string | null, url: URL): boolean {
 const APP_ROUTES = new Set([
   '/',
   '/jobs',
+  '/ideas',
   '/dashboard',
   '/profile',
   '/about',
@@ -31,7 +33,7 @@ const APP_ROUTES = new Set([
 
 export function isAppRoute(pathname: string): boolean {
   if (APP_ROUTES.has(pathname)) return true
-  return /^\/(?:auth\/(?:signup|login|recovery|reset)|admin\/data-quality|jobs\/[A-Za-z0-9_-]+)$/.test(
+  return /^\/(?:auth\/(?:signup|login|recovery|reset)|admin\/data-quality|jobs\/[A-Za-z0-9_-]+|ideas\/[^/]+)$/.test(
     pathname,
   )
 }
@@ -64,6 +66,20 @@ export function jobMeta(
   return { title, description, canonical: `${origin}/jobs/${encodeURIComponent(job.id)}` }
 }
 
+export function ideaMeta(
+  idea: ProductIdea,
+  origin: string,
+): { title: string; description: string; canonical: string } {
+  return {
+    title: truncate(`${idea.title} | FJ Ideas`, 60),
+    description: truncate(
+      `${idea.product} Official context: ${idea.evidence.displayValue} for ${idea.evidence.indicatorName} in ${idea.location.name} (${idea.evidence.year}). Validate the idea before building.`,
+      155,
+    ),
+    canonical: `${origin}/ideas/${encodeURIComponent(idea.id)}`,
+  }
+}
+
 export function pageMeta(pathname: string): { title: string; description: string } {
   const pages: Record<string, { title: string; description: string }> = {
     '/': {
@@ -86,8 +102,14 @@ export function pageMeta(pathname: string): { title: string; description: string
       description: 'Add your skills and preferences so FJ can rank the jobs most relevant to you.',
     },
     '/pricing': {
-      title: 'Pricing | FJ - Find Jobs',
-      description: 'A free account for browsing and applying. Paid tools for active job seekers.',
+      title: 'Free early access | FJ - Find Jobs',
+      description:
+        'Every current FJ tool is free for now. Payments are paused; no card or trial is needed.',
+    },
+    '/ideas': {
+      title: 'Problems and product ideas by location | FJ',
+      description:
+        'Explore detailed physical and software product ideas with dated official evidence, live trends and validation steps.',
     },
     '/about': {
       title: 'About FJ - Find Jobs',
@@ -155,18 +177,20 @@ export function pageBody(pathname: string): string {
 <p>Every listing links to the original posting, where applying is always free. FJ does not verify or endorse employers; always check the employer's official website and confirm the vacancy there.</p>`,
     '/about': `<p>FJ Find Jobs helps people in Nigeria and around the world find real jobs, gigs and contracts. We collect public adverts from company career pages and job boards. We put them in one place and link to the original advert.</p>
 <p>FJ is not an employer, client or recruiter. We do not approve companies, clients or listings. Finding work and applying on the original website are free. Pro includes FJ Match Intelligence, which compares your CV with an advert, separates essential requirements from desirable ones, names missing skills, checks location signals and suggests stronger alternatives. Check the company or client and the original advert yourself before you apply. Never pay to apply.</p>
-<p>We help you find work. You apply on the original website.</p>`,
+<p>FJ also has a separate Problems and product ideas section with dated location evidence, current search trends and validation plans. Evidence does not prove demand.</p>
+<p>We help you find work and investigate ideas. You apply, build and validate independently.</p>`,
     '/privacy': `<p><strong>What we collect.</strong> Your account email, the profile you build (skills, preferences), saved jobs, your confirmed application history, and job alerts. The homepage and information pages need no account. Seeing the jobs needs the free account, so your saved jobs and alerts follow you on any device.</p>
 <p><strong>Free CV import stays on your device.</strong> Basic CV import reads the file in your browser for skill suggestions and does not save it.</p>
-<p><strong>Saved CV in Pro.</strong> Only if you choose the Pro CV check and tick the box does FJ save the text from your CV and the report in your account. FJ does not keep the PDF or DOCX file. You can see, download, change or delete the saved text. It is removed when you delete your account. We do not save an advert pasted into the advert checker.</p>
+<p><strong>Saved CV with permission.</strong> Only if you choose the saved-CV action and tick the box does FJ save the readable text from your CV and its report in your account. FJ does not keep the PDF or DOCX file. You can see, download, change or delete the saved text. It is removed when you delete your account. We do not save an advert pasted into the advert checker.</p>
+<p><strong>Product ideas stay on your device.</strong> Browsing ideas and trends needs no account. Saved ideas and validation checklists are stored in your browser, not sent to FJ.</p>
 <p><strong>Graduate-price check.</strong> FJ stores the status, answers, month and year, work history group, confirmation and result needed to offer the correct price. It does not ask for age, BVN or NIN.</p>
 <p><strong>Your password.</strong> You sign in with your email and password. We store only a scrambled form of your password that cannot be turned back into the password itself. If you forget it, we email you a one time reset link through our email delivery partner, which processes your email address only to deliver that message.</p>
-<p><strong>Payments.</strong> If you buy Pro, our payment partner Bachs processes your name, email, payment amount and payment details so it can take the payment and confirm it to FJ. FJ stores your plan, amount paid, payment reference and paid end date. FJ never sees or stores your full card number.</p>
+<p><strong>Payments are paused.</strong> Every current FJ tool is free for now and no new checkout is available. Historical payment records remain protected. FJ never sees or stores your full card number.</p>
 <p><strong>Retention.</strong> Account data is kept until you delete the relevant item or your account. Saved CV text is kept until you delete or replace it, or delete your account. Aggregated application history is retained so your monthly progress works. Operational logs are kept for up to 30 days.</p>
 <p><strong>Your rights (NDPA and similar laws).</strong> You may access, correct, export or erase your personal data, object to processing, and withdraw consent at any time. Use the account export/delete controls, or contact us. We respond within the periods the law requires.</p>`,
     '/terms': `<p><strong>What FJ is.</strong> FJ aggregates publicly listed jobs, gigs and contracts. We do not guarantee that any listing is accurate, current or genuine, or that any employer or client will respond. No employment relationship exists between you and FJ.</p>
-<p><strong>Finding and applying are free.</strong> We do not charge to browse, save, receive basic alerts or apply on an employer's own site. Optional Pro tools may be paid when payments open, but Pro is never a fee for a job or for submitting an application.</p>
-<p><strong>Pro tools and trial.</strong> The free 3-day trial includes one full CV check and help for three listings. FJ Match Intelligence is a decision aid, not a hiring prediction. Prepared words are drafts you must check. FJ does not apply for you, verify employers or clients, or guarantee a reply, interview, client call, offer, job or gig.</p>
+<p><strong>Everything is free for now.</strong> Browsing, saving, receiving alerts, applying and using the current preparation tools are free during early access. Payments are paused. Normal account, privacy, fair-use and safety limits still apply.</p>
+<p><strong>Preparation tools.</strong> FJ Match Intelligence is a decision aid, not a hiring prediction. Prepared words are drafts you must check. FJ does not apply for you, verify employers or clients, or guarantee a reply, interview, client call, offer, job or gig. Product ideas and trend signals are research starting points, not demand guarantees.</p>
 <p><strong>Your use of FJ.</strong> Use the service lawfully, do not scrape or abuse it, and verify listings independently before sharing personal information.</p>
 <p><strong>Liability.</strong> FJ is provided "as is". To the extent permitted by law, we are not liable for decisions made based on listings, or for the conduct of employers.</p>`,
     '/faq': `<p><strong>Do I pay to apply?</strong> No. Applying on the employer's own site is always free and unlimited. FJ never asks you to pay for a job or an application.</p>
@@ -175,7 +199,8 @@ export function pageBody(pathname: string): string {
 <p><strong>How often does FJ refresh?</strong> Listings are recollected automatically throughout the day; publishers can add or remove roles at any time.</p>
 <p><strong>Why do I see fewer non-English jobs?</strong> The default feed is English-first for Nigerian users. Turn on Worldwide in the More filter to see every language.</p>
 <p><strong>Why do I need an account to see listings?</strong> So we can save your jobs, gigs, alerts and applications and show them to you on any device. The account is free, and applying on the original site is always free.</p>
-<p><strong>What is Pro?</strong> Pro checks your CV and includes FJ Match Intelligence. It compares your CV with an advert, separates essential requirements from desirable ones, names missing skills, checks location signals and suggests stronger alternatives. Pro also prepares applications, checks adverts, shows best matches, sends Telegram alerts with more filters, tracks applications, lists skills to learn, helps with interviews and checks pay. The free trial lasts 3 days. We do not ask for card details.</p>
+<p><strong>Are all tools free?</strong> Yes, for now. CV checks, FJ Match Intelligence, prepared applications, advert checks, best matches, smart alerts, application stages, skills to learn, interview practice and pay checks are available with a free account. Payments are paused and no trial is required.</p>
+<p><strong>What are Problems and product ideas?</strong> This public section combines dated official indicators with physical and software product hypotheses. It shows exact values and years. Live trends are separate search-attention signals. Neither proves demand or business success.</p>
 <p><strong>Does FJ save my CV?</strong> Only with separate permission for detailed analysis. Basic import stays on your device; saved readable text can be downloaded or deleted.</p>
 <p><strong>How do I save jobs and track applications?</strong> Tap the bookmark on any job. When you apply through the original listing, mark the job as applied. Your Progress page counts what you confirm each month.</p>`,
     '/scams': `<p>Real employers do not charge you to apply or to get hired. Watch for these warning signs:</p>
@@ -190,10 +215,12 @@ export function pageBody(pathname: string): string {
 <p>If a listing asks you for money, stop and report it from the job page. You do not need an account. Check the employer on their official website and confirm the vacancy there before you share anything.</p>`,
     '/contact': `<p>Questions, feedback or a listing to report? Reach the FJ team through the contact options in the app.</p>
 <p>You can report a bad job at any time. You do not need an account.</p>`,
-    '/pricing': `<p>Finding jobs, gigs and contracts and applying are free. Basic alerts are free. Pro helps you check your CV, check the advert and prepare your application or pitch.</p>
-<p>Free includes search, scores, a CV tool on your device, saved listings and Telegram alerts. Pro adds a saved CV, a full CV check, FJ Match Intelligence, prepared applications, advert checks, best matches, alerts with more filters, application stages, skills to learn, interview practice and pay checks from real adverts.</p>
-<p>Founding prices for the first 500 paying members are Pro Monthly ₦5,000 and Pro Yearly ₦40,000, locked for 12 months; later standard prices are ₦10,000 monthly and ₦60,000 yearly. Pro for Graduates is ₦3,000 monthly for eligible final-year students, recent graduates and current or recent corps members. Monthly, Yearly and Graduate include the same Pro tools.</p>
-<p>The free 3-day trial needs no card and includes one full CV check and help for three listings. When paid plans are open, each naira payment buys one month or one year and does not renew by itself. FJ does not apply for you, verify employers or clients, or guarantee a job or gig.</p>`,
+    '/pricing': `<p>Every current FJ tool is free for now. Payments are paused, so there is no checkout and no card is needed.</p>
+<p>Your free account includes job search, saved listings, alerts, CV checks, FJ Match Intelligence, prepared applications, advert checks, best matches, application stages, skills to learn, interview practice and pay checks. Normal privacy, fair-use and safety limits still apply.</p>
+<p>Historical payment records remain protected. If paid plans return, FJ will explain the current price and terms before you choose. FJ does not apply for you, verify employers or clients, or guarantee a job or gig.</p>`,
+    '/ideas': `<p>Explore physical and software product ideas for Nigeria, other countries and a worldwide view. Each idea has a problem context, target buyer, first testable version, business model, skills, risks and validation steps.</p>
+<p>Official evidence shows the exact value, unit, observation year, dataset release time, attribution and source link. The figure is labelled “Latest official value”; annual observations are not real-time measurements. Evidence supports a broad problem context; it does not prove affected population, market size, demand or willingness to pay.</p>
+<p>Live trends are a separate view of current search attention. Approximate traffic labels are not exact search volume or proof of a business opportunity. Save ideas and validation checklists on your device for free.</p>`,
     '/employers': `<p>FJ collects real vacancies from employer career pages and established job boards, cleans them up, and puts them in front of people who are actively looking across Nigeria and beyond.</p>
 <p>Employer accounts and direct job posting are paused. There is no employer price and no way to publish a job directly on FJ today.</p>
 <p>Today, automatic collection from your public listings is free: if your vacancies are on your public careers page or an established board, FJ may collect them and link applicants to your original posting. You can record employer interest on this page in case posting is opened carefully in future.</p>
@@ -392,6 +419,7 @@ export function renderPagesSitemap(origin: string): string {
   const pages = [
     '/',
     '/jobs',
+    '/ideas',
     '/pricing',
     '/employers',
     '/about',
