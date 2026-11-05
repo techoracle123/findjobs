@@ -67,11 +67,17 @@ function buildIndex(snapshot: IdeaEvidenceSnapshot): IdeaIndex {
   let catalogTotal = 0
   const countries = snapshot.countries
     .map((country) => {
-      // Counts need arithmetic, not 25,000 short-lived candidate objects.
-      // Candidates are created later only for the requested country.
+      // Stored counts avoid a whole-catalogue scan on each cold request.
+      // Older snapshots still compute the exact count once, without creating
+      // 25,000 short-lived candidate objects.
+      const stored = snapshot.countryCounts?.[country.iso3]
       let count = 0
-      for (const concept of IDEA_CONCEPTS) {
-        if (strengthFor(concept, country) !== null) count += 1
+      if (typeof stored === 'number' && Number.isInteger(stored) && stored >= 0) {
+        count = stored
+      } else {
+        for (const concept of IDEA_CONCEPTS) {
+          if (strengthFor(concept, country) !== null) count += 1
+        }
       }
       catalogTotal += count
       return {
@@ -308,6 +314,11 @@ export function findIdea(
     .slice(0, 4)
     .map(materialize)
   return { idea: materialize(candidate), related, catalogTotal: index.catalogTotal }
+}
+
+export function catalogSummary(snapshot: IdeaEvidenceSnapshot) {
+  const index = buildIndex(snapshot)
+  return { catalogTotal: index.catalogTotal, countries: index.countries }
 }
 
 export function catalogTotal(snapshot: IdeaEvidenceSnapshot): number {

@@ -68,6 +68,8 @@ describe('World Bank idea evidence refresh', () => {
       Date.parse('2026-11-05T06:00:00Z'),
     )
     expect(snapshot.catalogTotal).toBe(110 * 144)
+    expect(snapshot.countryCounts?.NGA).toBe(144)
+    expect(Object.keys(snapshot.countryCounts ?? {})).toHaveLength(110)
     expect(snapshot.sourceLastUpdated).toBe('2026-10-08')
     expect(snapshot.refreshedAt).toBe('2026-11-05T06:00:00.000Z')
     expect(

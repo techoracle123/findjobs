@@ -87,9 +87,8 @@ export async function bootstrapPublicFeed(api, auth) {
     format: 'esm',
     logLevel: 'silent',
   })
-  const { IDEA_EVIDENCE_KEY, MIN_IDEA_CATALOG_TOTAL, refreshIdeaEvidence } = await import(
-    pathToFileURL(evidenceOutfile).href
-  )
+  const { IDEA_EVIDENCE_KEY, MIN_IDEA_CATALOG_TOTAL, refreshIdeaEvidence, withIdeaCatalogSummary } =
+    await import(pathToFileURL(evidenceOutfile).href)
   const previousEvidence = await kv.get(IDEA_EVIDENCE_KEY)
   try {
     const evidence = await refreshIdeaEvidence(kv)
@@ -101,6 +100,11 @@ export async function bootstrapPublicFeed(api, auth) {
       throw new Error(
         `Idea evidence is not ready and no sufficient previous snapshot exists: ${error instanceof Error ? error.message : 'unknown error'}`,
       )
+    }
+    if (!previousEvidence.countryCounts) {
+      // Upgrade the retained snapshot without another official-data request.
+      // Evidence values and all original timestamps remain untouched.
+      await kv.put(IDEA_EVIDENCE_KEY, JSON.stringify(withIdeaCatalogSummary(previousEvidence)))
     }
     console.log(
       `::warning title=Previous idea evidence retained::${error instanceof Error ? error.message : 'refresh failed'} The last snapshot with ${previousEvidence.catalogTotal} ideas remains available with its original timestamps.`,

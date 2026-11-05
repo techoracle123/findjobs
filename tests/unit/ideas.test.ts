@@ -5,6 +5,7 @@ import {
   MIN_IDEA_CATALOG_TOTAL,
 } from '../../src/server/ideas/concepts'
 import { findIdea, searchIdeas } from '../../src/server/ideas/catalog'
+import { withIdeaCatalogSummary } from '../../src/server/ideas/evidence'
 import { makeIdeaSnapshot } from '../fixtures/ideas'
 import { parseGoogleTrends } from '../../src/server/ideas/trends'
 
@@ -32,6 +33,17 @@ describe('localized product idea catalogue', () => {
     expect(response.ideas).toHaveLength(24)
     expect(response.evidence.countryCount).toBe(snapshot.countries.length - 1)
     expect(response.evidence.indicatorCount).toBe(12)
+  })
+
+  it('reuses stored country counts without changing search results', () => {
+    const snapshot = makeIdeaSnapshot(8)
+    const expected = searchIdeas(snapshot, { country: 'ALL', limit: 48 })
+    const stored = withIdeaCatalogSummary(snapshot)
+    expect(stored.countryCounts?.NGA).toBe(144)
+    expect(Object.keys(stored.countryCounts ?? {})).toHaveLength(8)
+    expect(searchIdeas(stored, { country: 'ALL', limit: 48 })).toEqual(expected)
+    expect(stored.refreshedAt).toBe(snapshot.refreshedAt)
+    expect(stored.countries).toEqual(snapshot.countries)
   })
 
   it('filters by country, category, format and search, with stable pagination', () => {

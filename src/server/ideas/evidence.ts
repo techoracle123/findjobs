@@ -1,6 +1,6 @@
 import type { IdeaCountry, IdeaEvidenceSnapshot, IdeaObservation } from '../../shared/ideas'
 import { IDEA_CATEGORIES, IDEA_INDICATOR_IDS, MIN_IDEA_CATALOG_TOTAL } from './concepts'
-import { catalogTotal } from './catalog'
+import { catalogSummary } from './catalog'
 
 export const IDEA_EVIDENCE_KEY = 'ideas:evidence:v1'
 export { MIN_IDEA_CATALOG_TOTAL } from './concepts'
@@ -84,6 +84,19 @@ export function clearIdeaEvidenceCache(): void {
   cacheGeneration += 1
 }
 
+/** Stores exact request-time counts without changing any official observation. */
+export function withIdeaCatalogSummary(snapshot: IdeaEvidenceSnapshot): IdeaEvidenceSnapshot {
+  const summary = catalogSummary(snapshot)
+  const counts = new Map(summary.countries.map((country) => [country.iso3, country.count]))
+  return {
+    ...snapshot,
+    catalogTotal: summary.catalogTotal,
+    countryCounts: Object.fromEntries(
+      snapshot.countries.map((country) => [country.iso3, counts.get(country.iso3) ?? 0]),
+    ),
+  }
+}
+
 /** Fetches only most-recent, non-empty official observations in a ten-year window. */
 export async function refreshIdeaEvidence(
   kv: KVNamespace,
@@ -163,13 +176,13 @@ export async function refreshIdeaEvidence(
     ),
     catalogTotal: 0,
   }
-  snapshot.catalogTotal = catalogTotal(snapshot)
-  if (options.requireMinimum !== false && snapshot.catalogTotal < MIN_IDEA_CATALOG_TOTAL) {
+  const stored = withIdeaCatalogSummary(snapshot)
+  if (options.requireMinimum !== false && stored.catalogTotal < MIN_IDEA_CATALOG_TOTAL) {
     throw new Error(
-      `Evidence supports ${snapshot.catalogTotal} localized ideas, below the required ${MIN_IDEA_CATALOG_TOTAL}`,
+      `Evidence supports ${stored.catalogTotal} localized ideas, below the required ${MIN_IDEA_CATALOG_TOTAL}`,
     )
   }
-  await kv.put(IDEA_EVIDENCE_KEY, JSON.stringify(snapshot))
-  memory.set(kv, { at: Date.now(), generation: cacheGeneration, value: snapshot })
-  return snapshot
+  await kv.put(IDEA_EVIDENCE_KEY, JSON.stringify(stored))
+  memory.set(kv, { at: Date.now(), generation: cacheGeneration, value: stored })
+  return stored
 }

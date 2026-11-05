@@ -26,6 +26,8 @@ export interface IdeaEvidenceSnapshot {
   earliestYearAllowed: number
   countries: IdeaCountry[]
   catalogTotal: number
+  /** Exact eligible concept counts, computed when the evidence is stored. */
+  countryCounts?: Record<string, number>
 }
 
 export interface IdeaEvidence {
