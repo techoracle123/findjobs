@@ -3,6 +3,7 @@ import {
   assemblePublicSnapshot,
   refreshPublicSource,
   publishPublicSnapshot,
+  readPublicationShards,
   PUBLIC_SOURCES,
   type IndexedJob,
   type SourceIndex,
@@ -274,4 +275,51 @@ it('publishes more than 500 records exactly once, with no overlapping index shar
   expect(published.parts).toHaveLength(3)
   expect(rows).toHaveLength(1105)
   expect(new Set(rows.map((job) => job.id)).size).toBe(1105)
+})
+
+it('keeps cold shard reads bounded, ordered and complete across a transient miss', async () => {
+  const keys = Array.from({ length: 12 }, (_, index) => `part:${index}`)
+  const rows = new Map(keys.map((key, index) => [key, [{ id: `job-${index}` } as IndexedJob]]))
+  rows.set('part:1', [{ id: 'job-0' } as IndexedJob, { id: 'job-1' } as IndexedJob])
+  let attempts = 0
+  let active = 0
+  let maxActive = 0
+  let maxBatch = 0
+  const kv = {
+    get: async (key: string | string[]) => {
+      if (!Array.isArray(key)) return null
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      maxBatch = Math.max(maxBatch, key.length)
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 2))
+        if (key.includes('part:2') && ++attempts < 3) throw new Error('transient KV timeout')
+        // Reverse the response map to prove input shard order is preserved.
+        return new Map([...key].reverse().map((part) => [part, rows.get(part) ?? null]))
+      } finally {
+        active -= 1
+      }
+    },
+  } as unknown as KVNamespace
+  const jobs = await readPublicationShards(kv, keys)
+  expect(jobs.map((job) => job.id)).toEqual(
+    Array.from({ length: 12 }, (_, index) => `job-${index}`),
+  )
+  expect(attempts).toBe(3)
+  expect(maxBatch).toBe(5)
+  expect(maxActive).toBe(2)
+})
+
+it('never returns a partial publication after a persistent shard miss', async () => {
+  let attempts = 0
+  const kv = {
+    get: async (keys: string[]) => {
+      attempts += 1
+      return new Map(keys.filter((key) => key !== 'missing').map((key) => [key, [{ id: key }]]))
+    },
+  } as unknown as KVNamespace
+  await expect(readPublicationShards(kv, ['present', 'missing'])).rejects.toThrow(
+    'temporarily unavailable',
+  )
+  expect(attempts).toBe(3)
 })

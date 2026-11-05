@@ -524,6 +524,51 @@ export async function publishPublicSnapshot(
 let cached: PublicSnapshot | null = null
 let loadedAt = 0
 let pending: Promise<PublicSnapshot | null> | null = null
+
+const PUBLICATION_READ_BATCH = 5
+const PUBLICATION_READ_CONCURRENCY = 2
+
+async function readPublicationBatch(
+  kv: KVNamespace,
+  keys: string[],
+): Promise<Map<string, IndexedJob[] | null>> {
+  // Ten hot shards at once made a cold read large enough to hit intermittent
+  // KV timeouts as the corpus grew. Smaller bounded reads keep the same five
+  // normal waves, while three attempts absorb a transient miss without ever
+  // returning an incomplete publication.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const candidate = await withTimeout(
+        kv.get<IndexedJob[]>(keys, { type: 'json', cacheTtl: 60 }),
+        5000,
+      )
+      if (keys.every((key) => candidate.get(key))) return candidate
+    } catch {
+      // Retry below. A partial or failed batch is never exposed to readers.
+    }
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  throw new Error('Public publication shards are temporarily unavailable')
+}
+
+export async function readPublicationShards(
+  kv: KVNamespace,
+  keys: string[],
+): Promise<IndexedJob[]> {
+  const jobs = new Map<string, IndexedJob>()
+  const batches: string[][] = []
+  for (let index = 0; index < keys.length; index += PUBLICATION_READ_BATCH)
+    batches.push(keys.slice(index, index + PUBLICATION_READ_BATCH))
+  for (let index = 0; index < batches.length; index += PUBLICATION_READ_CONCURRENCY) {
+    const wave = batches.slice(index, index + PUBLICATION_READ_CONCURRENCY)
+    const loaded = await Promise.all(wave.map((batch) => readPublicationBatch(kv, batch)))
+    for (const [batchIndex, parts] of loaded.entries())
+      for (const key of wave[batchIndex])
+        for (const job of parts.get(key) ?? []) if (!jobs.has(job.id)) jobs.set(job.id, job)
+  }
+  return [...jobs.values()]
+}
+
 const SNAPSHOT_CACHE_MS = 60 * 60000
 export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnapshot | null> {
   if (!kv) return null
@@ -546,33 +591,7 @@ export async function publishedPublicJobs(kv?: KVNamespace): Promise<PublicSnaps
       )
         return returnFallback()
       if (snapshot.parts?.length) {
-        const jobs = new Map<string, IndexedJob>()
-        // KV's bulk API resolves the publication in one RPC, rather than
-        // serial cold-region round trips for each shard. Keep negative cache
-        // short during eventual-consistency propagation of a new publication.
-        for (let i = 0; i < snapshot.parts.length; i += 10) {
-          const keys = snapshot.parts.slice(i, i + 10)
-          let parts: Map<string, IndexedJob[] | null> | null = null
-          // A newly published shard can be briefly invisible in one region.
-          // One bounded retry is cheaper and safer than discarding the whole
-          // snapshot and falling back to a full database scan.
-          for (let attempt = 0; attempt < 2 && !parts; attempt += 1) {
-            try {
-              const candidate = await withTimeout(
-                kv.get<IndexedJob[]>(keys, { type: 'json', cacheTtl: 60 }),
-                5000,
-              )
-              if (keys.every((key) => candidate.get(key))) parts = candidate
-            } catch {
-              parts = null
-            }
-            if (!parts && attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250))
-          }
-          if (!parts) return returnFallback()
-          for (const key of keys)
-            for (const job of parts.get(key)!) if (!jobs.has(job.id)) jobs.set(job.id, job)
-        }
-        snapshot.jobs = [...jobs.values()]
+        snapshot.jobs = await readPublicationShards(kv, snapshot.parts)
         if (snapshot.ids && new Set(snapshot.ids).size !== snapshot.jobs.length)
           return returnFallback()
       }
